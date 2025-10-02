@@ -1,0 +1,25 @@
+nodes:
+  - id: "n1"
+    address: "localhost:5001"
+  - id: "n2"
+    address: "localhost:5002"
+  - id: "n3"
+    address: "localhost:5003"
+  - id: "n4"
+    address: "localhost:5004"
+  - id: "n5"
+    address: "localhost:5005"
+
+clients:
+- A
+- B
+- C
+- D
+- E
+- F
+- G
+- H
+- I
+- J
+
+db_dir: ./data

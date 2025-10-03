@@ -42,7 +42,7 @@ func main() {
 	// Parse Transactions
 	// The entire csv file is loaded into memory and transactions are queued by
 	// client and set number like preserving the order for each client
-	file, err := os.Open("test1.csv")
+	file, err := os.Open("testdata/test1.csv")
 	if err != nil {
 		log.Fatal(err)
 	}

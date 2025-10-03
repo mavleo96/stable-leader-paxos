@@ -1,2 +1,4 @@
-**/*.db
-**/*.csv
+data/**
+logs/**
+debug/**
+testdata/**

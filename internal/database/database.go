@@ -4,17 +4,28 @@ import (
 	"errors"
 	"strconv"
 
-	pbBank "github.com/mavleo96/cft-mavleo96/pb/bank"
+	bankpb "github.com/mavleo96/cft-mavleo96/pb/bank"
 	"go.etcd.io/bbolt"
 )
 
+type Database struct {
+	db *bbolt.DB
+}
+
 // InitDB initializes the database with "balances" bucket and adds accounts
 // for the given account IDs, setting their initial balance to 10.
-func InitDB(db *bbolt.DB, accountIds []string) error {
-	return db.Update(func(tx *bbolt.Tx) error {
+func (d *Database) InitDB(dbPath string, accountIds []string) (err error) {
+	boltDB, err := bbolt.Open(dbPath, 0600, nil)
+	if err != nil {
+		return err
+	}
+	d.db = boltDB
+
+	err = d.db.Update(func(tx *bbolt.Tx) error {
 		// Create the "balances" bucket
 		_, err := tx.CreateBucket([]byte("balances"))
 		if err != nil {
+			d.db.Close()
 			return err
 		}
 
@@ -27,13 +38,17 @@ func InitDB(db *bbolt.DB, accountIds []string) error {
 		}
 		return nil
 	})
+	if err != nil {
+		return err
+	}
+	return nil
 }
 
 // UpdateDB processes a transaction by updating the balances of the sender and receiver.
 // It returns true if the transaction was successful, or false if the sender had insufficient funds.
-func UpdateDB(db *bbolt.DB, t *pbBank.Transaction) (bool, error) {
+func (d *Database) UpdateDB(t *bankpb.Transaction) (bool, error) {
 	var success bool
-	err := db.Update(func(tx *bbolt.Tx) error {
+	err := d.db.Update(func(tx *bbolt.Tx) error {
 		b := tx.Bucket([]byte("balances"))
 
 		// Retrieve sender and receiver balances
@@ -79,4 +94,9 @@ func UpdateDB(db *bbolt.DB, t *pbBank.Transaction) (bool, error) {
 		return nil
 	})
 	return success, err
+}
+
+// Close closes the database
+func (d *Database) Close() error {
+	return d.db.Close()
 }

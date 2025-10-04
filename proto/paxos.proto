@@ -1,0 +1,54 @@
+syntax="proto3";
+
+package paxos;
+
+import "google/protobuf/empty.proto";
+import "bank.proto";
+
+option go_package = "github.com/mavleo96/cft-mavleo96/pb/paxos;paxospb";
+
+service Paxos {
+    rpc PrepareRequest (PrepareMessage) returns (AckMessage);
+    rpc AcceptRequest (AcceptMessage) returns (AcceptedMessage);
+    rpc CommitRequest (CommitMessage) returns (google.protobuf.Empty);
+}
+
+message BallotNumber {
+    int64 n = 1;
+    string nodeID = 2;
+}
+
+message AcceptRecord  {
+    BallotNumber acceptedBallotNumber = 1;
+	int64 acceptedSequenceNumber = 2;
+    bank.TransactionRequest acceptedVal = 3;
+}
+
+message PrepareMessage {
+    BallotNumber b = 1;
+}
+
+message AckMessage {
+    bool ok = 1;
+    BallotNumber acceptNum = 2;
+    repeated AcceptRecord acceptLog = 3;
+}
+
+message AcceptMessage {
+    BallotNumber b = 1;
+    int64 sequenceNum = 2;
+    bank.TransactionRequest message = 3;
+}
+
+message AcceptedMessage {
+    bool ok = 1;
+    int64 sequenceNum = 2;
+    bank.TransactionRequest message = 3;
+    string acceptorID = 4;
+}
+
+message CommitMessage {
+    BallotNumber b = 1;
+    int64 sequenceNum = 2;
+    bank.TransactionRequest transaction = 3;
+}

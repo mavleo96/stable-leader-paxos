@@ -2,16 +2,16 @@ syntax = "proto3";
 
 package bank;
 
-option go_package = "./bank";
+option go_package = "github.com/mavleo96/cft-mavleo96/pb/bank;bankpb";
 
 service TransactionService {
-    rpc TransferRequest (TransactionRequest) returns (TransferResponse);
+    rpc TransferRequest (TransactionRequest) returns (TransactionResponse);
 }
 
-// This should be renamed to TransactionResponse
-message TransferResponse {
-    bool success = 1;
-    string message = 2;
+message Transaction {
+    string sender = 1;
+    string receiver = 2;
+    int64 amount = 3;
 }
 
 message TransactionRequest {
@@ -20,8 +20,9 @@ message TransactionRequest {
     string sender = 3;
 }
 
-message Transaction {
-    string sender = 1;
-    string receiver = 2;
-    int64 amount = 3;
+message TransactionResponse {
+    string nodeID = 1;  // TODO: check if BallotNumber can be used here instead
+    int64 timestamp = 2;
+    string sender = 3;
+    bool success = 4;
 }

@@ -1,6 +1,6 @@
 #!/bin/bash
 
-CONFIG_FILE="./config.yaml"
+CONFIG_FILE="./configs/config.yaml"
 
 rm -rf "./logs" "./data"
 mkdir -p "./logs" "./data"

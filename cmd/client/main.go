@@ -1,15 +1,20 @@
 package main
 
 import (
+	"bufio"
+	"context"
 	"fmt"
+	"os"
+	"strings"
 	"sync"
 
 	"github.com/mavleo96/cft-mavleo96/internal/client"
 	"github.com/mavleo96/cft-mavleo96/internal/config"
-	bankpb "github.com/mavleo96/cft-mavleo96/pb/bank"
+	pb "github.com/mavleo96/cft-mavleo96/pb/paxos"
 	log "github.com/sirupsen/logrus"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/protobuf/types/known/emptypb"
 )
 
 func main() {
@@ -22,15 +27,19 @@ func main() {
 	}
 
 	// Create gRPC clients for each node
-	nodeClients := make(map[string]bankpb.TransactionServiceClient)
+	nodeClients := make(map[string]pb.PaxosClient)
 	for _, node := range cfg.Nodes {
-		conn, err := grpc.NewClient(node.Address, grpc.WithTransportCredentials(insecure.NewCredentials()))
-		if err != nil {
-			// Skip if node is not reachable
-			log.Warn(err)
-			continue
+		var conn *grpc.ClientConn
+		var err error
+		for {
+			conn, err = grpc.NewClient(node.Address, grpc.WithTransportCredentials(insecure.NewCredentials()))
+			if err != nil {
+				log.Warn(err)
+				continue
+			}
+			break
 		}
-		txnClient := bankpb.NewTransactionServiceClient(conn)
+		txnClient := pb.NewPaxosClient(conn)
 		nodeClients[node.ID] = txnClient
 		defer conn.Close()
 	}
@@ -52,13 +61,15 @@ func main() {
 	// Each client has its own goroutine and channel. The channel is used by main routine and client routine to communicate.
 	// - main routine sends set number to client routine
 	// - client routine sends {nil, nil} to main routine when set is done
-	// - main routine sends {-1, 0} to client routine to signal exit
 	clientChannels := make(map[string]chan client.SetNumber)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 	for _, clientID := range cfg.Clients {
 		clientChannels[clientID] = make(chan client.SetNumber)
-		defer close(clientChannels[clientID])
-		go client.ClientRoutine(clientID, clientChannels[clientID], masterQueue[clientID], nodeClients)
+		go client.ClientRoutine(ctx, clientID, clientChannels[clientID], masterQueue[clientID], nodeClients)
 	}
+
+	scanner := bufio.NewScanner(os.Stdin)
 
 	// Main Interactive Loop to control set processing
 mainLoop:
@@ -84,13 +95,15 @@ mainLoop:
 		log.Infof("Set %d processed by all clients", setNum.N1)
 
 		// Interaction loop
-		var cmd string
 	interactionLoop:
 		for {
-			_, err := fmt.Scan(&cmd)
-			if err != nil {
-				log.Panic(err)
+			fmt.Print("> ")
+			if !scanner.Scan() {
+				if err := scanner.Err(); err != nil {
+					log.Panic(err)
+				}
 			}
+			cmd := strings.TrimSpace(scanner.Text())
 			switch cmd {
 			case "next":
 				break interactionLoop
@@ -99,9 +112,21 @@ mainLoop:
 			case "print log":
 				log.Info("Print log command received")
 				// TODO: implement print log
+				for _, nodeClient := range nodeClients {
+					_, err = nodeClient.PrintLog(context.Background(), &emptypb.Empty{})
+					if err != nil {
+						log.Panic(err)
+					}
+				}
 			case "print db":
 				log.Info("Print db command received")
 				// TODO: implement print db
+				for _, nodeClient := range nodeClients {
+					_, err = nodeClient.PrintDB(context.Background(), &emptypb.Empty{})
+					if err != nil {
+						log.Panic(err)
+					}
+				}
 			case "print status":
 				log.Info("Print status command received")
 				// TODO: implement print status
@@ -113,8 +138,6 @@ mainLoop:
 			}
 		}
 	}
-	for _, clientID := range cfg.Clients {
-		clientChannels[clientID] <- client.SetNumber{N1: -1, N2: 0}
-	}
+	cancel()
 	log.Info("Exiting...")
 }

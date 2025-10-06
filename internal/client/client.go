@@ -4,7 +4,8 @@ import (
 	"context"
 	"time"
 
-	bankpb "github.com/mavleo96/cft-mavleo96/pb/bank"
+	"github.com/mavleo96/cft-mavleo96/internal/utils"
+	pb "github.com/mavleo96/cft-mavleo96/pb/paxos"
 	log "github.com/sirupsen/logrus"
 	"google.golang.org/grpc/status"
 )
@@ -17,34 +18,37 @@ const (
 // result is a struct to store the result of a transaction
 type result struct {
 	NodeID   string
-	Response *bankpb.TransactionResponse
+	Response *pb.TransactionResponse
 	Err      error
 }
 
 // ClientRoutine is a persistent routine that processes transactions for a client
-func ClientRoutine(clientID string, signalCh chan SetNumber, txnQueue ClientTxnQueue, nodeClients map[string]bankpb.TransactionServiceClient) {
+func ClientRoutine(ctx context.Context, clientID string, signalCh chan SetNumber, txnQueue ClientTxnQueue, nodeClients map[string]pb.PaxosClient) {
 	leaderNode := "n1" // leader initialized to n1 by default
 	for {
+		select {
 		// Wait for set id to process from main routine
-		setNum := <-signalCh
-		if setNum.N1 == -1 { // exit signal
+		case setNum := <-signalCh:
+			// Process transactions for the set
+			for _, t := range txnQueue[setNum] {
+				processTransaction(clientID, t, nodeClients, &leaderNode)
+			}
+			// Signal main routine that the set is done
+			signalCh <- SetNumber{}
+
+		// Exit signal
+		case <-ctx.Done():
+			log.Infof("%s received exit signal", clientID)
 			return
 		}
-
-		// Process transactions for the set
-		for _, t := range txnQueue[setNum] {
-			processTransaction(clientID, t, nodeClients, &leaderNode)
-		}
-		// Signal main routine that the set is done
-		signalCh <- SetNumber{}
 	}
 }
 
 // processTransaction processes a transaction with retries and updates the leader node if leader changes
-func processTransaction(clientID string, t *bankpb.Transaction, nodeClients map[string]bankpb.TransactionServiceClient, leaderNode *string) {
+func processTransaction(clientID string, t *pb.Transaction, nodeClients map[string]pb.PaxosClient, leaderNode *string) {
 	// Create a TransactionRequest with timestamp (uid) and sender
 	timestamp := time.Now().UnixMilli()
-	request := &bankpb.TransactionRequest{
+	request := &pb.TransactionRequest{
 		Transaction: t,
 		Timestamp:   timestamp,
 		Sender:      clientID,
@@ -52,7 +56,7 @@ func processTransaction(clientID string, t *bankpb.Transaction, nodeClients map[
 
 	// Retry loop
 	var err error
-	var response *bankpb.TransactionResponse
+	var response *pb.TransactionResponse
 	for attempt := 1; attempt <= maxAttempts; attempt++ {
 		// Context for each attempt with timeout
 		ctx, cancel := context.WithTimeout(context.Background(), clientTimeout)
@@ -67,7 +71,7 @@ func processTransaction(clientID string, t *bankpb.Transaction, nodeClients map[
 
 			// Multi-cast to all nodes and collect responses
 			for nodeID, nodeClient := range nodeClients {
-				go func(nodeID string, nodeClient bankpb.TransactionServiceClient) {
+				go func(nodeID string, nodeClient pb.PaxosClient) {
 					resp, err := nodeClient.TransferRequest(ctx, request)
 					responsesCh <- result{NodeID: nodeID, Response: resp, Err: err}
 				}(nodeID, nodeClient)
@@ -90,25 +94,19 @@ func processTransaction(clientID string, t *bankpb.Transaction, nodeClients map[
 		cancel()
 		if err == nil {
 			log.Infof(
-				"%s <- %s: {Request: ((%s, %s, %d), %d), Success: %v}",
+				"%s <- %s: {Request: %s, Success: %v}",
 				clientID,
 				*leaderNode,
-				request.Transaction.Sender,
-				request.Transaction.Receiver,
-				request.Transaction.Amount,
-				request.Timestamp,
+				utils.TransactionRequestString(request),
 				response.Success,
 			)
 			break
 		} else {
 			log.Warnf(
-				"%s <- %s: {Request: ((%s, %s, %d), %d), Error: %v}",
+				"%s <- %s: {Request: %s, Error: %v}",
 				clientID,
 				*leaderNode,
-				request.Transaction.Sender,
-				request.Transaction.Receiver,
-				request.Transaction.Amount,
-				request.Timestamp,
+				utils.TransactionRequestString(request),
 				status.Convert(err).Message(),
 			)
 		}

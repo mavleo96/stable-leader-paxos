@@ -6,7 +6,7 @@ import (
 	"strconv"
 	"strings"
 
-	bankpb "github.com/mavleo96/cft-mavleo96/pb/bank"
+	pb "github.com/mavleo96/cft-mavleo96/pb/paxos"
 )
 
 // SetNumber represent test set number
@@ -18,7 +18,7 @@ type SetNumber struct {
 }
 
 // Custom types for transaction queues
-type ClientTxnQueue map[SetNumber][]*bankpb.Transaction
+type ClientTxnQueue map[SetNumber][]*pb.Transaction
 type MasterTxnQueue map[string]ClientTxnQueue
 
 // CreateMasterQueue creates a master queue of transactions
@@ -45,7 +45,7 @@ func CreateMasterQueue(records [][]string, clientList []string) (MasterTxnQueue,
 			}
 			setNumList = append(setNumList, SetNumber{N1: n1, N2: 1})
 			for _, clientID := range clientList {
-				masterQueue[clientID][lastElement(setNumList)] = make([]*bankpb.Transaction, 0)
+				masterQueue[clientID][lastElement(setNumList)] = make([]*pb.Transaction, 0)
 			}
 			// TODO: need to save alive nodes list here
 		}
@@ -55,7 +55,7 @@ func CreateMasterQueue(records [][]string, clientList []string) (MasterTxnQueue,
 				N2: lastElement(setNumList).N2 + 1,
 			})
 			for _, clientID := range clientList {
-				masterQueue[clientID][lastElement(setNumList)] = make([]*bankpb.Transaction, 0)
+				masterQueue[clientID][lastElement(setNumList)] = make([]*pb.Transaction, 0)
 			}
 			continue // LF is not a transaction
 		}
@@ -70,15 +70,15 @@ func CreateMasterQueue(records [][]string, clientList []string) (MasterTxnQueue,
 }
 
 // ParseTransactionString parses a transaction string of the format "(Sender, Receiver, Amount)"
-func ParseTransactionString(s string) (bankpb.Transaction, error) {
+func ParseTransactionString(s string) (pb.Transaction, error) {
 	var p []string = strings.Split(strings.Trim(s, "()\""), ", ")
 
 	amount, err := strconv.Atoi(p[2])
 	if err != nil {
-		return bankpb.Transaction{}, err
+		return pb.Transaction{}, err
 	}
 
-	return bankpb.Transaction{
+	return pb.Transaction{
 		Sender:   p[0],
 		Receiver: p[1],
 		Amount:   int64(amount)}, nil

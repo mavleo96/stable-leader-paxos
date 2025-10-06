@@ -22,10 +22,8 @@ type PaxosServer struct {
 	State              AcceptorState
 	DB                 *database.Database
 	LastReplyTimestamp map[string]int64 // Proposer only
-	// Leader             string           // Proposer only
-	Peers  []*models.Node // Compose from Node struct or Proposer
-	Quorum int            // Compose from Proposer
-	// CurrentBallotNum    *pb.BallotNumber
+	Peers              map[string]*models.Node
+	Quorum             int              // Compose from Proposer
 	CurrentSequenceNum int64            // Proposer only
 	CurrentBallotNum   *pb.BallotNumber // Proposer only
 	PaxosTimer         *time.Timer      // Proposer only
@@ -40,7 +38,7 @@ type PaxosServer struct {
 
 type AcceptorState struct {
 	Mutex               sync.RWMutex
-	Leader              string
+	Leader              *models.Node
 	PromisedBallotNum   *pb.BallotNumber
 	AcceptLog           map[int64]*pb.AcceptRecord
 	ExecutedSequenceNum int64

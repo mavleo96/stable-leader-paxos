@@ -47,7 +47,7 @@ func (s *PaxosServer) AcceptRequest(ctx context.Context, req *pb.AcceptMessage) 
 	// Update State
 	// Replace if sequence number exists in accept log else append
 	// Update leader since this is a accept request with higher ballot number
-	s.State.Leader = req.B.NodeID
+	s.State.Leader = s.Peers[req.B.NodeID]
 	// s.State.PromisedBallotNum = req.B // This is wrong according to Prajwal
 	s.State.AcceptLog[req.SequenceNum] = &pb.AcceptRecord{
 		AcceptedBallotNumber:   req.B,
@@ -82,7 +82,7 @@ func (s *PaxosServer) CommitRequest(ctx context.Context, req *pb.CommitMessage) 
 	// Update State
 	// Replace if sequence number exists in accept log else append
 	// Update leader since this is a accept request with higher ballot number
-	s.State.Leader = req.B.NodeID
+	s.State.Leader = s.Peers[req.B.NodeID]
 	s.State.AcceptLog[req.SequenceNum] = &pb.AcceptRecord{
 		AcceptedBallotNumber:   req.B,
 		AcceptedSequenceNumber: req.SequenceNum,

@@ -2,99 +2,62 @@ package paxos
 
 import (
 	"context"
-	"sync"
 
-	paxospb "github.com/mavleo96/cft-mavleo96/pb/paxos"
+	"github.com/mavleo96/cft-mavleo96/internal/utils"
+	pb "github.com/mavleo96/cft-mavleo96/pb/paxos"
 	log "github.com/sirupsen/logrus"
-	"google.golang.org/protobuf/types/known/emptypb"
 )
 
-type PaxosServer struct {
-	NodeID string
-	Addr   string
-	State  AcceptorState
-	paxospb.UnimplementedPaxosServer
-}
+// All functions are part of Acceptor structure
+// They should only try to acquire the state mutex
 
-type AcceptorState struct {
-	Mutex             sync.Mutex
-	PromisedBallotNum *paxospb.BallotNumber
-	AcceptLog         []*paxospb.AcceptRecord // TODO: should this be a map?
-}
+// func (s *PaxosServer) PrepareRequest(ctx context.Context, req *pb.PrepareMessage) (*pb.AckMessage, error) {
+// 	// TODO: think what if leader node needs to handle this
+// 	s.State.Mutex.Lock()
+// 	defer s.State.Mutex.Unlock()
 
-func BallotNumberIsHigherOrEqual(current *paxospb.BallotNumber, new *paxospb.BallotNumber) bool {
-	if new.N == current.N {
-		return new.NodeID >= current.NodeID
-	}
-	return new.N >= current.N
-}
+// 	// TODO: don't promise if timer has not expired -> need to log messages and then respond to highest
+// 	if !BallotNumberIsHigher(s.State.PromisedBallotNum, req.B) {
+// 		log.Warnf("Rejected prepare request %v", req.String())
+// 		return &pb.AckMessage{Ok: false}, nil
+// 	}
 
-func BallotNumberIsHigher(current *paxospb.BallotNumber, new *paxospb.BallotNumber) bool {
-	if new.N == current.N {
-		return new.NodeID > current.NodeID
-	}
-	return new.N > current.N
-}
+// 	s.State.PromisedBallotNum = req.B
+// 	log.Infof("Accepted prepare request %v", req.String())
+// 	return &pb.AckMessage{
+// 		Ok:        true,
+// 		AcceptNum: s.State.PromisedBallotNum,
+// 		AcceptLog: s.State.AcceptLog,
+// 	}, nil
+// }
 
-func (s *PaxosServer) PrepareRequest(ctx context.Context, req *paxospb.PrepareMessage) (*paxospb.AckMessage, error) {
+// AcceptRequest handles the accept request rpc on server side
+// This code is part of Acceptor structure
+func (s *PaxosServer) AcceptRequest(ctx context.Context, req *pb.AcceptMessage) (*pb.AcceptedMessage, error) {
 	s.State.Mutex.Lock()
 	defer s.State.Mutex.Unlock()
 
-	// TODO: don't promise if timer has not expired -> need to log messages and then respond to highest
-
-	if !BallotNumberIsHigher(s.State.PromisedBallotNum, req.B) {
-		log.Warnf("Rejected prepare request %v", req.String())
-		return &paxospb.AckMessage{Ok: false}, nil
-	}
-
-	s.State.PromisedBallotNum = req.B
-
-	log.Infof("Accepted prepare request %v", req.String())
-	return &paxospb.AckMessage{
-		Ok:        true,
-		AcceptNum: s.State.PromisedBallotNum,
-		AcceptLog: s.State.AcceptLog,
-	}, nil
-
-}
-
-func (s *PaxosServer) AcceptRequest(ctx context.Context, req *paxospb.AcceptMessage) (*paxospb.AcceptedMessage, error) {
-	s.State.Mutex.Lock()
-	defer s.State.Mutex.Unlock()
-	// req.B.N
-
-	// check if req ballot number is higher or equal to state
-	// if no -> return ok = false
+	// Reject if ballot number is lower than promised ballot number
 	if !BallotNumberIsHigherOrEqual(s.State.PromisedBallotNum, req.B) {
-		log.Warnf("Rejected accept request %v", req.String())
-		return &paxospb.AcceptedMessage{Ok: false, SequenceNum: req.SequenceNum, AcceptorID: s.NodeID}, nil
+		log.Warnf("Rejected %s", utils.TransactionRequestString(req.Message))
+		return &pb.AcceptedMessage{Ok: false, SequenceNum: req.SequenceNum, AcceptorID: s.NodeID}, nil
 	}
 
-	// update state
-	s.State.PromisedBallotNum = req.B
-	updated := false
-	for i, acceptRecord := range s.State.AcceptLog {
-		if acceptRecord.AcceptedSequenceNumber == req.SequenceNum {
-			s.State.AcceptLog[i] = &paxospb.AcceptRecord{
-				AcceptedBallotNumber:   req.B,
-				AcceptedSequenceNumber: req.SequenceNum,
-				AcceptedVal:            req.Message,
-			}
-			updated = true
-			break
-		}
-	}
-	if !updated {
-		s.State.AcceptLog = append(s.State.AcceptLog, &paxospb.AcceptRecord{
-			AcceptedBallotNumber:   req.B,
-			AcceptedSequenceNumber: req.SequenceNum,
-			AcceptedVal:            req.Message,
-		})
+	// Update State
+	// Replace if sequence number exists in accept log else append
+	// Update leader since this is a accept request with higher ballot number
+	s.State.Leader = req.B.NodeID
+	// s.State.PromisedBallotNum = req.B // This is wrong according to Prajwal
+	s.State.AcceptLog[req.SequenceNum] = &pb.AcceptRecord{
+		AcceptedBallotNumber:   req.B,
+		AcceptedSequenceNumber: req.SequenceNum,
+		AcceptedVal:            req.Message,
+		Committed:              false,
+		Executed:               false,
 	}
 
-	// else yes -> accept
-	log.Infof("Accepted accept request %v", req.String())
-	return &paxospb.AcceptedMessage{
+	log.Infof("Accepted %s", utils.TransactionRequestString(req.Message))
+	return &pb.AcceptedMessage{
 		Ok:          true,
 		SequenceNum: req.SequenceNum,
 		Message:     req.Message,
@@ -102,9 +65,63 @@ func (s *PaxosServer) AcceptRequest(ctx context.Context, req *paxospb.AcceptMess
 	}, nil
 }
 
-func (s *PaxosServer) CommitRequest(ctx context.Context, req *paxospb.CommitMessage) (*emptypb.Empty, error) {
+// CommitRequest handles the commit request rpc on server side
+// This code is part of Acceptor structure
+func (s *PaxosServer) CommitRequest(ctx context.Context, req *pb.CommitMessage) (*pb.CommitResponse, error) {
 	s.State.Mutex.Lock()
 	defer s.State.Mutex.Unlock()
-	log.Infof("Commited %v", req.String())
-	return &emptypb.Empty{}, nil
+
+	// Reject if ballot number is lower than promised ballot number
+	if !BallotNumberIsHigherOrEqual(s.State.PromisedBallotNum, req.B) {
+		log.Warnf("Rejected %s", utils.TransactionRequestString(req.Transaction))
+		return &pb.CommitResponse{Success: false}, nil
+	}
+
+	// Update State
+	// Replace if sequence number exists in accept log else append
+	// Update leader since this is a accept request with higher ballot number
+	s.State.Leader = req.B.NodeID
+	s.State.AcceptLog[req.SequenceNum] = &pb.AcceptRecord{
+		AcceptedBallotNumber:   req.B,
+		AcceptedSequenceNumber: req.SequenceNum,
+		AcceptedVal:            req.Transaction,
+		Committed:              true,
+		Executed:               false,
+	}
+	log.Infof("Commited %s", utils.TransactionRequestString(req.Transaction))
+
+	// Execute as much as possible
+	success := s.TryExecute(req.SequenceNum)
+	if !success {
+		log.Warnf("Failed to execute commit request %s", utils.TransactionRequestString(req.Transaction))
+		return &pb.CommitResponse{Success: false}, nil
+	}
+
+	return &pb.CommitResponse{Success: true}, nil
+}
+
+// TryExecute tries to execute the transaction
+// The state mutex should be acquired before calling this function
+func (s *PaxosServer) TryExecute(sequenceNum int64) bool {
+	for s.State.ExecutedSequenceNum < sequenceNum {
+		nextSequenceNum := s.State.ExecutedSequenceNum + 1
+		record, ok := s.State.AcceptLog[nextSequenceNum]
+		if !ok {
+			return false
+		}
+		if !record.Committed {
+			return false
+		}
+		if record.Executed {
+			log.Fatal("Executed sequence number is already executed")
+		}
+		success, err := s.DB.UpdateDB(record.AcceptedVal.Transaction)
+		if err != nil {
+			log.Warn(err)
+		}
+		record.Executed = true
+		log.Infof("Executed %s with success %t", utils.TransactionRequestString(record.AcceptedVal), success)
+		s.State.ExecutedSequenceNum++
+	}
+	return true
 }

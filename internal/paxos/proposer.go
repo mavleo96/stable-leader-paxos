@@ -4,108 +4,152 @@ import (
 	"context"
 	"sync"
 
-	paxospb "github.com/mavleo96/cft-mavleo96/pb/paxos"
+	pb "github.com/mavleo96/cft-mavleo96/pb/paxos"
 	log "github.com/sirupsen/logrus"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 )
 
-type ProposerClient struct {
-	NodeID string
-	Peers  map[string]string
-	Quorum int
-}
+// func (s *PaxosServer) SendPrepareRequest(req *pb.PrepareMessage) (bool, error) {
+// 	mu := sync.Mutex{}
+// 	wg := sync.WaitGroup{}
 
-func (p *ProposerClient) SendPrepareRequest(req *paxospb.PrepareMessage) (bool, error) {
+// 	acceptCount := 0
+// 	// for id, addr := range p.Peers {
+// 	log.Infof("Sending prepare request")
+// 	for _, peer := range s.Peers {
+// 		id := peer.ID
+// 		addr := peer.Address
+// 		wg.Add(1)
+// 		go func(id, addr string) {
+// 			conn, err := grpc.NewClient(addr, grpc.WithTransportCredentials(insecure.NewCredentials()))
+// 			if err != nil {
+// 				log.Warn(err)
+// 			}
+// 			defer conn.Close()
+
+// 			client := pb.NewPaxosClient(conn)
+// 			resp, err := client.PrepareRequest(context.Background(), req)
+// 			if err != nil {
+// 				log.Warn(err)
+// 			}
+// 			if !resp.Ok {
+// 				return
+// 			}
+// 			mu.Lock()
+// 			acceptCount++
+// 			mu.Unlock() // defer is better?
+// 			wg.Done()   // defer is better?
+// 		}(id, addr)
+// 	}
+
+// 	wg.Wait()
+// 	if acceptCount < s.Quorum {
+// 		return false, nil
+// 	}
+// 	s.State.Mutex.Lock()
+// 	defer s.State.Mutex.Unlock()
+// 	s.State.PromisedBallotNum = req.B
+// 	// s.CurrentBallotNum = req.B
+// 	// TODO: need to regularize the logs and prepare correct accept message
+
+// 	log.Infof("Prepared %v", req.String())
+
+// 	return true, nil
+
+// }
+
+// SendAcceptRequest handles the accept request rpc on node client side
+// This code is part of Proposer structure
+func (s *PaxosServer) SendAcceptRequest(req *pb.AcceptMessage) (bool, error) {
+
 	mu := sync.Mutex{}
-	wg := sync.WaitGroup{}
-
 	acceptCount := 0
-	for id, addr := range p.Peers {
+
+	// Multicast accept request to all peers
+	wg := sync.WaitGroup{}
+	for _, peer := range s.Peers {
+		id := peer.ID
+		addr := peer.Address
 		wg.Add(1)
 		go func(id, addr string) {
+			defer wg.Done()
+			// Initialize connection to peer
 			conn, err := grpc.NewClient(addr, grpc.WithTransportCredentials(insecure.NewCredentials()))
 			if err != nil {
 				log.Warn(err)
 			}
 			defer conn.Close()
+			client := pb.NewPaxosClient(conn)
 
-			client := paxospb.NewPaxosClient(conn)
-			resp, err := client.PrepareRequest(context.Background(), req)
-			if err != nil {
-				log.Warn(err)
-			}
-			if !resp.Ok {
-				return
-			}
-			mu.Lock()
-			acceptCount++
-			mu.Unlock()
-			wg.Done()
-		}(id, addr)
-	}
-
-	wg.Wait()
-	if acceptCount < p.Quorum {
-		return false, nil
-	}
-	return true, nil
-
-}
-
-func (p *ProposerClient) SendAcceptRequest(req *paxospb.AcceptMessage) (bool, error) {
-
-	mu := sync.Mutex{}
-	wg := sync.WaitGroup{}
-
-	acceptCount := 0
-	for id, addr := range p.Peers {
-		wg.Add(1)
-		go func(id, addr string) {
-			conn, err := grpc.NewClient(addr, grpc.WithTransportCredentials(insecure.NewCredentials()))
-			if err != nil {
-				log.Warn(err)
-			}
-			defer conn.Close()
-
-			client := paxospb.NewPaxosClient(conn)
+			// Send accept request to peer
 			resp, err := client.AcceptRequest(context.Background(), req)
 			if err != nil {
 				log.Warn(err)
 			}
 			if !resp.Ok {
-				return
+				return // if not accepted, return without incrementing acceptCount
 			}
 			mu.Lock()
+			defer mu.Unlock()
 			acceptCount++
-			// TODO: need to log accept message (but why?)
-			mu.Unlock()
-			wg.Done()
+			// TODO: is server mutex needed here?; yes need to sync
+			s.AcceptedMessages = append(s.AcceptedMessages, resp)
 		}(id, addr)
 	}
-
 	wg.Wait()
-	if acceptCount < p.Quorum {
+
+	// Check if acceptCount is less than quorum
+	if acceptCount < s.Quorum {
 		return false, nil
 	}
 	return true, nil
 }
 
-func (p *ProposerClient) SendCommitRequest(req *paxospb.CommitMessage) error {
-	for id, addr := range p.Peers {
+// SendCommitRequest handles the commit request rpc on node client side
+// This code is part of Proposer structure
+func (s *PaxosServer) SendCommitRequest(req *pb.CommitMessage) (bool, error) {
+	// Multicast commit request to all peers except self
+	for _, peer := range s.Peers { // No need to wait for response from peers
+		id := peer.ID
+		if id == s.NodeID {
+			continue // Skip self here
+		}
+		addr := peer.Address
 		go func(id, addr string) {
+			// Initialize connection to peer
 			conn, err := grpc.NewClient(addr, grpc.WithTransportCredentials(insecure.NewCredentials()))
 			if err != nil {
 				log.Warn(err)
 			}
 			defer conn.Close()
 
-			client := paxospb.NewPaxosClient(conn)
+			// Send commit request to peer
+			client := pb.NewPaxosClient(conn)
 			_, err = client.CommitRequest(context.Background(), req)
 			if err != nil {
 				log.Warn(err)
 			}
 		}(id, addr)
 	}
-	return nil
+
+	// Initialize connection to self
+	conn, err := grpc.NewClient(s.Addr, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	if err != nil {
+		log.Warn(err)
+	}
+	defer conn.Close()
+	client := pb.NewPaxosClient(conn)
+
+	// Send commit request to self and wait for response if it was executed
+	// TODO: check with Jelwin/Prajwal if this is good design
+	// TODO: if continuing with this design, then need to get transaction success status also
+	resp, err := client.CommitRequest(context.Background(), req)
+	if err != nil {
+		log.Warn(err)
+	}
+	if !resp.Success {
+		return false, nil
+	}
+	return true, nil
 }

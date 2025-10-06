@@ -10,8 +10,8 @@ import (
 )
 
 const (
-	mainTimeout = 10 * time.Second
-	// prepareTimeout = 5 * time.Second
+	mainTimeout = 3 * time.Second
+	// prepareTimeout = 500 * time.Millisecond
 )
 
 // TODO: Need to decompose this into Proposer and Acceptor structures
@@ -26,7 +26,7 @@ type PaxosServer struct {
 	Quorum             int              // Compose from Proposer
 	CurrentSequenceNum int64            // Proposer only
 	CurrentBallotNum   *pb.BallotNumber // Proposer only
-	PaxosTimer         *time.Timer      // Proposer only
+	PaxosTimer         *SafeTimer       // Proposer only
 	// ExecutedSequenceNum int64
 	// PendingExecutions []int64
 	AcceptedMessages []*pb.AcceptedMessage

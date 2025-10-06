@@ -22,6 +22,7 @@ const _ = grpc.SupportPackageIsVersion7
 const (
 	Paxos_TransferRequest_FullMethodName = "/paxos.Paxos/TransferRequest"
 	Paxos_PrintLog_FullMethodName        = "/paxos.Paxos/PrintLog"
+	Paxos_PrintDB_FullMethodName         = "/paxos.Paxos/PrintDB"
 	Paxos_AcceptRequest_FullMethodName   = "/paxos.Paxos/AcceptRequest"
 	Paxos_CommitRequest_FullMethodName   = "/paxos.Paxos/CommitRequest"
 )
@@ -32,9 +33,9 @@ const (
 type PaxosClient interface {
 	TransferRequest(ctx context.Context, in *TransactionRequest, opts ...grpc.CallOption) (*TransactionResponse, error)
 	PrintLog(ctx context.Context, in *emptypb.Empty, opts ...grpc.CallOption) (*emptypb.Empty, error)
-	// rpc PrepareRequest (PrepareMessage) returns (AckMessage);
+	PrintDB(ctx context.Context, in *emptypb.Empty, opts ...grpc.CallOption) (*emptypb.Empty, error)
 	AcceptRequest(ctx context.Context, in *AcceptMessage, opts ...grpc.CallOption) (*AcceptedMessage, error)
-	CommitRequest(ctx context.Context, in *CommitMessage, opts ...grpc.CallOption) (*emptypb.Empty, error)
+	CommitRequest(ctx context.Context, in *CommitMessage, opts ...grpc.CallOption) (*CommitResponse, error)
 }
 
 type paxosClient struct {
@@ -63,6 +64,15 @@ func (c *paxosClient) PrintLog(ctx context.Context, in *emptypb.Empty, opts ...g
 	return out, nil
 }
 
+func (c *paxosClient) PrintDB(ctx context.Context, in *emptypb.Empty, opts ...grpc.CallOption) (*emptypb.Empty, error) {
+	out := new(emptypb.Empty)
+	err := c.cc.Invoke(ctx, Paxos_PrintDB_FullMethodName, in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *paxosClient) AcceptRequest(ctx context.Context, in *AcceptMessage, opts ...grpc.CallOption) (*AcceptedMessage, error) {
 	out := new(AcceptedMessage)
 	err := c.cc.Invoke(ctx, Paxos_AcceptRequest_FullMethodName, in, out, opts...)
@@ -72,8 +82,8 @@ func (c *paxosClient) AcceptRequest(ctx context.Context, in *AcceptMessage, opts
 	return out, nil
 }
 
-func (c *paxosClient) CommitRequest(ctx context.Context, in *CommitMessage, opts ...grpc.CallOption) (*emptypb.Empty, error) {
-	out := new(emptypb.Empty)
+func (c *paxosClient) CommitRequest(ctx context.Context, in *CommitMessage, opts ...grpc.CallOption) (*CommitResponse, error) {
+	out := new(CommitResponse)
 	err := c.cc.Invoke(ctx, Paxos_CommitRequest_FullMethodName, in, out, opts...)
 	if err != nil {
 		return nil, err
@@ -87,9 +97,9 @@ func (c *paxosClient) CommitRequest(ctx context.Context, in *CommitMessage, opts
 type PaxosServer interface {
 	TransferRequest(context.Context, *TransactionRequest) (*TransactionResponse, error)
 	PrintLog(context.Context, *emptypb.Empty) (*emptypb.Empty, error)
-	// rpc PrepareRequest (PrepareMessage) returns (AckMessage);
+	PrintDB(context.Context, *emptypb.Empty) (*emptypb.Empty, error)
 	AcceptRequest(context.Context, *AcceptMessage) (*AcceptedMessage, error)
-	CommitRequest(context.Context, *CommitMessage) (*emptypb.Empty, error)
+	CommitRequest(context.Context, *CommitMessage) (*CommitResponse, error)
 	mustEmbedUnimplementedPaxosServer()
 }
 
@@ -103,10 +113,13 @@ func (UnimplementedPaxosServer) TransferRequest(context.Context, *TransactionReq
 func (UnimplementedPaxosServer) PrintLog(context.Context, *emptypb.Empty) (*emptypb.Empty, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method PrintLog not implemented")
 }
+func (UnimplementedPaxosServer) PrintDB(context.Context, *emptypb.Empty) (*emptypb.Empty, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method PrintDB not implemented")
+}
 func (UnimplementedPaxosServer) AcceptRequest(context.Context, *AcceptMessage) (*AcceptedMessage, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method AcceptRequest not implemented")
 }
-func (UnimplementedPaxosServer) CommitRequest(context.Context, *CommitMessage) (*emptypb.Empty, error) {
+func (UnimplementedPaxosServer) CommitRequest(context.Context, *CommitMessage) (*CommitResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method CommitRequest not implemented")
 }
 func (UnimplementedPaxosServer) mustEmbedUnimplementedPaxosServer() {}
@@ -154,6 +167,24 @@ func _Paxos_PrintLog_Handler(srv interface{}, ctx context.Context, dec func(inte
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(PaxosServer).PrintLog(ctx, req.(*emptypb.Empty))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Paxos_PrintDB_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(emptypb.Empty)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PaxosServer).PrintDB(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Paxos_PrintDB_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PaxosServer).PrintDB(ctx, req.(*emptypb.Empty))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -208,6 +239,10 @@ var Paxos_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "PrintLog",
 			Handler:    _Paxos_PrintLog_Handler,
+		},
+		{
+			MethodName: "PrintDB",
+			Handler:    _Paxos_PrintDB_Handler,
 		},
 		{
 			MethodName: "AcceptRequest",

@@ -9,10 +9,12 @@ option go_package = "github.com/mavleo96/cft-mavleo96/pb/paxos;pb";
 service Paxos {
     rpc TransferRequest (TransactionRequest) returns (TransactionResponse);
     rpc PrintLog (google.protobuf.Empty) returns (google.protobuf.Empty);
+    rpc PrintDB (google.protobuf.Empty) returns (google.protobuf.Empty);
 
     // rpc PrepareRequest (PrepareMessage) returns (AckMessage);
+
     rpc AcceptRequest (AcceptMessage) returns (AcceptedMessage);
-    rpc CommitRequest (CommitMessage) returns (google.protobuf.Empty);
+    rpc CommitRequest (CommitMessage) returns (CommitResponse);
 }
 
 message BallotNumber {
@@ -24,6 +26,8 @@ message AcceptRecord  {
     BallotNumber acceptedBallotNumber = 1;
 	int64 acceptedSequenceNumber = 2;
     TransactionRequest acceptedVal = 3;
+    bool Committed = 4;
+    bool Executed = 5;
 }
 
 message PrepareMessage {
@@ -72,4 +76,8 @@ message TransactionResponse {
     int64 timestamp = 2;
     string sender = 3;
     bool success = 4;
+}
+
+message CommitResponse {
+    bool success = 1;  // TODO: need to add transaction execution success if continuing with this
 }

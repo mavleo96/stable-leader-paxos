@@ -79,6 +79,8 @@ type AcceptRecord struct {
 	AcceptedBallotNumber   *BallotNumber          `protobuf:"bytes,1,opt,name=acceptedBallotNumber,proto3" json:"acceptedBallotNumber,omitempty"`
 	AcceptedSequenceNumber int64                  `protobuf:"varint,2,opt,name=acceptedSequenceNumber,proto3" json:"acceptedSequenceNumber,omitempty"`
 	AcceptedVal            *TransactionRequest    `protobuf:"bytes,3,opt,name=acceptedVal,proto3" json:"acceptedVal,omitempty"`
+	Committed              bool                   `protobuf:"varint,4,opt,name=Committed,proto3" json:"Committed,omitempty"`
+	Executed               bool                   `protobuf:"varint,5,opt,name=Executed,proto3" json:"Executed,omitempty"`
 	unknownFields          protoimpl.UnknownFields
 	sizeCache              protoimpl.SizeCache
 }
@@ -132,6 +134,20 @@ func (x *AcceptRecord) GetAcceptedVal() *TransactionRequest {
 		return x.AcceptedVal
 	}
 	return nil
+}
+
+func (x *AcceptRecord) GetCommitted() bool {
+	if x != nil {
+		return x.Committed
+	}
+	return false
+}
+
+func (x *AcceptRecord) GetExecuted() bool {
+	if x != nil {
+		return x.Executed
+	}
+	return false
 }
 
 type PrepareMessage struct {
@@ -614,6 +630,50 @@ func (x *TransactionResponse) GetSuccess() bool {
 	return false
 }
 
+type CommitResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Success       bool                   `protobuf:"varint,1,opt,name=success,proto3" json:"success,omitempty"` // TODO: need to add transaction execution success if continuing with this
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *CommitResponse) Reset() {
+	*x = CommitResponse{}
+	mi := &file_paxos_proto_msgTypes[10]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *CommitResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*CommitResponse) ProtoMessage() {}
+
+func (x *CommitResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_paxos_proto_msgTypes[10]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use CommitResponse.ProtoReflect.Descriptor instead.
+func (*CommitResponse) Descriptor() ([]byte, []int) {
+	return file_paxos_proto_rawDescGZIP(), []int{10}
+}
+
+func (x *CommitResponse) GetSuccess() bool {
+	if x != nil {
+		return x.Success
+	}
+	return false
+}
+
 var File_paxos_proto protoreflect.FileDescriptor
 
 const file_paxos_proto_rawDesc = "" +
@@ -621,11 +681,13 @@ const file_paxos_proto_rawDesc = "" +
 	"\vpaxos.proto\x12\x05paxos\x1a\x1bgoogle/protobuf/empty.proto\"4\n" +
 	"\fBallotNumber\x12\f\n" +
 	"\x01n\x18\x01 \x01(\x03R\x01n\x12\x16\n" +
-	"\x06nodeID\x18\x02 \x01(\tR\x06nodeID\"\xcc\x01\n" +
+	"\x06nodeID\x18\x02 \x01(\tR\x06nodeID\"\x86\x02\n" +
 	"\fAcceptRecord\x12G\n" +
 	"\x14acceptedBallotNumber\x18\x01 \x01(\v2\x13.paxos.BallotNumberR\x14acceptedBallotNumber\x126\n" +
 	"\x16acceptedSequenceNumber\x18\x02 \x01(\x03R\x16acceptedSequenceNumber\x12;\n" +
-	"\vacceptedVal\x18\x03 \x01(\v2\x19.paxos.TransactionRequestR\vacceptedVal\"3\n" +
+	"\vacceptedVal\x18\x03 \x01(\v2\x19.paxos.TransactionRequestR\vacceptedVal\x12\x1c\n" +
+	"\tCommitted\x18\x04 \x01(\bR\tCommitted\x12\x1a\n" +
+	"\bExecuted\x18\x05 \x01(\bR\bExecuted\"3\n" +
 	"\x0ePrepareMessage\x12!\n" +
 	"\x01b\x18\x01 \x01(\v2\x13.paxos.BallotNumberR\x01b\"\x82\x01\n" +
 	"\n" +
@@ -660,12 +722,15 @@ const file_paxos_proto_rawDesc = "" +
 	"\x06nodeID\x18\x01 \x01(\tR\x06nodeID\x12\x1c\n" +
 	"\ttimestamp\x18\x02 \x01(\x03R\ttimestamp\x12\x16\n" +
 	"\x06sender\x18\x03 \x01(\tR\x06sender\x12\x18\n" +
-	"\asuccess\x18\x04 \x01(\bR\asuccess2\x8b\x02\n" +
+	"\asuccess\x18\x04 \x01(\bR\asuccess\"*\n" +
+	"\x0eCommitResponse\x12\x18\n" +
+	"\asuccess\x18\x01 \x01(\bR\asuccess2\xc5\x02\n" +
 	"\x05Paxos\x12H\n" +
 	"\x0fTransferRequest\x12\x19.paxos.TransactionRequest\x1a\x1a.paxos.TransactionResponse\x12:\n" +
-	"\bPrintLog\x12\x16.google.protobuf.Empty\x1a\x16.google.protobuf.Empty\x12=\n" +
-	"\rAcceptRequest\x12\x14.paxos.AcceptMessage\x1a\x16.paxos.AcceptedMessage\x12=\n" +
-	"\rCommitRequest\x12\x14.paxos.CommitMessage\x1a\x16.google.protobuf.EmptyB.Z,github.com/mavleo96/cft-mavleo96/pb/paxos;pbb\x06proto3"
+	"\bPrintLog\x12\x16.google.protobuf.Empty\x1a\x16.google.protobuf.Empty\x129\n" +
+	"\aPrintDB\x12\x16.google.protobuf.Empty\x1a\x16.google.protobuf.Empty\x12=\n" +
+	"\rAcceptRequest\x12\x14.paxos.AcceptMessage\x1a\x16.paxos.AcceptedMessage\x12<\n" +
+	"\rCommitRequest\x12\x14.paxos.CommitMessage\x1a\x15.paxos.CommitResponseB.Z,github.com/mavleo96/cft-mavleo96/pb/paxos;pbb\x06proto3"
 
 var (
 	file_paxos_proto_rawDescOnce sync.Once
@@ -679,7 +744,7 @@ func file_paxos_proto_rawDescGZIP() []byte {
 	return file_paxos_proto_rawDescData
 }
 
-var file_paxos_proto_msgTypes = make([]protoimpl.MessageInfo, 10)
+var file_paxos_proto_msgTypes = make([]protoimpl.MessageInfo, 11)
 var file_paxos_proto_goTypes = []any{
 	(*BallotNumber)(nil),        // 0: paxos.BallotNumber
 	(*AcceptRecord)(nil),        // 1: paxos.AcceptRecord
@@ -691,7 +756,8 @@ var file_paxos_proto_goTypes = []any{
 	(*Transaction)(nil),         // 7: paxos.Transaction
 	(*TransactionRequest)(nil),  // 8: paxos.TransactionRequest
 	(*TransactionResponse)(nil), // 9: paxos.TransactionResponse
-	(*emptypb.Empty)(nil),       // 10: google.protobuf.Empty
+	(*CommitResponse)(nil),      // 10: paxos.CommitResponse
+	(*emptypb.Empty)(nil),       // 11: google.protobuf.Empty
 }
 var file_paxos_proto_depIdxs = []int32{
 	0,  // 0: paxos.AcceptRecord.acceptedBallotNumber:type_name -> paxos.BallotNumber
@@ -706,15 +772,17 @@ var file_paxos_proto_depIdxs = []int32{
 	8,  // 9: paxos.CommitMessage.transaction:type_name -> paxos.TransactionRequest
 	7,  // 10: paxos.TransactionRequest.transaction:type_name -> paxos.Transaction
 	8,  // 11: paxos.Paxos.TransferRequest:input_type -> paxos.TransactionRequest
-	10, // 12: paxos.Paxos.PrintLog:input_type -> google.protobuf.Empty
-	4,  // 13: paxos.Paxos.AcceptRequest:input_type -> paxos.AcceptMessage
-	6,  // 14: paxos.Paxos.CommitRequest:input_type -> paxos.CommitMessage
-	9,  // 15: paxos.Paxos.TransferRequest:output_type -> paxos.TransactionResponse
-	10, // 16: paxos.Paxos.PrintLog:output_type -> google.protobuf.Empty
-	5,  // 17: paxos.Paxos.AcceptRequest:output_type -> paxos.AcceptedMessage
-	10, // 18: paxos.Paxos.CommitRequest:output_type -> google.protobuf.Empty
-	15, // [15:19] is the sub-list for method output_type
-	11, // [11:15] is the sub-list for method input_type
+	11, // 12: paxos.Paxos.PrintLog:input_type -> google.protobuf.Empty
+	11, // 13: paxos.Paxos.PrintDB:input_type -> google.protobuf.Empty
+	4,  // 14: paxos.Paxos.AcceptRequest:input_type -> paxos.AcceptMessage
+	6,  // 15: paxos.Paxos.CommitRequest:input_type -> paxos.CommitMessage
+	9,  // 16: paxos.Paxos.TransferRequest:output_type -> paxos.TransactionResponse
+	11, // 17: paxos.Paxos.PrintLog:output_type -> google.protobuf.Empty
+	11, // 18: paxos.Paxos.PrintDB:output_type -> google.protobuf.Empty
+	5,  // 19: paxos.Paxos.AcceptRequest:output_type -> paxos.AcceptedMessage
+	10, // 20: paxos.Paxos.CommitRequest:output_type -> paxos.CommitResponse
+	16, // [16:21] is the sub-list for method output_type
+	11, // [11:16] is the sub-list for method input_type
 	11, // [11:11] is the sub-list for extension type_name
 	11, // [11:11] is the sub-list for extension extendee
 	0,  // [0:11] is the sub-list for field type_name
@@ -731,7 +799,7 @@ func file_paxos_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_paxos_proto_rawDesc), len(file_paxos_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   10,
+			NumMessages:   11,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

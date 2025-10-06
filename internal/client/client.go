@@ -17,7 +17,6 @@ const (
 
 // result is a struct to store the result of a transaction
 type result struct {
-	NodeID   string
 	Response *pb.TransactionResponse
 	Err      error
 }
@@ -60,9 +59,25 @@ func processTransaction(clientID string, t *pb.Transaction, nodeClients map[stri
 	for attempt := 1; attempt <= maxAttempts; attempt++ {
 		// Context for each attempt with timeout
 		ctx, cancel := context.WithTimeout(context.Background(), clientTimeout)
-
 		if attempt == 1 { // First attempt to leader
 			response, err = nodeClients[*leaderNode].TransferRequest(ctx, request)
+			if err == nil {
+				log.Infof(
+					"%s <- %s: %s",
+					clientID,
+					*leaderNode,
+					utils.TransactionResponseString(response),
+				)
+				cancel()
+				break
+			} else {
+				log.Warnf(
+					"%s <- %s: %v",
+					clientID,
+					*leaderNode,
+					status.Convert(err).Message(),
+				)
+			}
 		} else { // Multi-cast to all nodes if 1st attempt fails
 			// Responses channel to collect responses from goroutines of requests to all nodes
 			// (By recreating this channel in each attempt we don't have to drain it)
@@ -73,43 +88,37 @@ func processTransaction(clientID string, t *pb.Transaction, nodeClients map[stri
 			for nodeID, nodeClient := range nodeClients {
 				go func(nodeID string, nodeClient pb.PaxosClient) {
 					resp, err := nodeClient.TransferRequest(ctx, request)
-					responsesCh <- result{NodeID: nodeID, Response: resp, Err: err}
+					if err == nil {
+						log.Infof(
+							"%s <- %s: %s",
+							clientID,
+							nodeID,
+							utils.TransactionResponseString(resp),
+						)
+					} else {
+						log.Warnf(
+							"%s <- %s: %v",
+							clientID,
+							nodeID,
+							status.Convert(err).Message(),
+						)
+					}
+					responsesCh <- result{Response: resp, Err: err}
 				}(nodeID, nodeClient)
 			}
 			for i := 0; i < len(nodeClients); i++ { // Collect responses from goroutines
 				res := <-responsesCh
 				if res.Err == nil {
 					// Update leader node if response is successful
-					*leaderNode = res.NodeID
-					response = res.Response
+					*leaderNode = res.Response.B.NodeID
 					err = nil
 					log.Infof("%s updated leader to %s", clientID, *leaderNode)
 					break
-				} else {
-					err = res.Err
 				}
 			}
 		}
 		// Cancel context and break from retry loop if error is nil
 		cancel()
-		if err == nil {
-			log.Infof(
-				"%s <- %s: {Request: %s, Success: %v}",
-				clientID,
-				*leaderNode,
-				utils.TransactionRequestString(request),
-				response.Success,
-			)
-			break
-		} else {
-			log.Warnf(
-				"%s <- %s: {Request: %s, Error: %v}",
-				clientID,
-				*leaderNode,
-				utils.TransactionRequestString(request),
-				status.Convert(err).Message(),
-			)
-		}
 	}
 
 }

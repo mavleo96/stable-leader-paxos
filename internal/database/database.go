@@ -1,10 +1,10 @@
 package database
 
 import (
+	"fmt"
 	"strconv"
 
 	pb "github.com/mavleo96/cft-mavleo96/pb/paxos"
-	log "github.com/sirupsen/logrus"
 	"go.etcd.io/bbolt"
 )
 
@@ -105,7 +105,7 @@ func (d *Database) PrintDB() {
 	d.db.View(func(tx *bbolt.Tx) error {
 		b := tx.Bucket([]byte("balances"))
 		b.ForEach(func(k, v []byte) error {
-			log.Infof("Balance: %s: %s", k, v)
+			fmt.Printf("Balance: %s: %s\n", k, v)
 			return nil
 		})
 		return nil

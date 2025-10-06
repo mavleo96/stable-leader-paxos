@@ -2,8 +2,9 @@ package paxos
 
 import (
 	"context"
+	"fmt"
 
-	log "github.com/sirupsen/logrus"
+	"github.com/mavleo96/cft-mavleo96/internal/utils"
 	"google.golang.org/protobuf/types/known/emptypb"
 )
 
@@ -12,16 +13,16 @@ import (
 func (s *PaxosServer) PrintLog(ctx context.Context, req *emptypb.Empty) (*emptypb.Empty, error) {
 	s.State.Mutex.RLock()
 	defer s.State.Mutex.RUnlock()
-	log.Info("Printing log")
+	fmt.Println("Printing log")
 	for _, record := range s.State.AcceptLog {
-		log.Infof("Accept log: %v", record)
+		fmt.Printf("Accept log: %v\n", utils.AcceptRecordString(record))
 	}
 
-	for _, record := range s.LastReplyTimestamp {
-		log.Infof("Last reply timestamp: %v", record)
+	for clientID, timestamp := range s.LastReplyTimestamp {
+		fmt.Printf("Last reply timestamp: <%s, %d>\n", clientID, timestamp)
 	}
 	for _, record := range s.AcceptedMessages {
-		log.Infof("Accepted messages: %v", record)
+		fmt.Printf("Accepted messages: %v\n", utils.AcceptedMessageString(record))
 	}
 	return &emptypb.Empty{}, nil
 }
@@ -31,7 +32,7 @@ func (s *PaxosServer) PrintLog(ctx context.Context, req *emptypb.Empty) (*emptyp
 func (s *PaxosServer) PrintDB(ctx context.Context, req *emptypb.Empty) (*emptypb.Empty, error) {
 	s.State.Mutex.RLock()
 	defer s.State.Mutex.RUnlock()
-	log.Info("Printing database")
+	fmt.Println("Printing database")
 	s.DB.PrintDB()
 	return &emptypb.Empty{}, nil
 }

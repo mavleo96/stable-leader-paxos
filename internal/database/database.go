@@ -1,10 +1,10 @@
 package database
 
 import (
-	"errors"
 	"strconv"
 
-	bankpb "github.com/mavleo96/cft-mavleo96/pb/bank"
+	pb "github.com/mavleo96/cft-mavleo96/pb/paxos"
+	log "github.com/sirupsen/logrus"
 	"go.etcd.io/bbolt"
 )
 
@@ -46,7 +46,7 @@ func (d *Database) InitDB(dbPath string, accountIds []string) (err error) {
 
 // UpdateDB processes a transaction by updating the balances of the sender and receiver.
 // It returns true if the transaction was successful, or false if the sender had insufficient funds.
-func (d *Database) UpdateDB(t *bankpb.Transaction) (bool, error) {
+func (d *Database) UpdateDB(t *pb.Transaction) (bool, error) {
 	var success bool
 	err := d.db.Update(func(tx *bbolt.Tx) error {
 		b := tx.Bucket([]byte("balances"))
@@ -54,12 +54,15 @@ func (d *Database) UpdateDB(t *bankpb.Transaction) (bool, error) {
 		// Retrieve sender and receiver balances
 		senderBalBytes := b.Get([]byte(t.Sender))
 		if senderBalBytes == nil {
-			// TODO: need to define error somewhere else (maybe in pb?)
-			return errors.New("sender doesn't exist")
+			// TODO: need to define error somewhere else
+			// TODO: should message be included?
+			success = false
+			return nil
 		}
 		receiverBalBytes := b.Get([]byte(t.Receiver))
 		if receiverBalBytes == nil {
-			return errors.New("receiver doesn't exist")
+			success = false
+			return nil
 		}
 		senderBal, err := strconv.Atoi(string(senderBalBytes))
 		if err != nil {
@@ -73,10 +76,12 @@ func (d *Database) UpdateDB(t *bankpb.Transaction) (bool, error) {
 		// Check if amount is valid and sender has sufficient balance
 		amount := int(t.Amount)
 		if amount <= 0 {
+			// TODO: should message be included?
 			success = false
 			return nil
 		}
 		if senderBal < amount {
+			// TODO: should message be included?
 			success = false
 			return nil
 		}
@@ -94,6 +99,17 @@ func (d *Database) UpdateDB(t *bankpb.Transaction) (bool, error) {
 		return nil
 	})
 	return success, err
+}
+
+func (d *Database) PrintDB() {
+	d.db.View(func(tx *bbolt.Tx) error {
+		b := tx.Bucket([]byte("balances"))
+		b.ForEach(func(k, v []byte) error {
+			log.Infof("Balance: %s: %s", k, v)
+			return nil
+		})
+		return nil
+	})
 }
 
 // Close closes the database

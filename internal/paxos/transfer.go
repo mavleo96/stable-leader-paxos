@@ -71,9 +71,9 @@ func (s *PaxosServer) TransferRequest(ctx context.Context, req *pb.TransactionRe
 
 	s.LastReplyTimestamp[req.Sender] = req.Timestamp
 	return &pb.TransactionResponse{
-		NodeID:    s.NodeID,
+		B:         s.CurrentBallotNum,
 		Timestamp: req.Timestamp,
 		Sender:    req.Sender,
-		Success:   true, // TODO: this response should be result of db.UpdateDB.
+		Result:    true, // TODO: this response should be result of db.UpdateDB.
 	}, nil
 }

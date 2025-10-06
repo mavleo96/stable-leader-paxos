@@ -74,6 +74,7 @@ func (x *BallotNumber) GetNodeID() string {
 	return ""
 }
 
+// TODO: this need not be part of proto
 type AcceptRecord struct {
 	state                  protoimpl.MessageState `protogen:"open.v1"`
 	AcceptedBallotNumber   *BallotNumber          `protobuf:"bytes,1,opt,name=acceptedBallotNumber,proto3" json:"acceptedBallotNumber,omitempty"`
@@ -317,9 +318,10 @@ func (x *AcceptMessage) GetMessage() *TransactionRequest {
 type AcceptedMessage struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Ok            bool                   `protobuf:"varint,1,opt,name=ok,proto3" json:"ok,omitempty"`
-	SequenceNum   int64                  `protobuf:"varint,2,opt,name=sequenceNum,proto3" json:"sequenceNum,omitempty"`
-	Message       *TransactionRequest    `protobuf:"bytes,3,opt,name=message,proto3" json:"message,omitempty"`
-	AcceptorID    string                 `protobuf:"bytes,4,opt,name=acceptorID,proto3" json:"acceptorID,omitempty"`
+	B             *BallotNumber          `protobuf:"bytes,2,opt,name=b,proto3" json:"b,omitempty"`
+	SequenceNum   int64                  `protobuf:"varint,3,opt,name=sequenceNum,proto3" json:"sequenceNum,omitempty"`
+	Message       *TransactionRequest    `protobuf:"bytes,4,opt,name=message,proto3" json:"message,omitempty"`
+	AcceptorID    string                 `protobuf:"bytes,5,opt,name=acceptorID,proto3" json:"acceptorID,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -359,6 +361,13 @@ func (x *AcceptedMessage) GetOk() bool {
 		return x.Ok
 	}
 	return false
+}
+
+func (x *AcceptedMessage) GetB() *BallotNumber {
+	if x != nil {
+		return x.B
+	}
+	return nil
 }
 
 func (x *AcceptedMessage) GetSequenceNum() int64 {
@@ -564,10 +573,10 @@ func (x *TransactionRequest) GetSender() string {
 
 type TransactionResponse struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	NodeID        string                 `protobuf:"bytes,1,opt,name=nodeID,proto3" json:"nodeID,omitempty"` // TODO: check if BallotNumber can be used here instead
+	B             *BallotNumber          `protobuf:"bytes,1,opt,name=b,proto3" json:"b,omitempty"`
 	Timestamp     int64                  `protobuf:"varint,2,opt,name=timestamp,proto3" json:"timestamp,omitempty"`
 	Sender        string                 `protobuf:"bytes,3,opt,name=sender,proto3" json:"sender,omitempty"`
-	Success       bool                   `protobuf:"varint,4,opt,name=success,proto3" json:"success,omitempty"`
+	Result        bool                   `protobuf:"varint,4,opt,name=result,proto3" json:"result,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -602,11 +611,11 @@ func (*TransactionResponse) Descriptor() ([]byte, []int) {
 	return file_paxos_proto_rawDescGZIP(), []int{9}
 }
 
-func (x *TransactionResponse) GetNodeID() string {
+func (x *TransactionResponse) GetB() *BallotNumber {
 	if x != nil {
-		return x.NodeID
+		return x.B
 	}
-	return ""
+	return nil
 }
 
 func (x *TransactionResponse) GetTimestamp() int64 {
@@ -623,9 +632,9 @@ func (x *TransactionResponse) GetSender() string {
 	return ""
 }
 
-func (x *TransactionResponse) GetSuccess() bool {
+func (x *TransactionResponse) GetResult() bool {
 	if x != nil {
-		return x.Success
+		return x.Result
 	}
 	return false
 }
@@ -698,13 +707,14 @@ const file_paxos_proto_rawDesc = "" +
 	"\rAcceptMessage\x12!\n" +
 	"\x01b\x18\x01 \x01(\v2\x13.paxos.BallotNumberR\x01b\x12 \n" +
 	"\vsequenceNum\x18\x02 \x01(\x03R\vsequenceNum\x123\n" +
-	"\amessage\x18\x03 \x01(\v2\x19.paxos.TransactionRequestR\amessage\"\x98\x01\n" +
+	"\amessage\x18\x03 \x01(\v2\x19.paxos.TransactionRequestR\amessage\"\xbb\x01\n" +
 	"\x0fAcceptedMessage\x12\x0e\n" +
-	"\x02ok\x18\x01 \x01(\bR\x02ok\x12 \n" +
-	"\vsequenceNum\x18\x02 \x01(\x03R\vsequenceNum\x123\n" +
-	"\amessage\x18\x03 \x01(\v2\x19.paxos.TransactionRequestR\amessage\x12\x1e\n" +
+	"\x02ok\x18\x01 \x01(\bR\x02ok\x12!\n" +
+	"\x01b\x18\x02 \x01(\v2\x13.paxos.BallotNumberR\x01b\x12 \n" +
+	"\vsequenceNum\x18\x03 \x01(\x03R\vsequenceNum\x123\n" +
+	"\amessage\x18\x04 \x01(\v2\x19.paxos.TransactionRequestR\amessage\x12\x1e\n" +
 	"\n" +
-	"acceptorID\x18\x04 \x01(\tR\n" +
+	"acceptorID\x18\x05 \x01(\tR\n" +
 	"acceptorID\"\x91\x01\n" +
 	"\rCommitMessage\x12!\n" +
 	"\x01b\x18\x01 \x01(\v2\x13.paxos.BallotNumberR\x01b\x12 \n" +
@@ -717,12 +727,12 @@ const file_paxos_proto_rawDesc = "" +
 	"\x12TransactionRequest\x124\n" +
 	"\vtransaction\x18\x01 \x01(\v2\x12.paxos.TransactionR\vtransaction\x12\x1c\n" +
 	"\ttimestamp\x18\x02 \x01(\x03R\ttimestamp\x12\x16\n" +
-	"\x06sender\x18\x03 \x01(\tR\x06sender\"}\n" +
-	"\x13TransactionResponse\x12\x16\n" +
-	"\x06nodeID\x18\x01 \x01(\tR\x06nodeID\x12\x1c\n" +
+	"\x06sender\x18\x03 \x01(\tR\x06sender\"\x86\x01\n" +
+	"\x13TransactionResponse\x12!\n" +
+	"\x01b\x18\x01 \x01(\v2\x13.paxos.BallotNumberR\x01b\x12\x1c\n" +
 	"\ttimestamp\x18\x02 \x01(\x03R\ttimestamp\x12\x16\n" +
-	"\x06sender\x18\x03 \x01(\tR\x06sender\x12\x18\n" +
-	"\asuccess\x18\x04 \x01(\bR\asuccess\"*\n" +
+	"\x06sender\x18\x03 \x01(\tR\x06sender\x12\x16\n" +
+	"\x06result\x18\x04 \x01(\bR\x06result\"*\n" +
 	"\x0eCommitResponse\x12\x18\n" +
 	"\asuccess\x18\x01 \x01(\bR\asuccess2\xc5\x02\n" +
 	"\x05Paxos\x12H\n" +
@@ -767,25 +777,27 @@ var file_paxos_proto_depIdxs = []int32{
 	1,  // 4: paxos.AckMessage.acceptLog:type_name -> paxos.AcceptRecord
 	0,  // 5: paxos.AcceptMessage.b:type_name -> paxos.BallotNumber
 	8,  // 6: paxos.AcceptMessage.message:type_name -> paxos.TransactionRequest
-	8,  // 7: paxos.AcceptedMessage.message:type_name -> paxos.TransactionRequest
-	0,  // 8: paxos.CommitMessage.b:type_name -> paxos.BallotNumber
-	8,  // 9: paxos.CommitMessage.transaction:type_name -> paxos.TransactionRequest
-	7,  // 10: paxos.TransactionRequest.transaction:type_name -> paxos.Transaction
-	8,  // 11: paxos.Paxos.TransferRequest:input_type -> paxos.TransactionRequest
-	11, // 12: paxos.Paxos.PrintLog:input_type -> google.protobuf.Empty
-	11, // 13: paxos.Paxos.PrintDB:input_type -> google.protobuf.Empty
-	4,  // 14: paxos.Paxos.AcceptRequest:input_type -> paxos.AcceptMessage
-	6,  // 15: paxos.Paxos.CommitRequest:input_type -> paxos.CommitMessage
-	9,  // 16: paxos.Paxos.TransferRequest:output_type -> paxos.TransactionResponse
-	11, // 17: paxos.Paxos.PrintLog:output_type -> google.protobuf.Empty
-	11, // 18: paxos.Paxos.PrintDB:output_type -> google.protobuf.Empty
-	5,  // 19: paxos.Paxos.AcceptRequest:output_type -> paxos.AcceptedMessage
-	10, // 20: paxos.Paxos.CommitRequest:output_type -> paxos.CommitResponse
-	16, // [16:21] is the sub-list for method output_type
-	11, // [11:16] is the sub-list for method input_type
-	11, // [11:11] is the sub-list for extension type_name
-	11, // [11:11] is the sub-list for extension extendee
-	0,  // [0:11] is the sub-list for field type_name
+	0,  // 7: paxos.AcceptedMessage.b:type_name -> paxos.BallotNumber
+	8,  // 8: paxos.AcceptedMessage.message:type_name -> paxos.TransactionRequest
+	0,  // 9: paxos.CommitMessage.b:type_name -> paxos.BallotNumber
+	8,  // 10: paxos.CommitMessage.transaction:type_name -> paxos.TransactionRequest
+	7,  // 11: paxos.TransactionRequest.transaction:type_name -> paxos.Transaction
+	0,  // 12: paxos.TransactionResponse.b:type_name -> paxos.BallotNumber
+	8,  // 13: paxos.Paxos.TransferRequest:input_type -> paxos.TransactionRequest
+	11, // 14: paxos.Paxos.PrintLog:input_type -> google.protobuf.Empty
+	11, // 15: paxos.Paxos.PrintDB:input_type -> google.protobuf.Empty
+	4,  // 16: paxos.Paxos.AcceptRequest:input_type -> paxos.AcceptMessage
+	6,  // 17: paxos.Paxos.CommitRequest:input_type -> paxos.CommitMessage
+	9,  // 18: paxos.Paxos.TransferRequest:output_type -> paxos.TransactionResponse
+	11, // 19: paxos.Paxos.PrintLog:output_type -> google.protobuf.Empty
+	11, // 20: paxos.Paxos.PrintDB:output_type -> google.protobuf.Empty
+	5,  // 21: paxos.Paxos.AcceptRequest:output_type -> paxos.AcceptedMessage
+	10, // 22: paxos.Paxos.CommitRequest:output_type -> paxos.CommitResponse
+	18, // [18:23] is the sub-list for method output_type
+	13, // [13:18] is the sub-list for method input_type
+	13, // [13:13] is the sub-list for extension type_name
+	13, // [13:13] is the sub-list for extension extendee
+	0,  // [0:13] is the sub-list for field type_name
 }
 
 func init() { file_paxos_proto_init() }

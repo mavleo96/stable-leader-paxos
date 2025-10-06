@@ -47,6 +47,4 @@ type AcceptorState struct {
 	// AcceptLog         []*pb.AcceptRecord // TODO: should this be a map?
 }
 
-var UnsuccessfulTransactionResponse = &pb.TransactionResponse{
-	Success: false,
-}
+var UnsuccessfulTransactionResponse = &pb.TransactionResponse{}

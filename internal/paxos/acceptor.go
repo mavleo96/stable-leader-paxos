@@ -2,6 +2,7 @@ package paxos
 
 import (
 	"context"
+	"errors"
 
 	"github.com/mavleo96/cft-mavleo96/internal/utils"
 	pb "github.com/mavleo96/cft-mavleo96/pb/paxos"
@@ -75,7 +76,7 @@ func (s *PaxosServer) CommitRequest(ctx context.Context, req *pb.CommitMessage) 
 	// Reject if ballot number is lower than promised ballot number
 	if !BallotNumberIsHigherOrEqual(s.State.PromisedBallotNum, req.B) {
 		log.Warnf("Rejected %s", utils.TransactionRequestString(req.Transaction))
-		return &pb.CommitResponse{Success: false}, nil
+		return &pb.CommitResponse{Committed: false}, nil
 	}
 
 	// Update State
@@ -92,28 +93,29 @@ func (s *PaxosServer) CommitRequest(ctx context.Context, req *pb.CommitMessage) 
 	log.Infof("Commited %s", utils.TransactionRequestString(req.Transaction))
 
 	// Execute as much as possible
-	success := s.TryExecute(req.SequenceNum)
-	if !success {
+	result, err := s.TryExecute(req.SequenceNum)
+	if err != nil {
 		log.Warnf("Failed to execute commit request %s", utils.TransactionRequestString(req.Transaction))
-		return &pb.CommitResponse{Success: false}, nil
+		return &pb.CommitResponse{Committed: true, Executed: false}, nil
 	}
 
-	return &pb.CommitResponse{Success: true}, nil
+	return &pb.CommitResponse{Committed: true, Executed: true, Result: result}, nil
 }
 
 // TryExecute tries to execute the transaction
 // The state mutex should be acquired before calling this function
-func (s *PaxosServer) TryExecute(sequenceNum int64) bool {
+func (s *PaxosServer) TryExecute(sequenceNum int64) (bool, error) {
 	for s.State.ExecutedSequenceNum < sequenceNum {
 		nextSequenceNum := s.State.ExecutedSequenceNum + 1
 		record, ok := s.State.AcceptLog[nextSequenceNum]
 		if !ok {
-			return false
+			return false, errors.New("not executed since log has gaps")
 		}
 		if !record.Committed {
-			return false
+			return false, errors.New("not executed since log has gaps")
 		}
 		if record.Executed {
+			// TODO: should this be a warning?
 			log.Fatal("Executed sequence number is already executed")
 		}
 		success, err := s.DB.UpdateDB(record.AcceptedVal.Transaction)
@@ -121,8 +123,9 @@ func (s *PaxosServer) TryExecute(sequenceNum int64) bool {
 			log.Warn(err)
 		}
 		record.Executed = true
+		record.Result = success
 		log.Infof("Executed %s with success %t", utils.TransactionRequestString(record.AcceptedVal), success)
 		s.State.ExecutedSequenceNum++
 	}
-	return true
+	return s.State.AcceptLog[sequenceNum].Result, nil
 }

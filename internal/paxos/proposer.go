@@ -108,7 +108,7 @@ func (s *PaxosServer) SendAcceptRequest(req *pb.AcceptMessage) (bool, error) {
 
 // SendCommitRequest handles the commit request rpc on node client side
 // This code is part of Proposer structure
-func (s *PaxosServer) SendCommitRequest(req *pb.CommitMessage) (bool, error) {
+func (s *PaxosServer) SendCommitRequest(req *pb.CommitMessage) (*pb.CommitResponse, error) {
 	// Multicast commit request to all peers except self
 	for _, peer := range s.Peers { // No need to wait for response from peers
 		id := peer.ID
@@ -148,8 +148,5 @@ func (s *PaxosServer) SendCommitRequest(req *pb.CommitMessage) (bool, error) {
 	if err != nil {
 		log.Warn(err)
 	}
-	if !resp.Success {
-		return false, nil
-	}
-	return true, nil
+	return resp, nil
 }

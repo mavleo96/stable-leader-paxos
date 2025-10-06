@@ -82,6 +82,7 @@ type AcceptRecord struct {
 	AcceptedVal            *TransactionRequest    `protobuf:"bytes,3,opt,name=acceptedVal,proto3" json:"acceptedVal,omitempty"`
 	Committed              bool                   `protobuf:"varint,4,opt,name=Committed,proto3" json:"Committed,omitempty"`
 	Executed               bool                   `protobuf:"varint,5,opt,name=Executed,proto3" json:"Executed,omitempty"`
+	Result                 bool                   `protobuf:"varint,6,opt,name=Result,proto3" json:"Result,omitempty"`
 	unknownFields          protoimpl.UnknownFields
 	sizeCache              protoimpl.SizeCache
 }
@@ -147,6 +148,13 @@ func (x *AcceptRecord) GetCommitted() bool {
 func (x *AcceptRecord) GetExecuted() bool {
 	if x != nil {
 		return x.Executed
+	}
+	return false
+}
+
+func (x *AcceptRecord) GetResult() bool {
+	if x != nil {
+		return x.Result
 	}
 	return false
 }
@@ -641,7 +649,9 @@ func (x *TransactionResponse) GetResult() bool {
 
 type CommitResponse struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	Success       bool                   `protobuf:"varint,1,opt,name=success,proto3" json:"success,omitempty"` // TODO: need to add transaction execution success if continuing with this
+	Committed     bool                   `protobuf:"varint,1,opt,name=committed,proto3" json:"committed,omitempty"` // TODO: need to add transaction execution success if continuing with this
+	Executed      bool                   `protobuf:"varint,2,opt,name=executed,proto3" json:"executed,omitempty"`
+	Result        bool                   `protobuf:"varint,3,opt,name=result,proto3" json:"result,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -676,9 +686,23 @@ func (*CommitResponse) Descriptor() ([]byte, []int) {
 	return file_paxos_proto_rawDescGZIP(), []int{10}
 }
 
-func (x *CommitResponse) GetSuccess() bool {
+func (x *CommitResponse) GetCommitted() bool {
 	if x != nil {
-		return x.Success
+		return x.Committed
+	}
+	return false
+}
+
+func (x *CommitResponse) GetExecuted() bool {
+	if x != nil {
+		return x.Executed
+	}
+	return false
+}
+
+func (x *CommitResponse) GetResult() bool {
+	if x != nil {
+		return x.Result
 	}
 	return false
 }
@@ -690,13 +714,14 @@ const file_paxos_proto_rawDesc = "" +
 	"\vpaxos.proto\x12\x05paxos\x1a\x1bgoogle/protobuf/empty.proto\"4\n" +
 	"\fBallotNumber\x12\f\n" +
 	"\x01n\x18\x01 \x01(\x03R\x01n\x12\x16\n" +
-	"\x06nodeID\x18\x02 \x01(\tR\x06nodeID\"\x86\x02\n" +
+	"\x06nodeID\x18\x02 \x01(\tR\x06nodeID\"\x9e\x02\n" +
 	"\fAcceptRecord\x12G\n" +
 	"\x14acceptedBallotNumber\x18\x01 \x01(\v2\x13.paxos.BallotNumberR\x14acceptedBallotNumber\x126\n" +
 	"\x16acceptedSequenceNumber\x18\x02 \x01(\x03R\x16acceptedSequenceNumber\x12;\n" +
 	"\vacceptedVal\x18\x03 \x01(\v2\x19.paxos.TransactionRequestR\vacceptedVal\x12\x1c\n" +
 	"\tCommitted\x18\x04 \x01(\bR\tCommitted\x12\x1a\n" +
-	"\bExecuted\x18\x05 \x01(\bR\bExecuted\"3\n" +
+	"\bExecuted\x18\x05 \x01(\bR\bExecuted\x12\x16\n" +
+	"\x06Result\x18\x06 \x01(\bR\x06Result\"3\n" +
 	"\x0ePrepareMessage\x12!\n" +
 	"\x01b\x18\x01 \x01(\v2\x13.paxos.BallotNumberR\x01b\"\x82\x01\n" +
 	"\n" +
@@ -732,9 +757,11 @@ const file_paxos_proto_rawDesc = "" +
 	"\x01b\x18\x01 \x01(\v2\x13.paxos.BallotNumberR\x01b\x12\x1c\n" +
 	"\ttimestamp\x18\x02 \x01(\x03R\ttimestamp\x12\x16\n" +
 	"\x06sender\x18\x03 \x01(\tR\x06sender\x12\x16\n" +
-	"\x06result\x18\x04 \x01(\bR\x06result\"*\n" +
-	"\x0eCommitResponse\x12\x18\n" +
-	"\asuccess\x18\x01 \x01(\bR\asuccess2\xc5\x02\n" +
+	"\x06result\x18\x04 \x01(\bR\x06result\"b\n" +
+	"\x0eCommitResponse\x12\x1c\n" +
+	"\tcommitted\x18\x01 \x01(\bR\tcommitted\x12\x1a\n" +
+	"\bexecuted\x18\x02 \x01(\bR\bexecuted\x12\x16\n" +
+	"\x06result\x18\x03 \x01(\bR\x06result2\xc5\x02\n" +
 	"\x05Paxos\x12H\n" +
 	"\x0fTransferRequest\x12\x19.paxos.TransactionRequest\x1a\x1a.paxos.TransactionResponse\x12:\n" +
 	"\bPrintLog\x12\x16.google.protobuf.Empty\x1a\x16.google.protobuf.Empty\x129\n" +

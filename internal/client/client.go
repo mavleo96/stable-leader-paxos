@@ -63,18 +63,20 @@ func processTransaction(clientID string, t *pb.Transaction, nodeClients map[stri
 			response, err = nodeClients[*leaderNode].TransferRequest(ctx, request)
 			if err == nil {
 				log.Infof(
-					"%s <- %s: %s",
+					"%s <- %s: %s, %s",
 					clientID,
 					*leaderNode,
+					utils.TransactionString(request.Transaction),
 					utils.TransactionResponseString(response),
 				)
 				cancel()
 				break
 			} else {
 				log.Warnf(
-					"%s <- %s: %v",
+					"%s <- %s: %s, %v",
 					clientID,
 					*leaderNode,
+					utils.TransactionString(request.Transaction),
 					status.Convert(err).Message(),
 				)
 			}
@@ -90,16 +92,18 @@ func processTransaction(clientID string, t *pb.Transaction, nodeClients map[stri
 					resp, err := nodeClient.TransferRequest(ctx, request)
 					if err == nil {
 						log.Infof(
-							"%s <- %s: %s",
+							"%s <- %s: %s, %s",
 							clientID,
 							nodeID,
+							utils.TransactionString(request.Transaction),
 							utils.TransactionResponseString(resp),
 						)
 					} else {
 						log.Warnf(
-							"%s <- %s: %v",
+							"%s <- %s: %s, %v",
 							clientID,
 							nodeID,
+							utils.TransactionString(request.Transaction),
 							status.Convert(err).Message(),
 						)
 					}

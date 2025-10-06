@@ -29,6 +29,7 @@ message AcceptRecord  {
     TransactionRequest acceptedVal = 3;
     bool Committed = 4;
     bool Executed = 5;
+    bool Result = 6;
 }
 
 message PrepareMessage {
@@ -81,5 +82,7 @@ message TransactionResponse {
 }
 
 message CommitResponse {
-    bool success = 1;  // TODO: need to add transaction execution success if continuing with this
+    bool committed = 1;  // TODO: need to add transaction execution success if continuing with this
+    bool executed = 2;
+    bool result = 3;
 }

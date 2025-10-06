@@ -60,13 +60,20 @@ func (s *PaxosServer) TransferRequest(ctx context.Context, req *pb.TransactionRe
 		return UnsuccessfulTransactionResponse, status.Errorf(codes.Internal, "failed to send accept request")
 	}
 	// TODO: no error handling is prolly bad; but the function always returns nil
-	success, err := s.SendCommitRequest(&pb.CommitMessage{
+	resp, err := s.SendCommitRequest(&pb.CommitMessage{
 		B:           s.CurrentBallotNum,
 		SequenceNum: assignSequenceNum,
 		Transaction: req,
 	})
-	if err != nil || !success {
-		return UnsuccessfulTransactionResponse, status.Errorf(codes.Internal, "could not execute commit request")
+	if err != nil {
+		if !resp.Committed {
+			return UnsuccessfulTransactionResponse, status.Errorf(codes.Internal, "could not commit request")
+		}
+		if !resp.Executed {
+			return UnsuccessfulTransactionResponse, status.Errorf(codes.Internal, "could not execute request")
+		}
+		// TODO: improve this code flow
+		log.Fatalf("should not happen")
 	}
 
 	s.LastReplyTimestamp[req.Sender] = req.Timestamp
@@ -74,6 +81,6 @@ func (s *PaxosServer) TransferRequest(ctx context.Context, req *pb.TransactionRe
 		B:         s.CurrentBallotNum,
 		Timestamp: req.Timestamp,
 		Sender:    req.Sender,
-		Result:    true, // TODO: this response should be result of db.UpdateDB.
+		Result:    resp.Result,
 	}, nil
 }

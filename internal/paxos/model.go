@@ -7,6 +7,7 @@ import (
 	"github.com/mavleo96/cft-mavleo96/internal/database"
 	"github.com/mavleo96/cft-mavleo96/internal/models"
 	pb "github.com/mavleo96/cft-mavleo96/pb/paxos"
+	log "github.com/sirupsen/logrus"
 )
 
 const (
@@ -29,7 +30,8 @@ type PaxosServer struct {
 	PaxosTimer         *SafeTimer       // Proposer only
 	// ExecutedSequenceNum int64
 	// PendingExecutions []int64
-	AcceptedMessages []*pb.AcceptedMessage
+	AcceptedMessages  []*pb.AcceptedMessage
+	ForceTimerExpired chan bool // Proposer only
 	// ProposerClient ProposerClient
 	pb.UnimplementedPaxosServer
 	// bankpb.UnimplementedTransactionServiceServer
@@ -46,3 +48,16 @@ type AcceptorState struct {
 }
 
 var UnsuccessfulTransactionResponse = &pb.TransactionResponse{}
+
+func (s *PaxosServer) TimerRoutine() {
+	log.Info("Timer routine started is active")
+	for {
+		select {
+		case <-s.PaxosTimer.Timer.C:
+			log.Fatal("Timer expired, need to initiate prepare")
+		case <-s.ForceTimerExpired:
+			s.PaxosTimer.TimerCleanup()
+			log.Fatal("Timer expired, need to initiate prepare")
+		}
+	}
+}

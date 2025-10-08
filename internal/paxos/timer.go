@@ -48,6 +48,15 @@ func (t *SafeTimer) DecrementWaitCountAndResetOrStopIfZero() {
 	}
 }
 
+func (t *SafeTimer) TimerCleanup() {
+	t.Mutex.Lock()
+	defer t.Mutex.Unlock()
+	t.Timer.Stop()
+	<-t.Timer.C
+	t.Running = false
+	t.WaitCount = 0
+}
+
 func (t *SafeTimer) GetTimerState() (int64, bool) {
 	t.Mutex.RLock()
 	defer t.Mutex.RUnlock()
@@ -55,9 +64,14 @@ func (t *SafeTimer) GetTimerState() (int64, bool) {
 }
 
 func CreateSafeTimer() *SafeTimer {
+	// Create a timer and stop/drain it
+	timer := time.NewTimer(mainTimeout)
+	if !timer.Stop() {
+		<-timer.C
+	}
 	return &SafeTimer{
 		Mutex:     sync.RWMutex{},
-		Timer:     time.NewTimer(mainTimeout),
+		Timer:     timer,
 		WaitCount: 0,
 		Running:   false,
 	}

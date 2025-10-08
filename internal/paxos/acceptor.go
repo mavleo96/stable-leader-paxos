@@ -57,6 +57,10 @@ func (s *PaxosServer) AcceptRequest(ctx context.Context, req *pb.AcceptMessage) 
 		Executed:               false,
 	}
 
+	// TODO: a huge bug here is duplicate requests; need to fix this
+	// Timer wait count incrmented and will be decremented when commit request is received
+	s.PaxosTimer.IncrementWaitCountOrStart()
+
 	log.Infof("Accepted %s", utils.TransactionRequestString(req.Message))
 	return &pb.AcceptedMessage{
 		Ok:          true,
@@ -78,6 +82,10 @@ func (s *PaxosServer) CommitRequest(ctx context.Context, req *pb.CommitMessage) 
 		log.Warnf("Rejected %s", utils.TransactionRequestString(req.Transaction))
 		return &pb.CommitResponse{Committed: false}, nil
 	}
+
+	// TODO: a huge bug here is duplicate requests/ commit when not already accepted
+	// Timer wait count decremented since commit request is received
+	s.PaxosTimer.DecrementWaitCountAndResetOrStopIfZero()
 
 	// Update State
 	// Replace if sequence number exists in accept log else append

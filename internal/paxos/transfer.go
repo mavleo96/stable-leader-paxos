@@ -17,32 +17,10 @@ func (s *PaxosServer) TransferRequest(ctx context.Context, req *pb.TransactionRe
 	s.State.Mutex.RLock()
 	if s.State.Leader.ID != s.NodeID {
 		s.State.Mutex.RUnlock() // Release read lock on state mutex
-		s.PaxosTimer.IncrementWaitCountOrStart()
-		responseCh := make(chan error)
-		log.Warnf("Not leader, forwarding to leader %s", s.State.Leader)
-		go func(r *pb.TransactionRequest) {
-			err := s.ForwardToLeader(r)
-			responseCh <- err
-		}(req)
 
-		// TODO: currently waiting for leader to respond before returning to client
-		// Maybe need to return a response to client immediately and forward in separate goroutine
-		select {
-		case <-s.PaxosTimer.Timer.C:
-			log.Warnf("Leader timer expired, need to initiate prepare")
-			// TODO: ensure cleanup of routines waiting and timer
-			return UnsuccessfulTransactionResponse, status.Errorf(codes.Unavailable, "leader timed out")
-		case err := <-responseCh:
-			if err != nil {
-				// TODO: ensure cleanup of routines waiting and timer
-				// If error is not due to leader not being available, return failed forward
-				return UnsuccessfulTransactionResponse, err
-			}
-			s.PaxosTimer.DecrementWaitCountAndResetOrStopIfZero()
-			// If successful, return unsuccessful transaction response since this is not the leader
-			log.Infof("Successfully forwarded to leader %s: %s", s.State.Leader, utils.TransactionRequestString(req))
-			return UnsuccessfulTransactionResponse, status.Errorf(codes.Unavailable, "not leader")
-		}
+		// Forward request to leader and return to client immediately
+		go s.ForwardToLeader(req)
+		return UnsuccessfulTransactionResponse, status.Errorf(codes.Unavailable, "not leader")
 	}
 
 	// Release the read lock and acquire write lock since we need to process the request
@@ -115,19 +93,30 @@ func (s *PaxosServer) TransferRequest(ctx context.Context, req *pb.TransactionRe
 }
 
 // ForwardToLeader forwards the request to the leader
-func (s *PaxosServer) ForwardToLeader(req *pb.TransactionRequest) error {
+func (s *PaxosServer) ForwardToLeader(req *pb.TransactionRequest) {
 	// Initialize connection to leader
+	log.Warnf("Not leader, forwarding to leader %s", s.State.Leader)
 	conn, err := grpc.NewClient(s.State.Leader.Address, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
 		log.Warnf("Failed to forward to leader %s: %s", s.State.Leader, err)
-		return status.Errorf(codes.Internal, "failed to forward to leader")
+		s.ForceTimerExpired <- true
+		return
 	}
 	defer conn.Close()
 	leaderClient := pb.NewPaxosClient(conn)
 
 	// Forward request to leader
+	s.PaxosTimer.IncrementWaitCountOrStart()
 	_, err = leaderClient.TransferRequest(context.Background(), req)
-	return err
+	s.PaxosTimer.DecrementWaitCountAndResetOrStopIfZero()
+
+	// TODO: need to check the error here if leader is emulating a failure
+	if err != nil {
+		if err.Error() == "not leader" {
+			s.ForceTimerExpired <- true
+			return
+		}
+	}
 }
 
 // TODO: This should be a util function

@@ -10,6 +10,7 @@ service Paxos {
     rpc TransferRequest (TransactionRequest) returns (TransactionResponse);
     rpc PrintLog (google.protobuf.Empty) returns (google.protobuf.Empty);
     rpc PrintDB (google.protobuf.Empty) returns (google.protobuf.Empty);
+    rpc PrintTimerState (google.protobuf.Empty) returns (google.protobuf.Empty);
 
     // rpc PrepareRequest (PrepareMessage) returns (AckMessage);
 

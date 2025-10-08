@@ -136,6 +136,15 @@ mainLoop:
 			case "print view":
 				log.Info("Print view command received")
 				// TODO: implement print view
+			case "print timer state":
+				log.Info("Print timer state command received")
+				// TODO: implement print timer state
+				for _, nodeClient := range nodeClients {
+					_, err = nodeClient.PrintTimerState(context.Background(), &emptypb.Empty{})
+					if err != nil {
+						log.Panic(err)
+					}
+				}
 			default:
 				continue interactionLoop
 			}

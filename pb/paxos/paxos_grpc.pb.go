@@ -23,6 +23,7 @@ const (
 	Paxos_TransferRequest_FullMethodName = "/paxos.Paxos/TransferRequest"
 	Paxos_PrintLog_FullMethodName        = "/paxos.Paxos/PrintLog"
 	Paxos_PrintDB_FullMethodName         = "/paxos.Paxos/PrintDB"
+	Paxos_PrintTimerState_FullMethodName = "/paxos.Paxos/PrintTimerState"
 	Paxos_AcceptRequest_FullMethodName   = "/paxos.Paxos/AcceptRequest"
 	Paxos_CommitRequest_FullMethodName   = "/paxos.Paxos/CommitRequest"
 )
@@ -34,6 +35,7 @@ type PaxosClient interface {
 	TransferRequest(ctx context.Context, in *TransactionRequest, opts ...grpc.CallOption) (*TransactionResponse, error)
 	PrintLog(ctx context.Context, in *emptypb.Empty, opts ...grpc.CallOption) (*emptypb.Empty, error)
 	PrintDB(ctx context.Context, in *emptypb.Empty, opts ...grpc.CallOption) (*emptypb.Empty, error)
+	PrintTimerState(ctx context.Context, in *emptypb.Empty, opts ...grpc.CallOption) (*emptypb.Empty, error)
 	AcceptRequest(ctx context.Context, in *AcceptMessage, opts ...grpc.CallOption) (*AcceptedMessage, error)
 	CommitRequest(ctx context.Context, in *CommitMessage, opts ...grpc.CallOption) (*CommitResponse, error)
 }
@@ -73,6 +75,15 @@ func (c *paxosClient) PrintDB(ctx context.Context, in *emptypb.Empty, opts ...gr
 	return out, nil
 }
 
+func (c *paxosClient) PrintTimerState(ctx context.Context, in *emptypb.Empty, opts ...grpc.CallOption) (*emptypb.Empty, error) {
+	out := new(emptypb.Empty)
+	err := c.cc.Invoke(ctx, Paxos_PrintTimerState_FullMethodName, in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *paxosClient) AcceptRequest(ctx context.Context, in *AcceptMessage, opts ...grpc.CallOption) (*AcceptedMessage, error) {
 	out := new(AcceptedMessage)
 	err := c.cc.Invoke(ctx, Paxos_AcceptRequest_FullMethodName, in, out, opts...)
@@ -98,6 +109,7 @@ type PaxosServer interface {
 	TransferRequest(context.Context, *TransactionRequest) (*TransactionResponse, error)
 	PrintLog(context.Context, *emptypb.Empty) (*emptypb.Empty, error)
 	PrintDB(context.Context, *emptypb.Empty) (*emptypb.Empty, error)
+	PrintTimerState(context.Context, *emptypb.Empty) (*emptypb.Empty, error)
 	AcceptRequest(context.Context, *AcceptMessage) (*AcceptedMessage, error)
 	CommitRequest(context.Context, *CommitMessage) (*CommitResponse, error)
 	mustEmbedUnimplementedPaxosServer()
@@ -115,6 +127,9 @@ func (UnimplementedPaxosServer) PrintLog(context.Context, *emptypb.Empty) (*empt
 }
 func (UnimplementedPaxosServer) PrintDB(context.Context, *emptypb.Empty) (*emptypb.Empty, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method PrintDB not implemented")
+}
+func (UnimplementedPaxosServer) PrintTimerState(context.Context, *emptypb.Empty) (*emptypb.Empty, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method PrintTimerState not implemented")
 }
 func (UnimplementedPaxosServer) AcceptRequest(context.Context, *AcceptMessage) (*AcceptedMessage, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method AcceptRequest not implemented")
@@ -189,6 +204,24 @@ func _Paxos_PrintDB_Handler(srv interface{}, ctx context.Context, dec func(inter
 	return interceptor(ctx, in, info, handler)
 }
 
+func _Paxos_PrintTimerState_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(emptypb.Empty)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PaxosServer).PrintTimerState(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Paxos_PrintTimerState_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PaxosServer).PrintTimerState(ctx, req.(*emptypb.Empty))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _Paxos_AcceptRequest_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(AcceptMessage)
 	if err := dec(in); err != nil {
@@ -243,6 +276,10 @@ var Paxos_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "PrintDB",
 			Handler:    _Paxos_PrintDB_Handler,
+		},
+		{
+			MethodName: "PrintTimerState",
+			Handler:    _Paxos_PrintTimerState_Handler,
 		},
 		{
 			MethodName: "AcceptRequest",

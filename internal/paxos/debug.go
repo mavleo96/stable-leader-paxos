@@ -36,3 +36,10 @@ func (s *PaxosServer) PrintDB(ctx context.Context, req *emptypb.Empty) (*emptypb
 	s.DB.PrintDB()
 	return &emptypb.Empty{}, nil
 }
+
+// PrintTimerState prints the timer state
+func (s *PaxosServer) PrintTimerState(ctx context.Context, req *emptypb.Empty) (*emptypb.Empty, error) {
+	waitCount, running := s.PaxosTimer.GetTimerState()
+	fmt.Printf("Timer state: %d, %t\n", waitCount, running)
+	return &emptypb.Empty{}, nil
+}

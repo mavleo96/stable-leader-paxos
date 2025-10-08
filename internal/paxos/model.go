@@ -10,7 +10,7 @@ import (
 )
 
 const (
-	mainTimeout = 3 * time.Second
+	mainTimeout = 500 * time.Millisecond
 	// prepareTimeout = 500 * time.Millisecond
 )
 

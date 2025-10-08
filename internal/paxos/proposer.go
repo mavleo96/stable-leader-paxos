@@ -64,12 +64,15 @@ import (
 func (s *PaxosServer) SendAcceptRequest(req *pb.AcceptMessage) (bool, error) {
 
 	mu := sync.Mutex{}
-	acceptCount := 0
+	acceptCount := 1
 
 	// Multicast accept request to all peers
 	wg := sync.WaitGroup{}
 	for _, peer := range s.Peers {
 		id := peer.ID
+		if id == s.NodeID {
+			continue
+		}
 		addr := peer.Address
 		wg.Add(1)
 		go func(id, addr string) {
@@ -108,7 +111,7 @@ func (s *PaxosServer) SendAcceptRequest(req *pb.AcceptMessage) (bool, error) {
 
 // SendCommitRequest handles the commit request rpc on node client side
 // This code is part of Proposer structure
-func (s *PaxosServer) SendCommitRequest(req *pb.CommitMessage) (*pb.CommitResponse, error) {
+func (s *PaxosServer) SendCommitRequest(req *pb.CommitMessage) {
 	// Multicast commit request to all peers except self
 	for _, peer := range s.Peers { // No need to wait for response from peers
 		id := peer.ID
@@ -132,21 +135,4 @@ func (s *PaxosServer) SendCommitRequest(req *pb.CommitMessage) (*pb.CommitRespon
 			}
 		}(id, addr)
 	}
-
-	// Initialize connection to self
-	conn, err := grpc.NewClient(s.Addr, grpc.WithTransportCredentials(insecure.NewCredentials()))
-	if err != nil {
-		log.Warn(err)
-	}
-	defer conn.Close()
-	client := pb.NewPaxosClient(conn)
-
-	// Send commit request to self and wait for response if it was executed
-	// TODO: check with Jelwin/Prajwal if this is good design
-	// TODO: if continuing with this design, then need to get transaction success status also
-	resp, err := client.CommitRequest(context.Background(), req)
-	if err != nil {
-		log.Warn(err)
-	}
-	return resp, nil
 }

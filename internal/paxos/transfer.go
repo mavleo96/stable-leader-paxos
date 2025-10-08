@@ -13,11 +13,11 @@ import (
 )
 
 func (s *PaxosServer) TransferRequest(ctx context.Context, req *pb.TransactionRequest) (*pb.TransactionResponse, error) {
-	// s.Mutex.RLock()
-	// defer s.Mutex.RUnlock()
+	// Forward request if not leader; acquire read lock on state mutex
+	s.State.Mutex.RLock()
 	if s.State.Leader.ID != s.NodeID {
+		s.State.Mutex.RUnlock() // Release read lock on state mutex
 		s.PaxosTimer.IncrementWaitCountOrStart()
-
 		responseCh := make(chan error)
 		log.Warnf("Not leader, forwarding to leader %s", s.State.Leader)
 		go func(r *pb.TransactionRequest) {
@@ -25,6 +25,8 @@ func (s *PaxosServer) TransferRequest(ctx context.Context, req *pb.TransactionRe
 			responseCh <- err
 		}(req)
 
+		// TODO: currently waiting for leader to respond before returning to client
+		// Maybe need to return a response to client immediately and forward in separate goroutine
 		select {
 		case <-s.PaxosTimer.Timer.C:
 			log.Warnf("Leader timer expired, need to initiate prepare")
@@ -43,69 +45,72 @@ func (s *PaxosServer) TransferRequest(ctx context.Context, req *pb.TransactionRe
 		}
 	}
 
-	// TODO: think if this should be at the beginning of the function
+	// Release the read lock and acquire write lock since we need to process the request
+	s.State.Mutex.RUnlock()
+	s.State.Mutex.Lock()
+	defer s.State.Mutex.Unlock()
+
 	// We will process even if the timestamp is equal because previous reply could have been lost or sent to backup node
 	if req.Timestamp < s.LastReplyTimestamp[req.Sender] {
+		log.Warnf("Old timestamp %d < %d", req.Timestamp, s.LastReplyTimestamp[req.Sender])
 		return UnsuccessfulTransactionResponse, status.Errorf(codes.AlreadyExists, "old timestamp")
 	}
-	// Check if the request is already accepted or assign a higher sequence number
-	s.State.Mutex.RLock()
-	for _, acceptRecord := range s.State.AcceptLog {
-		acceptedVal := acceptRecord.AcceptedVal
-		if acceptedVal.Sender == req.Sender && acceptedVal.Timestamp == req.Timestamp {
-			// TODO: Need to think about this; what if its not committed, or not executed
-			if !acceptRecord.Executed {
-				s.State.Mutex.RUnlock()
-				return UnsuccessfulTransactionResponse, status.Errorf(codes.AlreadyExists, "commmited but not executed")
-			} else {
-				s.State.Mutex.RUnlock()
-				return &pb.TransactionResponse{
-					B:         s.CurrentBallotNum,
-					Timestamp: req.Timestamp,
-					Sender:    req.Sender,
-					Result:    acceptRecord.Result,
-				}, nil
-			}
+
+	// ACCEPT REQUEST LOGIC
+	// Check if the request is already accepted
+	sequenceNum, _ := s.CheckIfRequestInAcceptLog(req)
+	// If new request then assign a higher sequence number and accept it immediately before sending accepts
+	if sequenceNum == 0 {
+		s.CurrentSequenceNum++
+		sequenceNum = s.CurrentSequenceNum
+		log.Infof("Accepted %s", utils.TransactionRequestString(req))
+		s.State.AcceptLog[sequenceNum] = &pb.AcceptRecord{
+			AcceptedBallotNumber:   s.CurrentBallotNum,
+			AcceptedSequenceNumber: sequenceNum,
+			AcceptedVal:            req,
+			Committed:              false,
+			Executed:               false,
+			Result:                 false,
 		}
 	}
-	s.State.Mutex.RUnlock()
 
-	s.Mutex.Lock()
-	defer s.Mutex.Unlock()
-	s.CurrentSequenceNum++
-	assignSequenceNum := s.CurrentSequenceNum
+	// COMMIT REQUEST LOGIC
+	// Check if the request is already committed
+	if !s.State.AcceptLog[sequenceNum].Committed {
+		ok, err := s.SendAcceptRequest(&pb.AcceptMessage{
+			B:           s.CurrentBallotNum,
+			SequenceNum: sequenceNum,
+			Message:     req,
+		})
+		if err != nil {
+			return UnsuccessfulTransactionResponse, status.Errorf(codes.Internal, err.Error())
+		}
+		if !ok {
+			return UnsuccessfulTransactionResponse, status.Errorf(codes.Internal, "failed to get quorum of accepts")
+		}
 
-	ok, err := s.SendAcceptRequest(&pb.AcceptMessage{
-		B:           s.CurrentBallotNum,
-		SequenceNum: assignSequenceNum,
-		Message:     req,
-	})
-	if err != nil || !ok {
-		return UnsuccessfulTransactionResponse, status.Errorf(codes.Internal, "failed to send accept request")
+		// Once quorum of accepts in recieved commit it immediately and multicast the commit request
+		s.State.AcceptLog[sequenceNum].Committed = true
+		// TODO: no error handling is prolly bad; but the function always returns nil
+		s.SendCommitRequest(&pb.CommitMessage{
+			B:           s.CurrentBallotNum,
+			SequenceNum: sequenceNum,
+			Transaction: req,
+		})
 	}
-	// TODO: no error handling is prolly bad; but the function always returns nil
-	resp, err := s.SendCommitRequest(&pb.CommitMessage{
-		B:           s.CurrentBallotNum,
-		SequenceNum: assignSequenceNum,
-		Transaction: req,
-	})
+
+	// EXECUTE REQUEST LOGIC
+	// Try to execute the request and return the result
+	result, err := s.TryExecute(sequenceNum)
 	if err != nil {
-		if !resp.Committed {
-			return UnsuccessfulTransactionResponse, status.Errorf(codes.Internal, "could not commit request")
-		}
-		if !resp.Executed {
-			return UnsuccessfulTransactionResponse, status.Errorf(codes.Internal, "could not execute request")
-		}
-		// TODO: improve this code flow
-		log.Fatalf("should not happen")
+		return UnsuccessfulTransactionResponse, status.Errorf(codes.Internal, "could not commit request WITH %v", err)
 	}
-
 	s.LastReplyTimestamp[req.Sender] = req.Timestamp
 	return &pb.TransactionResponse{
 		B:         s.CurrentBallotNum,
 		Timestamp: req.Timestamp,
 		Sender:    req.Sender,
-		Result:    resp.Result,
+		Result:    result,
 	}, nil
 }
 
@@ -123,4 +128,20 @@ func (s *PaxosServer) ForwardToLeader(req *pb.TransactionRequest) error {
 	// Forward request to leader
 	_, err = leaderClient.TransferRequest(context.Background(), req)
 	return err
+}
+
+// TODO: This should be a util function
+func (s *PaxosServer) CheckIfRequestInAcceptLog(req *pb.TransactionRequest) (int64, error) {
+	// TODO: This is a development hack; need to remove this
+	if s.State.Mutex.TryLock() {
+		log.Fatal("State mutex was not acquired before trying to execute!")
+	}
+
+	for _, acceptRecord := range s.State.AcceptLog {
+		acceptedVal := acceptRecord.AcceptedVal
+		if acceptedVal.Sender == req.Sender && acceptedVal.Timestamp == req.Timestamp {
+			return acceptRecord.AcceptedSequenceNumber, nil
+		}
+	}
+	return int64(0), nil
 }

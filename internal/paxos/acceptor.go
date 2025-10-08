@@ -105,6 +105,11 @@ func (s *PaxosServer) CommitRequest(ctx context.Context, req *pb.CommitMessage) 
 // TryExecute tries to execute the transaction
 // The state mutex should be acquired before calling this function
 func (s *PaxosServer) TryExecute(sequenceNum int64) (bool, error) {
+	// TODO: This is a development hack; need to remove this
+	if s.State.Mutex.TryLock() {
+		log.Fatal("State mutex was not acquired before trying to execute!")
+	}
+
 	for s.State.ExecutedSequenceNum < sequenceNum {
 		nextSequenceNum := s.State.ExecutedSequenceNum + 1
 		record, ok := s.State.AcceptLog[nextSequenceNum]

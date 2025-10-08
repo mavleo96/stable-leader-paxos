@@ -761,12 +761,13 @@ const file_paxos_proto_rawDesc = "" +
 	"\x0eCommitResponse\x12\x1c\n" +
 	"\tcommitted\x18\x01 \x01(\bR\tcommitted\x12\x1a\n" +
 	"\bexecuted\x18\x02 \x01(\bR\bexecuted\x12\x16\n" +
-	"\x06result\x18\x03 \x01(\bR\x06result2\x88\x03\n" +
+	"\x06result\x18\x03 \x01(\bR\x06result2\xc4\x03\n" +
 	"\x05Paxos\x12H\n" +
 	"\x0fTransferRequest\x12\x19.paxos.TransactionRequest\x1a\x1a.paxos.TransactionResponse\x12:\n" +
 	"\bPrintLog\x12\x16.google.protobuf.Empty\x1a\x16.google.protobuf.Empty\x129\n" +
 	"\aPrintDB\x12\x16.google.protobuf.Empty\x1a\x16.google.protobuf.Empty\x12A\n" +
-	"\x0fPrintTimerState\x12\x16.google.protobuf.Empty\x1a\x16.google.protobuf.Empty\x12=\n" +
+	"\x0fPrintTimerState\x12\x16.google.protobuf.Empty\x1a\x16.google.protobuf.Empty\x12:\n" +
+	"\x0ePrepareRequest\x12\x15.paxos.PrepareMessage\x1a\x11.paxos.AckMessage\x12=\n" +
 	"\rAcceptRequest\x12\x14.paxos.AcceptMessage\x1a\x16.paxos.AcceptedMessage\x12<\n" +
 	"\rCommitRequest\x12\x14.paxos.CommitMessage\x1a\x15.paxos.CommitResponseB.Z,github.com/mavleo96/cft-mavleo96/pb/paxos;pbb\x06proto3"
 
@@ -815,16 +816,18 @@ var file_paxos_proto_depIdxs = []int32{
 	11, // 14: paxos.Paxos.PrintLog:input_type -> google.protobuf.Empty
 	11, // 15: paxos.Paxos.PrintDB:input_type -> google.protobuf.Empty
 	11, // 16: paxos.Paxos.PrintTimerState:input_type -> google.protobuf.Empty
-	4,  // 17: paxos.Paxos.AcceptRequest:input_type -> paxos.AcceptMessage
-	6,  // 18: paxos.Paxos.CommitRequest:input_type -> paxos.CommitMessage
-	9,  // 19: paxos.Paxos.TransferRequest:output_type -> paxos.TransactionResponse
-	11, // 20: paxos.Paxos.PrintLog:output_type -> google.protobuf.Empty
-	11, // 21: paxos.Paxos.PrintDB:output_type -> google.protobuf.Empty
-	11, // 22: paxos.Paxos.PrintTimerState:output_type -> google.protobuf.Empty
-	5,  // 23: paxos.Paxos.AcceptRequest:output_type -> paxos.AcceptedMessage
-	10, // 24: paxos.Paxos.CommitRequest:output_type -> paxos.CommitResponse
-	19, // [19:25] is the sub-list for method output_type
-	13, // [13:19] is the sub-list for method input_type
+	2,  // 17: paxos.Paxos.PrepareRequest:input_type -> paxos.PrepareMessage
+	4,  // 18: paxos.Paxos.AcceptRequest:input_type -> paxos.AcceptMessage
+	6,  // 19: paxos.Paxos.CommitRequest:input_type -> paxos.CommitMessage
+	9,  // 20: paxos.Paxos.TransferRequest:output_type -> paxos.TransactionResponse
+	11, // 21: paxos.Paxos.PrintLog:output_type -> google.protobuf.Empty
+	11, // 22: paxos.Paxos.PrintDB:output_type -> google.protobuf.Empty
+	11, // 23: paxos.Paxos.PrintTimerState:output_type -> google.protobuf.Empty
+	3,  // 24: paxos.Paxos.PrepareRequest:output_type -> paxos.AckMessage
+	5,  // 25: paxos.Paxos.AcceptRequest:output_type -> paxos.AcceptedMessage
+	10, // 26: paxos.Paxos.CommitRequest:output_type -> paxos.CommitResponse
+	20, // [20:27] is the sub-list for method output_type
+	13, // [13:20] is the sub-list for method input_type
 	13, // [13:13] is the sub-list for extension type_name
 	13, // [13:13] is the sub-list for extension extendee
 	0,  // [0:13] is the sub-list for field type_name

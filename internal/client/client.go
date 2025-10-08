@@ -11,7 +11,7 @@ import (
 )
 
 const (
-	clientTimeout = time.Second * 5
+	clientTimeout = 1500 * time.Millisecond
 	maxAttempts   = 1000
 )
 
@@ -56,6 +56,7 @@ func processTransaction(clientID string, t *pb.Transaction, nodeClients map[stri
 	// Retry loop
 	var err error
 	var response *pb.TransactionResponse
+retryLoop:
 	for attempt := 1; attempt <= maxAttempts; attempt++ {
 		// Context for each attempt with timeout
 		ctx, cancel := context.WithTimeout(context.Background(), clientTimeout)
@@ -63,22 +64,25 @@ func processTransaction(clientID string, t *pb.Transaction, nodeClients map[stri
 			response, err = nodeClients[*leaderNode].TransferRequest(ctx, request)
 			if err == nil {
 				log.Infof(
-					"%s <- %s: %s, %s",
+					"%s <- %s: %s, %s hola",
 					clientID,
 					*leaderNode,
 					utils.TransactionString(request.Transaction),
 					utils.TransactionResponseString(response),
 				)
 				cancel()
-				break
+				break retryLoop
+				// return
 			} else {
 				log.Warnf(
-					"%s <- %s: %s, %v",
+					"%s <- %s: %s, %v amigo",
 					clientID,
 					*leaderNode,
 					utils.TransactionString(request.Transaction),
 					status.Convert(err).Message(),
 				)
+				cancel()
+				continue retryLoop
 			}
 		} else { // Multi-cast to all nodes if 1st attempt fails
 			// Responses channel to collect responses from goroutines of requests to all nodes
@@ -92,7 +96,7 @@ func processTransaction(clientID string, t *pb.Transaction, nodeClients map[stri
 					resp, err := nodeClient.TransferRequest(ctx, request)
 					if err == nil {
 						log.Infof(
-							"%s <- %s: %s, %s",
+							"%s <- %s: %s, %s buenos",
 							clientID,
 							nodeID,
 							utils.TransactionString(request.Transaction),
@@ -100,7 +104,7 @@ func processTransaction(clientID string, t *pb.Transaction, nodeClients map[stri
 						)
 					} else {
 						log.Warnf(
-							"%s <- %s: %s, %v",
+							"%s <- %s: %s, %v dias",
 							clientID,
 							nodeID,
 							utils.TransactionString(request.Transaction),
@@ -117,12 +121,13 @@ func processTransaction(clientID string, t *pb.Transaction, nodeClients map[stri
 					*leaderNode = res.Response.B.NodeID
 					err = nil
 					log.Infof("%s updated leader to %s", clientID, *leaderNode)
-					break
+					cancel()
+					break retryLoop
 				}
 			}
+			cancel()
+			continue retryLoop
 		}
-		// Cancel context and break from retry loop if error is nil
-		cancel()
 	}
 
 }

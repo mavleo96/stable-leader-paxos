@@ -3,6 +3,7 @@ package main
 import (
 	"bufio"
 	"context"
+	"flag"
 	"fmt"
 	"os"
 	"strings"
@@ -19,6 +20,8 @@ import (
 
 func main() {
 	// log.SetLevel(log.FatalLevel)
+	filePath := flag.String("file", "", "Path to CSV file")
+	flag.Parse()
 
 	// Parse Config
 	cfg, err := config.ParseConfig("./configs/config.yaml")
@@ -47,7 +50,7 @@ func main() {
 	// Parse Transactions
 	// The entire csv file is loaded into memory and transactions are queued by
 	// client and set number like preserving the order for each client.
-	records, err := client.ReadCSV("./testdata/test1.csv")
+	records, err := client.ReadCSV(*filePath)
 	if err != nil {
 		log.Fatal(err)
 	}

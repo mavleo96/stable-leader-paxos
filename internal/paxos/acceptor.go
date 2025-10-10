@@ -3,6 +3,7 @@ package paxos
 import (
 	"context"
 	"errors"
+	"time"
 
 	"github.com/mavleo96/cft-mavleo96/internal/utils"
 	pb "github.com/mavleo96/cft-mavleo96/pb/paxos"
@@ -13,25 +14,47 @@ import (
 // All functions are part of Acceptor structure
 // They should only try to acquire the state mutex
 
-// func (s *PaxosServer) PrepareRequest(ctx context.Context, req *pb.PrepareMessage) (*pb.AckMessage, error) {
-// 	// TODO: think what if leader node needs to handle this
-// 	s.State.Mutex.Lock()
-// 	defer s.State.Mutex.Unlock()
+// PrepareRequest handles the prepare request rpc on server side
+func (s *PaxosServer) PrepareRequest(ctx context.Context, req *pb.PrepareMessage) (*pb.AckMessage, error) {
+	log.Infof("Received prepare request %v", utils.BallotNumberString(req.B))
+	s.State.Mutex.RLock()
 
-// 	// TODO: don't promise if timer has not expired -> need to log messages and then respond to highest
-// 	if !BallotNumberIsHigher(s.State.PromisedBallotNum, req.B) {
-// 		log.Warnf("Rejected prepare request %v", req.String())
-// 		return &pb.AckMessage{Ok: false}, nil
-// 	}
+	// Reject immediately if ballot number is lower or equal to promise
+	if !BallotNumberIsHigher(s.State.PromisedBallotNum, req.B) {
+		s.State.Mutex.RUnlock()
+		log.Warnf("Rejected prepare request %s without queueing", utils.BallotNumberString(req.B))
+		return &pb.AckMessage{Ok: false}, nil
+	}
+	s.State.Mutex.RUnlock()
 
-// 	s.State.PromisedBallotNum = req.B
-// 	log.Infof("Accepted prepare request %v", req.String())
-// 	return &pb.AckMessage{
-// 		Ok:        true,
-// 		AcceptNum: s.State.PromisedBallotNum,
-// 		AcceptLog: s.State.AcceptLog,
-// 	}, nil
-// }
+	// Add prepare request record to prepare message log
+	prepareRequestRecord := &PrepareRequestRecord{
+		ResponseChannel: make(chan *pb.PrepareMessage),
+		PrepareMessage:  req,
+	}
+	s.PrepareMessageLog[time.Now()] = prepareRequestRecord
+
+	// Wait for prepare routine to send prepare message
+	if resp := <-prepareRequestRecord.ResponseChannel; resp != prepareRequestRecord.PrepareMessage {
+		log.Infof("Rejected prepare request %s", utils.BallotNumberString(req.B))
+		return &pb.AckMessage{Ok: false}, nil
+	}
+
+	// Prepare the log to be sent
+	s.State.Mutex.RLock()
+	defer s.State.Mutex.RUnlock()
+	acceptLog := make([]*pb.AcceptRecord, 0)
+	for _, record := range s.State.AcceptLog {
+		acceptLog = append(acceptLog, record)
+	}
+
+	log.Infof("Accepted prepare request %s", utils.BallotNumberString(req.B))
+	return &pb.AckMessage{
+		Ok:        true,
+		AcceptNum: req.B,
+		AcceptLog: acceptLog,
+	}, nil
+}
 
 // AcceptRequest handles the accept request rpc on server side
 // This code is part of Acceptor structure

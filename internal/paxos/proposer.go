@@ -10,54 +10,77 @@ import (
 	"google.golang.org/grpc/credentials/insecure"
 )
 
-// func (s *PaxosServer) SendPrepareRequest(req *pb.PrepareMessage) (bool, error) {
-// 	mu := sync.Mutex{}
-// 	wg := sync.WaitGroup{}
+func (s *PaxosServer) SendPrepareRequest(req *pb.PrepareMessage) (bool, error) {
 
-// 	acceptCount := 0
-// 	// for id, addr := range p.Peers {
-// 	log.Infof("Sending prepare request")
-// 	for _, peer := range s.Peers {
-// 		id := peer.ID
-// 		addr := peer.Address
-// 		wg.Add(1)
-// 		go func(id, addr string) {
-// 			conn, err := grpc.NewClient(addr, grpc.WithTransportCredentials(insecure.NewCredentials()))
-// 			if err != nil {
-// 				log.Warn(err)
-// 			}
-// 			defer conn.Close()
+	// mu := sync.Mutex{}
+	// acceptCount := 1
+	peerAcceptLog := map[string][]*pb.AcceptRecord{}
 
-// 			client := pb.NewPaxosClient(conn)
-// 			resp, err := client.PrepareRequest(context.Background(), req)
-// 			if err != nil {
-// 				log.Warn(err)
-// 			}
-// 			if !resp.Ok {
-// 				return
-// 			}
-// 			mu.Lock()
-// 			acceptCount++
-// 			mu.Unlock() // defer is better?
-// 			wg.Done()   // defer is better?
-// 		}(id, addr)
-// 	}
+	// Multicast prepare request to all peers except self
+	// wg := sync.WaitGroup{}
+	responseChan := make(chan bool, len(s.Peers)-1)
+	for _, peer := range s.Peers {
+		id := peer.ID
+		if id == s.NodeID {
+			continue
+		}
+		addr := peer.Address
 
-// 	wg.Wait()
-// 	if acceptCount < s.Quorum {
-// 		return false, nil
-// 	}
-// 	s.State.Mutex.Lock()
-// 	defer s.State.Mutex.Unlock()
-// 	s.State.PromisedBallotNum = req.B
-// 	// s.CurrentBallotNum = req.B
-// 	// TODO: need to regularize the logs and prepare correct accept message
+		// wg.Add(1)
+		log.Infof("Sending prepare request to %s", addr)
+		go func(id, addr string) {
+			// defer wg.Done()
+			// Initialize connection to peer
+			conn, err := grpc.NewClient(addr, grpc.WithTransportCredentials(insecure.NewCredentials()))
+			if err != nil {
+				log.Warn(err)
+			}
+			defer conn.Close()
+			client := pb.NewPaxosClient(conn)
 
-// 	log.Infof("Prepared %v", req.String())
+			// Send prepare request to peer
+			resp, err := client.PrepareRequest(context.Background(), req)
+			log.Infof("Prepare response from %s: %v", addr, resp.String())
+			if err != nil {
+				log.Warn(err)
+				responseChan <- false
+				return
+			}
+			if !resp.Ok {
+				responseChan <- false
+				return // if not accepted, return without incrementing acceptCount
+			}
+			// mu.Lock()
+			// defer mu.Unlock()
+			// acceptCount++
+			peerAcceptLog[id] = resp.AcceptLog
+			responseChan <- true
+		}(id, addr)
+	}
+	log.Infof("Waiting for prepare responses")
+	// wg.Wait()
+	// Count oks
+	okCount := 1
+	for i := 0; i < len(s.Peers)-1; i++ {
+		ok := <-responseChan
+		if ok {
+			okCount++
+		}
+		if okCount >= s.Quorum {
+			break
+		}
+	}
 
-// 	return true, nil
+	// Check if acceptCount is less than quorum
+	if okCount < s.Quorum {
+		log.Warnf("I don't have enough acceptors to prepare %v", req.String())
+		return false, nil
+	}
 
-// }
+	log.Infof("I am prepared %v", req.String())
+	return true, nil
+
+}
 
 // SendAcceptRequest handles the accept request rpc on node client side
 // This code is part of Proposer structure

@@ -38,8 +38,9 @@ type PaxosClient interface {
 	PrintDB(ctx context.Context, in *emptypb.Empty, opts ...grpc.CallOption) (*emptypb.Empty, error)
 	PrintTimerState(ctx context.Context, in *emptypb.Empty, opts ...grpc.CallOption) (*emptypb.Empty, error)
 	PrepareRequest(ctx context.Context, in *PrepareMessage, opts ...grpc.CallOption) (*AckMessage, error)
+	// rpc NewViewRequest (NewViewMessage) returns (stream AcceptedMessage);
 	AcceptRequest(ctx context.Context, in *AcceptMessage, opts ...grpc.CallOption) (*AcceptedMessage, error)
-	CommitRequest(ctx context.Context, in *CommitMessage, opts ...grpc.CallOption) (*CommitResponse, error)
+	CommitRequest(ctx context.Context, in *CommitMessage, opts ...grpc.CallOption) (*emptypb.Empty, error)
 }
 
 type paxosClient struct {
@@ -104,8 +105,8 @@ func (c *paxosClient) AcceptRequest(ctx context.Context, in *AcceptMessage, opts
 	return out, nil
 }
 
-func (c *paxosClient) CommitRequest(ctx context.Context, in *CommitMessage, opts ...grpc.CallOption) (*CommitResponse, error) {
-	out := new(CommitResponse)
+func (c *paxosClient) CommitRequest(ctx context.Context, in *CommitMessage, opts ...grpc.CallOption) (*emptypb.Empty, error) {
+	out := new(emptypb.Empty)
 	err := c.cc.Invoke(ctx, Paxos_CommitRequest_FullMethodName, in, out, opts...)
 	if err != nil {
 		return nil, err
@@ -122,8 +123,9 @@ type PaxosServer interface {
 	PrintDB(context.Context, *emptypb.Empty) (*emptypb.Empty, error)
 	PrintTimerState(context.Context, *emptypb.Empty) (*emptypb.Empty, error)
 	PrepareRequest(context.Context, *PrepareMessage) (*AckMessage, error)
+	// rpc NewViewRequest (NewViewMessage) returns (stream AcceptedMessage);
 	AcceptRequest(context.Context, *AcceptMessage) (*AcceptedMessage, error)
-	CommitRequest(context.Context, *CommitMessage) (*CommitResponse, error)
+	CommitRequest(context.Context, *CommitMessage) (*emptypb.Empty, error)
 	mustEmbedUnimplementedPaxosServer()
 }
 
@@ -149,7 +151,7 @@ func (UnimplementedPaxosServer) PrepareRequest(context.Context, *PrepareMessage)
 func (UnimplementedPaxosServer) AcceptRequest(context.Context, *AcceptMessage) (*AcceptedMessage, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method AcceptRequest not implemented")
 }
-func (UnimplementedPaxosServer) CommitRequest(context.Context, *CommitMessage) (*CommitResponse, error) {
+func (UnimplementedPaxosServer) CommitRequest(context.Context, *CommitMessage) (*emptypb.Empty, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method CommitRequest not implemented")
 }
 func (UnimplementedPaxosServer) mustEmbedUnimplementedPaxosServer() {}

@@ -21,15 +21,16 @@ func (s *PaxosServer) TransferRequest(ctx context.Context, req *pb.TransactionRe
 	defer s.State.Mutex.Unlock()
 	if s.State.Leader.ID != s.NodeID {
 		// Forward request to leader and return to client immediately
-		if s.State.Leader.ID != "" {
-			log.Warnf("Not leader, forwarding to leader %s", s.State.Leader.ID)
-			go s.ForwardToLeader(req, s.State.Leader)
-		} else {
-			// TODO: try to become the leader without returning to client
-			// TODO: i need to start a timer to become the leader if election is not happening
-			// Need to handle this case when system initialization vs failed election
-			log.Warn("Leader is empty, Need to become leader if election is not happening")
-		}
+		// if s.State.Leader.ID != "" {
+		log.Warnf("Not leader, forwarding to leader %s", s.State.Leader.ID)
+		go s.ForwardToLeader(req, s.State.Leader)
+		// }
+		// else {
+		// 	// TODO: try to become the leader without returning to client
+		// 	// TODO: i need to start a timer to become the leader if election is not happening
+		// 	// Need to handle this case when system initialization vs failed election
+		// 	log.Warn("Leader is empty, Need to become leader if election is not happening")
+		// }
 		return UnsuccessfulTransactionResponse, status.Errorf(codes.Aborted, "not leader")
 	}
 
@@ -52,12 +53,12 @@ func (s *PaxosServer) TransferRequest(ctx context.Context, req *pb.TransactionRe
 		sequenceNum = MaxSequenceNumber(s.State.AcceptLog) + 1
 		log.Infof("Accepted %s", utils.TransactionRequestString(req))
 		s.State.AcceptLog[sequenceNum] = &pb.AcceptRecord{
-			AcceptedBallotNumber:   s.State.PromisedBallotNum,
-			AcceptedSequenceNumber: sequenceNum,
-			AcceptedVal:            req,
-			Committed:              false,
-			Executed:               false,
-			Result:                 false,
+			AcceptedBallotNum:   s.State.PromisedBallotNum,
+			AcceptedSequenceNum: sequenceNum,
+			AcceptedVal:         req,
+			Committed:           false,
+			Executed:            false,
+			Result:              false,
 		}
 	}
 
@@ -131,13 +132,16 @@ func (s *PaxosServer) ForwardToLeader(req *pb.TransactionRequest, leader *models
 	responseChan := make(chan error)
 	defer close(responseChan)
 	go func(ctx context.Context, responseChan chan error, leader *models.Node) {
+		if leader.ID == "" {
+			responseChan <- status.Errorf(codes.Aborted, "leader is empty")
+			return
+		}
 		// defer close(responseChan)
 		// Initialize connection to leader
 		conn, err := grpc.NewClient(leader.Address, grpc.WithTransportCredentials(insecure.NewCredentials()))
 		if err != nil {
 			log.Warnf("Failed to connect to leader %s: %s", leader.ID, err)
-			// TODO: Need to check if i need to force timer expired or let backup timeout handle it
-			// s.PaxosTimer.ForceTimerExpired <- true
+			responseChan <- err
 			return
 		}
 		defer conn.Close()
@@ -146,7 +150,7 @@ func (s *PaxosServer) ForwardToLeader(req *pb.TransactionRequest, leader *models
 		// Forward request to leader
 		_, err = leaderClient.TransferRequest(ctx, req)
 		if err != nil {
-			log.Warnf("Emulating leader network failure by return nothing on response channel")
+			responseChan <- err
 			return
 		}
 		responseChan <- nil
@@ -158,8 +162,11 @@ func (s *PaxosServer) ForwardToLeader(req *pb.TransactionRequest, leader *models
 		log.Warnf("Backup timer expired, stopping leader client at %d", time.Now().UnixMilli())
 		return
 	case err := <-responseChan:
-		log.Infof("Response from leader on forwarding request %s", err)
-		s.PaxosTimer.DecrementWaitCountAndResetOrStopIfZero(req.String())
+		if err != nil {
+			log.Warnf("Error from leader on forwarding request %s", err)
+		} else {
+			s.PaxosTimer.DecrementWaitCountAndResetOrStopIfZero(req.String())
+		}
 		return
 	}
 }

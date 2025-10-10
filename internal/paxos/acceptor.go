@@ -56,6 +56,27 @@ func (s *PaxosServer) PrepareRequest(ctx context.Context, req *pb.PrepareMessage
 	}, nil
 }
 
+// NewViewRequest handles the new view request rpc on server side
+func (s *PaxosServer) NewViewRequest(req *pb.NewViewMessage, stream pb.Paxos_NewViewRequestServer) error {
+	// No need to acquire state mutex since AcceptRequest acquires it
+	log.Infof("Received new view message %v", utils.BallotNumberString(req.B))
+	for _, record := range req.AcceptLog {
+		acceptedMessage, err := s.AcceptRequest(context.Background(), &pb.AcceptMessage{
+			B:           record.AcceptedBallotNum,
+			SequenceNum: record.AcceptedSequenceNum,
+			Message:     record.AcceptedVal,
+		})
+		if err != nil {
+			log.Fatal(err)
+		}
+		if err := stream.Send(acceptedMessage); err != nil {
+			log.Fatal(err)
+		}
+	}
+	log.Infof("Finished streaming accepts for %s", utils.BallotNumberString(req.B))
+	return nil
+}
+
 // AcceptRequest handles the accept request rpc on server side
 // This code is part of Acceptor structure
 func (s *PaxosServer) AcceptRequest(ctx context.Context, req *pb.AcceptMessage) (*pb.AcceptedMessage, error) {
@@ -75,15 +96,14 @@ func (s *PaxosServer) AcceptRequest(ctx context.Context, req *pb.AcceptMessage) 
 	s.State.PromisedBallotNum = req.B // This is wrong according to Prajwal
 	seqNum, ok := GetSequenceNumberIfExistsInAcceptLog(s.State.AcceptLog, req.Message)
 	if ok {
-		s.State.AcceptLog[seqNum].AcceptedBallotNumber = req.B
-		log.Fatal("Sequence number already exists in accept log") // TODO: this is a development hack; need to fix this
+		s.State.AcceptLog[seqNum].AcceptedBallotNum = req.B
 	} else {
 		s.State.AcceptLog[req.SequenceNum] = &pb.AcceptRecord{
-			AcceptedBallotNumber:   req.B,
-			AcceptedSequenceNumber: req.SequenceNum,
-			AcceptedVal:            req.Message,
-			Committed:              false,
-			Executed:               false,
+			AcceptedBallotNum:   req.B,
+			AcceptedSequenceNum: req.SequenceNum,
+			AcceptedVal:         req.Message,
+			Committed:           false,
+			Executed:            false,
 		}
 		// We increment wait count since this is a new request
 		s.PaxosTimer.IncrementWaitCountOrStart(req.String())
@@ -125,15 +145,15 @@ func (s *PaxosServer) CommitRequest(ctx context.Context, req *pb.CommitMessage) 
 	// Replace if sequence number exists in accept log else append
 	seqNum, ok := GetSequenceNumberIfExistsInAcceptLog(s.State.AcceptLog, req.Transaction)
 	if ok {
-		s.State.AcceptLog[seqNum].AcceptedBallotNumber = req.B
+		s.State.AcceptLog[seqNum].AcceptedBallotNum = req.B
 		s.State.AcceptLog[seqNum].Committed = true
 	} else {
 		s.State.AcceptLog[req.SequenceNum] = &pb.AcceptRecord{
-			AcceptedBallotNumber:   req.B,
-			AcceptedSequenceNumber: req.SequenceNum,
-			AcceptedVal:            req.Transaction,
-			Committed:              true,
-			Executed:               false,
+			AcceptedBallotNum:   req.B,
+			AcceptedSequenceNum: req.SequenceNum,
+			AcceptedVal:         req.Transaction,
+			Committed:           true,
+			Executed:            false,
 		}
 	}
 	log.Infof("Commited %s", utils.TransactionRequestString(req.Transaction))
@@ -141,6 +161,9 @@ func (s *PaxosServer) CommitRequest(ctx context.Context, req *pb.CommitMessage) 
 	// Try to execute the request
 	// TODO: this busy retry logic can be problematic; need to fix this
 	for {
+		if s.State.AcceptLog[req.SequenceNum].Executed {
+			break
+		}
 		_, err := s.TryExecute(req.SequenceNum)
 		if err != nil {
 			log.Infof("Retry execute request %s", utils.TransactionRequestString(req.Transaction))
@@ -171,9 +194,14 @@ func (s *PaxosServer) TryExecute(sequenceNum int64) (bool, error) {
 		if record.Executed {
 			log.Fatal("Executed sequence number is already executed")
 		}
-		success, err := s.DB.UpdateDB(record.AcceptedVal.Transaction)
-		if err != nil {
-			log.Warn(err)
+		// Update database
+		var success bool = true
+		if record.AcceptedVal != NoOperation {
+			var err error
+			success, err = s.DB.UpdateDB(record.AcceptedVal.Transaction)
+			if err != nil {
+				log.Warn(err)
+			}
 		}
 		record.Executed = true
 		record.Result = success

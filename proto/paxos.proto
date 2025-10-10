@@ -13,7 +13,7 @@ service Paxos {
     rpc PrintTimerState (google.protobuf.Empty) returns (google.protobuf.Empty);
 
     rpc PrepareRequest (PrepareMessage) returns (AckMessage);
-    // rpc NewViewRequest (NewViewMessage) returns (stream AcceptedMessage);
+    rpc NewViewRequest (NewViewMessage) returns (stream AcceptedMessage);
     rpc AcceptRequest (AcceptMessage) returns (AcceptedMessage);
     rpc CommitRequest (CommitMessage) returns (google.protobuf.Empty);
 }
@@ -25,8 +25,8 @@ message BallotNumber {
 
 // TODO: this need not be part of proto
 message AcceptRecord  {
-    BallotNumber acceptedBallotNumber = 1;
-	int64 acceptedSequenceNumber = 2;
+    BallotNumber acceptedBallotNum = 1;
+	int64 acceptedSequenceNum = 2;
     TransactionRequest acceptedVal = 3;
     bool Committed = 4;
     bool Executed = 5;
@@ -57,10 +57,10 @@ message AcceptedMessage {
     string acceptorID = 5;
 }
 
-// message NewViewMessage {
-//     BallotNumber b = 1;
-//     repeated AcceptRecord acceptLog = 2;
-// }
+message NewViewMessage {
+    BallotNumber b = 1;
+    repeated AcceptRecord acceptLog = 2;
+}
 
 message CommitMessage {
     BallotNumber b = 1;

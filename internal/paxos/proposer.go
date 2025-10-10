@@ -2,6 +2,7 @@ package paxos
 
 import (
 	"context"
+	"io"
 	"sync"
 
 	pb "github.com/mavleo96/cft-mavleo96/pb/paxos"
@@ -10,14 +11,13 @@ import (
 	"google.golang.org/grpc/credentials/insecure"
 )
 
-func (s *PaxosServer) SendPrepareRequest(req *pb.PrepareMessage) (bool, error) {
-
-	// mu := sync.Mutex{}
-	// acceptCount := 1
-	peerAcceptLog := map[string][]*pb.AcceptRecord{}
+// SendPrepareRequest sends a prepare request to all peers except self and returns the response from each peer to PrepareRoutine
+// This code is part of Proposer structure
+func (s *PaxosServer) SendPrepareRequest(req *pb.PrepareMessage) (bool, map[string][]*pb.AcceptRecord, error) {
+	peerAcceptLog := map[string][]*pb.AcceptRecord{} // mutex not needed here since its a map
 
 	// Multicast prepare request to all peers except self
-	// wg := sync.WaitGroup{}
+	// We wait for only f+1 Goroutines to return
 	responseChan := make(chan bool, len(s.Peers)-1)
 	for _, peer := range s.Peers {
 		id := peer.ID
@@ -26,10 +26,8 @@ func (s *PaxosServer) SendPrepareRequest(req *pb.PrepareMessage) (bool, error) {
 		}
 		addr := peer.Address
 
-		// wg.Add(1)
-		log.Infof("Sending prepare request to %s", addr)
+		log.Infof("Sending prepare request to %s", id)
 		go func(id, addr string) {
-			// defer wg.Done()
 			// Initialize connection to peer
 			conn, err := grpc.NewClient(addr, grpc.WithTransportCredentials(insecure.NewCredentials()))
 			if err != nil {
@@ -48,38 +46,91 @@ func (s *PaxosServer) SendPrepareRequest(req *pb.PrepareMessage) (bool, error) {
 			}
 			if !resp.Ok {
 				responseChan <- false
-				return // if not accepted, return without incrementing acceptCount
+				return // if not accepted, return without incrementing promiseCount
 			}
-			// mu.Lock()
-			// defer mu.Unlock()
-			// acceptCount++
 			peerAcceptLog[id] = resp.AcceptLog
 			responseChan <- true
 		}(id, addr)
 	}
 	log.Infof("Waiting for prepare responses")
-	// wg.Wait()
-	// Count oks
-	okCount := 1
+
+	// Count promises and rejects
+	promiseCount := 1 // 1 is for self
+	rejectedCount := 0
 	for i := 0; i < len(s.Peers)-1; i++ {
 		ok := <-responseChan
 		if ok {
-			okCount++
+			promiseCount++
+		} else {
+			rejectedCount++
 		}
-		if okCount >= s.Quorum {
+		if rejectedCount >= s.Quorum || promiseCount >= s.Quorum {
 			break
 		}
 	}
 
-	// Check if acceptCount is less than quorum
-	if okCount < s.Quorum {
-		log.Warnf("I don't have enough acceptors to prepare %v", req.String())
-		return false, nil
+	// Check if promiseCount is less than quorum
+	if promiseCount < s.Quorum {
+		return false, nil, nil
+	}
+	return true, peerAcceptLog, nil
+}
+
+// SendNewViewRequest sends a new view request to all peers except self and returns the count of accepted requests for each sequence number
+// This code is part of Proposer structure
+func (s *PaxosServer) SendNewViewRequest(req *pb.NewViewMessage) (map[int64]int, error) {
+	// Initialize accept count map with 1 for self
+	mu := sync.Mutex{}
+	acceptCountMap := make(map[int64]int)
+	for _, record := range req.AcceptLog {
+		acceptCountMap[record.AcceptedSequenceNum] = 1
 	}
 
-	log.Infof("I am prepared %v", req.String())
-	return true, nil
+	// Multicast new view request to all peers except self
+	wg := sync.WaitGroup{}
+	for _, peer := range s.Peers {
+		id := peer.ID
+		if id == s.NodeID {
+			continue
+		}
+		addr := peer.Address
+		wg.Add(1)
+		go func(id, addr string) {
+			defer wg.Done()
+			// Initialize connection to peer
+			conn, err := grpc.NewClient(addr, grpc.WithTransportCredentials(insecure.NewCredentials()))
+			if err != nil {
+				log.Warn(err)
+			}
+			defer conn.Close()
+			client := pb.NewPaxosClient(conn)
 
+			// Send new view request to peer
+			stream, err := client.NewViewRequest(context.Background(), req)
+			if err != nil {
+				log.Warn(err)
+				return
+			}
+			// Stream accept responses from peer
+			for {
+				resp, err := stream.Recv()
+				if err == io.EOF {
+					break
+				}
+				if err != nil {
+					log.Warn(err)
+					return
+				}
+				// Update accept count map
+				mu.Lock()
+				acceptCountMap[resp.SequenceNum]++
+				mu.Unlock()
+			}
+		}(id, addr)
+	}
+	wg.Wait()
+
+	return acceptCountMap, nil
 }
 
 // SendAcceptRequest handles the accept request rpc on node client side

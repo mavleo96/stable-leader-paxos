@@ -25,6 +25,7 @@ const (
 	Paxos_PrintDB_FullMethodName         = "/paxos.Paxos/PrintDB"
 	Paxos_PrintTimerState_FullMethodName = "/paxos.Paxos/PrintTimerState"
 	Paxos_PrepareRequest_FullMethodName  = "/paxos.Paxos/PrepareRequest"
+	Paxos_NewViewRequest_FullMethodName  = "/paxos.Paxos/NewViewRequest"
 	Paxos_AcceptRequest_FullMethodName   = "/paxos.Paxos/AcceptRequest"
 	Paxos_CommitRequest_FullMethodName   = "/paxos.Paxos/CommitRequest"
 )
@@ -38,7 +39,7 @@ type PaxosClient interface {
 	PrintDB(ctx context.Context, in *emptypb.Empty, opts ...grpc.CallOption) (*emptypb.Empty, error)
 	PrintTimerState(ctx context.Context, in *emptypb.Empty, opts ...grpc.CallOption) (*emptypb.Empty, error)
 	PrepareRequest(ctx context.Context, in *PrepareMessage, opts ...grpc.CallOption) (*AckMessage, error)
-	// rpc NewViewRequest (NewViewMessage) returns (stream AcceptedMessage);
+	NewViewRequest(ctx context.Context, in *NewViewMessage, opts ...grpc.CallOption) (Paxos_NewViewRequestClient, error)
 	AcceptRequest(ctx context.Context, in *AcceptMessage, opts ...grpc.CallOption) (*AcceptedMessage, error)
 	CommitRequest(ctx context.Context, in *CommitMessage, opts ...grpc.CallOption) (*emptypb.Empty, error)
 }
@@ -96,6 +97,38 @@ func (c *paxosClient) PrepareRequest(ctx context.Context, in *PrepareMessage, op
 	return out, nil
 }
 
+func (c *paxosClient) NewViewRequest(ctx context.Context, in *NewViewMessage, opts ...grpc.CallOption) (Paxos_NewViewRequestClient, error) {
+	stream, err := c.cc.NewStream(ctx, &Paxos_ServiceDesc.Streams[0], Paxos_NewViewRequest_FullMethodName, opts...)
+	if err != nil {
+		return nil, err
+	}
+	x := &paxosNewViewRequestClient{stream}
+	if err := x.ClientStream.SendMsg(in); err != nil {
+		return nil, err
+	}
+	if err := x.ClientStream.CloseSend(); err != nil {
+		return nil, err
+	}
+	return x, nil
+}
+
+type Paxos_NewViewRequestClient interface {
+	Recv() (*AcceptedMessage, error)
+	grpc.ClientStream
+}
+
+type paxosNewViewRequestClient struct {
+	grpc.ClientStream
+}
+
+func (x *paxosNewViewRequestClient) Recv() (*AcceptedMessage, error) {
+	m := new(AcceptedMessage)
+	if err := x.ClientStream.RecvMsg(m); err != nil {
+		return nil, err
+	}
+	return m, nil
+}
+
 func (c *paxosClient) AcceptRequest(ctx context.Context, in *AcceptMessage, opts ...grpc.CallOption) (*AcceptedMessage, error) {
 	out := new(AcceptedMessage)
 	err := c.cc.Invoke(ctx, Paxos_AcceptRequest_FullMethodName, in, out, opts...)
@@ -123,7 +156,7 @@ type PaxosServer interface {
 	PrintDB(context.Context, *emptypb.Empty) (*emptypb.Empty, error)
 	PrintTimerState(context.Context, *emptypb.Empty) (*emptypb.Empty, error)
 	PrepareRequest(context.Context, *PrepareMessage) (*AckMessage, error)
-	// rpc NewViewRequest (NewViewMessage) returns (stream AcceptedMessage);
+	NewViewRequest(*NewViewMessage, Paxos_NewViewRequestServer) error
 	AcceptRequest(context.Context, *AcceptMessage) (*AcceptedMessage, error)
 	CommitRequest(context.Context, *CommitMessage) (*emptypb.Empty, error)
 	mustEmbedUnimplementedPaxosServer()
@@ -147,6 +180,9 @@ func (UnimplementedPaxosServer) PrintTimerState(context.Context, *emptypb.Empty)
 }
 func (UnimplementedPaxosServer) PrepareRequest(context.Context, *PrepareMessage) (*AckMessage, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method PrepareRequest not implemented")
+}
+func (UnimplementedPaxosServer) NewViewRequest(*NewViewMessage, Paxos_NewViewRequestServer) error {
+	return status.Errorf(codes.Unimplemented, "method NewViewRequest not implemented")
 }
 func (UnimplementedPaxosServer) AcceptRequest(context.Context, *AcceptMessage) (*AcceptedMessage, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method AcceptRequest not implemented")
@@ -257,6 +293,27 @@ func _Paxos_PrepareRequest_Handler(srv interface{}, ctx context.Context, dec fun
 	return interceptor(ctx, in, info, handler)
 }
 
+func _Paxos_NewViewRequest_Handler(srv interface{}, stream grpc.ServerStream) error {
+	m := new(NewViewMessage)
+	if err := stream.RecvMsg(m); err != nil {
+		return err
+	}
+	return srv.(PaxosServer).NewViewRequest(m, &paxosNewViewRequestServer{stream})
+}
+
+type Paxos_NewViewRequestServer interface {
+	Send(*AcceptedMessage) error
+	grpc.ServerStream
+}
+
+type paxosNewViewRequestServer struct {
+	grpc.ServerStream
+}
+
+func (x *paxosNewViewRequestServer) Send(m *AcceptedMessage) error {
+	return x.ServerStream.SendMsg(m)
+}
+
 func _Paxos_AcceptRequest_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(AcceptMessage)
 	if err := dec(in); err != nil {
@@ -329,6 +386,12 @@ var Paxos_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _Paxos_CommitRequest_Handler,
 		},
 	},
-	Streams:  []grpc.StreamDesc{},
+	Streams: []grpc.StreamDesc{
+		{
+			StreamName:    "NewViewRequest",
+			Handler:       _Paxos_NewViewRequest_Handler,
+			ServerStreams: true,
+		},
+	},
 	Metadata: "paxos.proto",
 }

@@ -29,8 +29,8 @@ func TransactionResponseString(x *pb.TransactionResponse) string {
 func AcceptRecordString(x *pb.AcceptRecord) string {
 	return fmt.Sprintf(
 		"<ACCEPT, %s, %d, %s>",
-		BallotNumberString(x.AcceptedBallotNumber),
-		x.AcceptedSequenceNumber,
+		BallotNumberString(x.AcceptedBallotNum),
+		x.AcceptedSequenceNum,
 		TransactionRequestString(x.AcceptedVal),
 	)
 }

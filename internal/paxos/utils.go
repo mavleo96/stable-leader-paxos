@@ -32,7 +32,7 @@ func BallotNumberIsHigher(current *pb.BallotNumber, new *pb.BallotNumber) bool {
 func GetSequenceNumberIfExistsInAcceptLog(acceptLog map[int64]*pb.AcceptRecord, req *pb.TransactionRequest) (int64, bool) {
 	for _, record := range acceptLog {
 		if record.AcceptedVal.Sender == req.Sender && record.AcceptedVal.Timestamp == req.Timestamp {
-			return record.AcceptedSequenceNumber, true
+			return record.AcceptedSequenceNum, true
 		}
 	}
 	return 0, false
@@ -42,8 +42,8 @@ func GetSequenceNumberIfExistsInAcceptLog(acceptLog map[int64]*pb.AcceptRecord, 
 func MaxSequenceNumber(acceptLog map[int64]*pb.AcceptRecord) int64 {
 	max := int64(0)
 	for _, record := range acceptLog {
-		if record.AcceptedSequenceNumber > max {
-			max = record.AcceptedSequenceNumber
+		if record.AcceptedSequenceNum > max {
+			max = record.AcceptedSequenceNum
 		}
 	}
 	return max

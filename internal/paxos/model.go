@@ -6,14 +6,15 @@ import (
 
 	"github.com/mavleo96/cft-mavleo96/internal/database"
 	"github.com/mavleo96/cft-mavleo96/internal/models"
+	"github.com/mavleo96/cft-mavleo96/internal/utils"
 	pb "github.com/mavleo96/cft-mavleo96/pb/paxos"
 	log "github.com/sirupsen/logrus"
 )
 
 const (
-	minBackupTimeout = time.Duration(50 * time.Millisecond)
-	maxBackupTimeout = time.Duration(100 * time.Millisecond)
-	prepareTimeout   = time.Duration(75 * time.Millisecond)
+	minBackupTimeout = time.Duration(300 * time.Millisecond)
+	maxBackupTimeout = time.Duration(400 * time.Millisecond)
+	prepareTimeout   = time.Duration(150 * time.Millisecond)
 )
 
 // TODO: Need to decompose this into Proposer and Acceptor structures
@@ -47,6 +48,8 @@ type AcceptorState struct {
 
 var UnsuccessfulTransactionResponse = &pb.TransactionResponse{}
 
+var NoOperation = &pb.TransactionRequest{}
+
 func (s *PaxosServer) ServerTimeoutRoutine() {
 	log.Warn("Server timeout routine is active")
 
@@ -57,6 +60,7 @@ func (s *PaxosServer) ServerTimeoutRoutine() {
 	}
 }
 
+// TODO: what sohuld this routine do if i concurrently receive new view message
 func (s *PaxosServer) PrepareRoutine() {
 	// Reset Leader
 	s.State.Mutex.Lock()
@@ -95,7 +99,7 @@ func (s *PaxosServer) PrepareRoutine() {
 		},
 	}
 	s.State.Mutex.Unlock()
-	ok, err := s.SendPrepareRequest(newPrepareMessage)
+	ok, acceptLogMap, err := s.SendPrepareRequest(newPrepareMessage)
 	if err != nil {
 		log.Warn(err)
 		return
@@ -105,13 +109,110 @@ func (s *PaxosServer) PrepareRoutine() {
 		return
 	}
 
-	// If election won acquire mutex and set leader
+	// If election won
+	// acquire mutex -> set leader -> synchronize accept log -> send new view request -> release mutex
 	s.State.Mutex.Lock()
 	s.State.Leader = &models.Node{
 		ID:      newPrepareMessage.B.NodeID,
 		Address: s.Peers[newPrepareMessage.B.NodeID].Address,
 	}
+	log.Infof("Leader for %s is %s", utils.BallotNumberString(newPrepareMessage.B), s.State.Leader.ID)
+	log.Infof("Accept log map: %v", acceptLogMap)
+
+	// Find the highest sequence number in the accept log map
+	for _, acceptLog := range acceptLogMap {
+		for _, record := range acceptLog {
+			sequenceNum := record.AcceptedSequenceNum
+			currentRecord, ok := s.State.AcceptLog[sequenceNum]
+			if ok {
+				if BallotNumberIsHigher(currentRecord.AcceptedBallotNum, record.AcceptedBallotNum) {
+					s.State.AcceptLog[sequenceNum].AcceptedBallotNum = record.AcceptedBallotNum
+					s.State.AcceptLog[sequenceNum].AcceptedVal = record.AcceptedVal
+					s.State.AcceptLog[sequenceNum].Committed = false
+					s.State.AcceptLog[sequenceNum].Executed = false
+					s.State.AcceptLog[sequenceNum].Result = false
+				}
+			} else {
+				s.State.AcceptLog[sequenceNum] = &pb.AcceptRecord{
+					AcceptedBallotNum:   record.AcceptedBallotNum,
+					AcceptedSequenceNum: record.AcceptedSequenceNum,
+					AcceptedVal:         record.AcceptedVal,
+					Committed:           false,
+					Executed:            false,
+					Result:              false,
+				}
+			}
+		}
+	}
+	maxSequenceNum := MaxSequenceNumber(s.State.AcceptLog)
+	for sequenceNum := int64(1); sequenceNum <= maxSequenceNum; sequenceNum++ {
+		_, ok := s.State.AcceptLog[sequenceNum]
+		if ok {
+			s.State.AcceptLog[sequenceNum].AcceptedBallotNum = s.State.PromisedBallotNum
+		} else {
+			s.State.AcceptLog[sequenceNum] = &pb.AcceptRecord{
+				AcceptedBallotNum:   s.State.PromisedBallotNum,
+				AcceptedSequenceNum: sequenceNum,
+				AcceptedVal:         NoOperation,
+				Committed:           false,
+				Executed:            false,
+				Result:              false,
+			}
+		}
+	}
+	newAcceptLog := make([]*pb.AcceptRecord, 0)
+	for sequenceNum := int64(1); sequenceNum <= maxSequenceNum; sequenceNum++ {
+		newAcceptLog = append(newAcceptLog, s.State.AcceptLog[sequenceNum])
+	}
+	newViewMessage := &pb.NewViewMessage{
+		B:         s.State.PromisedBallotNum,
+		AcceptLog: newAcceptLog,
+	}
+	// Mutex is released here so that new client requests can be processed
 	s.State.Mutex.Unlock()
+	log.Infof("New view accept log: %v", newViewMessage)
+	go s.NewViewRoutine(newViewMessage)
+	// go func() {
+	// 	err := s.SendNewViewRequest(newViewMessage)
+	// 	if err != nil {
+	// 		log.Warn(err)
+	// 	}
+	// }()
+}
+
+func (s *PaxosServer) NewViewRoutine(newViewMessage *pb.NewViewMessage) {
+	acceptCountMap, err := s.SendNewViewRequest(newViewMessage)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	for sequenceNum, acceptCount := range acceptCountMap {
+		if acceptCount >= s.Quorum {
+			log.Infof("Sequence number %d accepted by quorum in new view request", sequenceNum)
+		}
+		s.State.Mutex.Lock()
+		s.State.AcceptLog[sequenceNum].Committed = true
+		err := s.SendCommitRequest(&pb.CommitMessage{
+			B:           newViewMessage.B,
+			SequenceNum: sequenceNum,
+			Transaction: newViewMessage.AcceptLog[sequenceNum-1].AcceptedVal,
+		})
+		if err != nil {
+			log.Fatal(err)
+		}
+		for {
+			if s.State.AcceptLog[sequenceNum].Executed {
+				break
+			}
+			_, err := s.TryExecute(sequenceNum)
+			if err != nil {
+				log.Infof("Retry execute request %s", utils.TransactionRequestString(newViewMessage.AcceptLog[sequenceNum-1].AcceptedVal))
+				continue
+			}
+			break
+		}
+		s.State.Mutex.Unlock()
+	}
 }
 
 func FindHighestValidPrepareMessage(messageLog map[time.Time]*PrepareRequestRecord, expiryTimeStamp time.Time) *pb.PrepareMessage {

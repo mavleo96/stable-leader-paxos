@@ -11,7 +11,7 @@ import (
 )
 
 const (
-	clientTimeout = 1500 * time.Millisecond
+	clientTimeout = 300 * time.Millisecond
 	maxAttempts   = 1000
 )
 
@@ -82,6 +82,7 @@ retryLoop:
 					status.Convert(err).Message(),
 				)
 				cancel()
+				time.Sleep(clientTimeout)
 				continue retryLoop
 			}
 		} else { // Multi-cast to all nodes if 1st attempt fails
@@ -125,6 +126,7 @@ retryLoop:
 					break retryLoop
 				}
 			}
+			time.Sleep(clientTimeout)
 			cancel()
 			continue retryLoop
 		}

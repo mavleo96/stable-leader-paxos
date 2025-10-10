@@ -2,7 +2,9 @@ package paxos
 
 import (
 	"context"
+	"time"
 
+	"github.com/mavleo96/cft-mavleo96/internal/models"
 	"github.com/mavleo96/cft-mavleo96/internal/utils"
 	pb "github.com/mavleo96/cft-mavleo96/pb/paxos"
 	log "github.com/sirupsen/logrus"
@@ -12,38 +14,45 @@ import (
 	"google.golang.org/grpc/status"
 )
 
+// TransferRequest is the main function that rpc server calls to handle the transaction request
 func (s *PaxosServer) TransferRequest(ctx context.Context, req *pb.TransactionRequest) (*pb.TransactionResponse, error) {
-	// Forward request if not leader; acquire read lock on state mutex
-	s.State.Mutex.RLock()
-	if s.State.Leader.ID != s.NodeID {
-		s.State.Mutex.RUnlock() // Release read lock on state mutex
-
-		// Forward request to leader and return to client immediately
-		go s.ForwardToLeader(req)
-		return UnsuccessfulTransactionResponse, status.Errorf(codes.Unavailable, "not leader")
-	}
-
-	// Release the read lock and acquire write lock since we need to process the request
-	s.State.Mutex.RUnlock()
+	// Forward request if not leader
 	s.State.Mutex.Lock()
 	defer s.State.Mutex.Unlock()
+	if s.State.Leader.ID != s.NodeID {
+		// Forward request to leader and return to client immediately
+		if s.State.Leader.ID != "" {
+			log.Warnf("Not leader, forwarding to leader %s", s.State.Leader.ID)
+			go s.ForwardToLeader(req, s.State.Leader)
+		} else {
+			// TODO: try to become the leader without returning to client
+			// TODO: i need to start a timer to become the leader if election is not happening
+			// Need to handle this case when system initialization vs failed election
+			log.Warn("Leader is empty, Need to become leader if election is not happening")
+		}
+		return UnsuccessfulTransactionResponse, status.Errorf(codes.Aborted, "not leader")
+	}
 
-	// We will process even if the timestamp is equal because previous reply could have been lost or sent to backup node
-	if req.Timestamp < s.LastReplyTimestamp[req.Sender] {
-		log.Warnf("Old timestamp %d < %d", req.Timestamp, s.LastReplyTimestamp[req.Sender])
+	// Duplicate requests with same timestamp are not ignored since the reply could have been lost or sent to backup node
+	lastReply := s.LastReply[req.Sender]
+	if lastReply != nil && req.Timestamp == lastReply.Timestamp {
+		return s.LastReply[req.Sender], nil
+	}
+	// Older timestamp requests are ignored
+	if lastReply != nil && req.Timestamp < lastReply.Timestamp {
+		log.Warnf("Ignored %s; Last reply timestamp %d", utils.TransactionRequestString(req), s.LastReply[req.Sender].Timestamp)
 		return UnsuccessfulTransactionResponse, status.Errorf(codes.AlreadyExists, "old timestamp")
 	}
 
 	// ACCEPT REQUEST LOGIC
 	// Check if the request is already accepted
-	sequenceNum, _ := s.CheckIfRequestInAcceptLog(req)
+	sequenceNum, ok := GetSequenceNumberIfExistsInAcceptLog(s.State.AcceptLog, req)
 	// If new request then assign a higher sequence number and accept it immediately before sending accepts
-	if sequenceNum == 0 {
-		s.CurrentSequenceNum++
-		sequenceNum = s.CurrentSequenceNum
+	if !ok {
+		sequenceNum = MaxSequenceNumber(s.State.AcceptLog) + 1
 		log.Infof("Accepted %s", utils.TransactionRequestString(req))
 		s.State.AcceptLog[sequenceNum] = &pb.AcceptRecord{
-			AcceptedBallotNumber:   s.CurrentBallotNum,
+			AcceptedBallotNumber:   s.State.PromisedBallotNum,
 			AcceptedSequenceNumber: sequenceNum,
 			AcceptedVal:            req,
 			Committed:              false,
@@ -55,82 +64,102 @@ func (s *PaxosServer) TransferRequest(ctx context.Context, req *pb.TransactionRe
 	// COMMIT REQUEST LOGIC
 	// Check if the request is already committed
 	if !s.State.AcceptLog[sequenceNum].Committed {
-		ok, err := s.SendAcceptRequest(&pb.AcceptMessage{
-			B:           s.CurrentBallotNum,
-			SequenceNum: sequenceNum,
-			Message:     req,
-		})
-		if err != nil {
-			return UnsuccessfulTransactionResponse, status.Errorf(codes.Internal, err.Error())
-		}
-		if !ok {
-			return UnsuccessfulTransactionResponse, status.Errorf(codes.Internal, "failed to get quorum of accepts")
+		// Retry accept request until quorum of accepts is received
+		for {
+			ok, err := s.SendAcceptRequest(&pb.AcceptMessage{
+				B:           s.State.PromisedBallotNum,
+				SequenceNum: sequenceNum,
+				Message:     s.State.AcceptLog[sequenceNum].AcceptedVal,
+			})
+			if err != nil {
+				log.Fatal(err)
+			}
+			if !ok {
+				log.Warnf("Retry accept request %s", utils.TransactionRequestString(req))
+				continue
+			}
+			break
 		}
 
-		// Once quorum of accepts in recieved commit it immediately and multicast the commit request
+		// Once quorum of accepts received, commit it immediately and multicast the commit request
 		s.State.AcceptLog[sequenceNum].Committed = true
-		// TODO: no error handling is prolly bad; but the function always returns nil
-		s.SendCommitRequest(&pb.CommitMessage{
-			B:           s.CurrentBallotNum,
+		log.Infof("Committed %s", utils.TransactionRequestString(req))
+
+		log.Infof("Multicasting commit request for sequence number %d", sequenceNum)
+		err := s.SendCommitRequest(&pb.CommitMessage{
+			B:           s.State.PromisedBallotNum,
 			SequenceNum: sequenceNum,
 			Transaction: req,
 		})
+		if err != nil {
+			log.Fatal(err)
+		}
 	}
 
 	// EXECUTE REQUEST LOGIC
 	// Try to execute the request and return the result
-	result, err := s.TryExecute(sequenceNum)
-	if err != nil {
-		return UnsuccessfulTransactionResponse, status.Errorf(codes.Internal, "could not commit request WITH %v", err)
+	log.Info("Trying to execute request")
+	var result bool
+	for {
+		var err error
+		result, err = s.TryExecute(sequenceNum)
+		if err != nil {
+			log.Infof("Retry execute request %s", utils.TransactionRequestString(req))
+			continue
+		}
+		break
 	}
-	s.LastReplyTimestamp[req.Sender] = req.Timestamp
-	return &pb.TransactionResponse{
-		B:         s.CurrentBallotNum,
+	// s.LastReplyTimestamp[req.Sender] = req.Timestamp
+	response := &pb.TransactionResponse{
+		B:         s.State.PromisedBallotNum,
 		Timestamp: req.Timestamp,
 		Sender:    req.Sender,
 		Result:    result,
-	}, nil
+	}
+	s.LastReply[req.Sender] = response
+	return response, nil
 }
 
 // ForwardToLeader forwards the request to the leader
-func (s *PaxosServer) ForwardToLeader(req *pb.TransactionRequest) {
-	// Initialize connection to leader
-	log.Warnf("Not leader, forwarding to leader %s", s.State.Leader)
-	conn, err := grpc.NewClient(s.State.Leader.Address, grpc.WithTransportCredentials(insecure.NewCredentials()))
-	if err != nil {
-		log.Warnf("Failed to forward to leader %s: %s", s.State.Leader, err)
-		s.ForceTimerExpired <- true
-		return
-	}
-	defer conn.Close()
-	leaderClient := pb.NewPaxosClient(conn)
+func (s *PaxosServer) ForwardToLeader(req *pb.TransactionRequest, leader *models.Node) {
+	// TODO: Need to increase time only if node has not executed the request
+	timerCtx := s.PaxosTimer.IncrementWaitCountOrStartAndGetContext(req.String())
+	ctx, cancel := context.WithCancel(timerCtx)
+	defer cancel()
 
 	// Forward request to leader
-	s.PaxosTimer.IncrementWaitCountOrStart()
-	_, err = leaderClient.TransferRequest(context.Background(), req)
-	s.PaxosTimer.DecrementWaitCountAndResetOrStopIfZero()
-
-	// TODO: need to check the error here if leader is emulating a failure
-	if err != nil {
-		if err.Error() == "not leader" {
-			s.ForceTimerExpired <- true
+	responseChan := make(chan error)
+	defer close(responseChan)
+	go func(ctx context.Context, responseChan chan error, leader *models.Node) {
+		// defer close(responseChan)
+		// Initialize connection to leader
+		conn, err := grpc.NewClient(leader.Address, grpc.WithTransportCredentials(insecure.NewCredentials()))
+		if err != nil {
+			log.Warnf("Failed to connect to leader %s: %s", leader.ID, err)
+			// TODO: Need to check if i need to force timer expired or let backup timeout handle it
+			// s.PaxosTimer.ForceTimerExpired <- true
 			return
 		}
-	}
-}
+		defer conn.Close()
+		leaderClient := pb.NewPaxosClient(conn)
 
-// TODO: This should be a util function
-func (s *PaxosServer) CheckIfRequestInAcceptLog(req *pb.TransactionRequest) (int64, error) {
-	// TODO: This is a development hack; need to remove this
-	if s.State.Mutex.TryLock() {
-		log.Fatal("State mutex was not acquired before trying to execute!")
-	}
-
-	for _, acceptRecord := range s.State.AcceptLog {
-		acceptedVal := acceptRecord.AcceptedVal
-		if acceptedVal.Sender == req.Sender && acceptedVal.Timestamp == req.Timestamp {
-			return acceptRecord.AcceptedSequenceNumber, nil
+		// Forward request to leader
+		_, err = leaderClient.TransferRequest(ctx, req)
+		if err != nil {
+			log.Warnf("Emulating leader network failure by return nothing on response channel")
+			return
 		}
+		responseChan <- nil
+	}(ctx, responseChan, leader)
+
+	// Wait for response from leader or timer to cancel context
+	select {
+	case <-ctx.Done():
+		log.Warnf("Backup timer expired, stopping leader client at %d", time.Now().UnixMilli())
+		return
+	case err := <-responseChan:
+		log.Infof("Response from leader on forwarding request %s", err)
+		s.PaxosTimer.DecrementWaitCountAndResetOrStopIfZero(req.String())
+		return
 	}
-	return int64(0), nil
 }

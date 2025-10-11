@@ -213,6 +213,38 @@ func (s *PaxosServer) NewViewRoutine(newViewMessage *pb.NewViewMessage) {
 	}
 }
 
+func (s *PaxosServer) CatchupRoutine() {
+	s.State.Mutex.Lock()
+	defer s.State.Mutex.Unlock()
+
+	maxSequenceNum := MaxSequenceNumber(s.State.AcceptLog)
+	catchupMessage, err := s.SendCatchUpRequest(maxSequenceNum)
+	if err != nil {
+		log.Warn(err)
+		return
+	}
+	s.State.Leader = &models.Node{
+		ID:      catchupMessage.B.NodeID,
+		Address: s.Peers[catchupMessage.B.NodeID].Address,
+	}
+	log.Infof("Leader set to %s", s.State.Leader.ID)
+	log.Infof("Promised ballot number set to %s", utils.BallotNumberString(catchupMessage.B))
+	s.State.PromisedBallotNum = catchupMessage.B
+	for _, record := range catchupMessage.AcceptLog {
+		s.State.AcceptLog[record.AcceptedSequenceNum] = &pb.AcceptRecord{
+			AcceptedBallotNum:   record.AcceptedBallotNum,
+			AcceptedSequenceNum: record.AcceptedSequenceNum,
+			AcceptedVal:         record.AcceptedVal,
+			Committed:           true,
+			Executed:            false,
+		}
+		_, err = s.TryExecute(record.AcceptedSequenceNum)
+		if err != nil {
+			log.Infof("Failed to execute request %s", utils.TransactionRequestString(record.AcceptedVal))
+		}
+	}
+}
+
 func FindHighestValidPrepareMessage(messageLog map[time.Time]*PrepareRequestRecord, expiryTimeStamp time.Time) *pb.PrepareMessage {
 	var latestPrepareMessage *pb.PrepareMessage
 	for timestamp, prepareMessageEntry := range messageLog {

@@ -74,7 +74,7 @@ func (s *PaxosServer) TransferRequest(ctx context.Context, req *pb.TransactionRe
 	// Check if the request is already committed
 	if !s.State.AcceptLog[sequenceNum].Committed {
 		// Retry accept request until quorum of accepts is received
-		ok, err := s.SendAcceptRequest(&pb.AcceptMessage{
+		ok, rejected, err := s.SendAcceptRequest(&pb.AcceptMessage{
 			B:           s.State.PromisedBallotNum,
 			SequenceNum: sequenceNum,
 			Message:     s.State.AcceptLog[sequenceNum].AcceptedVal,
@@ -82,12 +82,15 @@ func (s *PaxosServer) TransferRequest(ctx context.Context, req *pb.TransactionRe
 		if err != nil {
 			log.Fatal(err)
 		}
-		if !ok {
-			log.Warnf("Failed to get quorum of accepts for request %s", utils.TransactionRequestString(req))
-			// TODO: should you just step down or try to become the leader?
+		if rejected {
+			log.Warnf("Stepping down since failed to get quorum of accepts for request %s", utils.TransactionRequestString(req))
 			s.State.Leader = &models.Node{ID: ""}
 			log.Warnf("Leader set to %s", s.State.Leader.ID)
-			return UnsuccessfulTransactionResponse, status.Errorf(codes.Aborted, "accept request failed")
+			return UnsuccessfulTransactionResponse, status.Errorf(codes.Aborted, "accept request failed due to rejection")
+		}
+		if !ok {
+			log.Warnf("Failed to get quorum of accepts for request %s", utils.TransactionRequestString(req))
+			return UnsuccessfulTransactionResponse, status.Errorf(codes.Aborted, "accept request failed insufficient quorum")
 		}
 
 		// Once quorum of accepts received, commit it immediately and multicast the commit request

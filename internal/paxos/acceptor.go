@@ -111,7 +111,7 @@ func (s *PaxosServer) AcceptRequest(ctx context.Context, req *pb.AcceptMessage) 
 	// Reject if ballot number is lower than promised ballot number
 	if !BallotNumberIsHigherOrEqual(s.State.PromisedBallotNum, req.B) {
 		log.Warnf("Rejected %s", utils.TransactionRequestString(req.Message))
-		return &pb.AcceptedMessage{Ok: false, B: req.B, SequenceNum: req.SequenceNum, Message: req.Message, AcceptorID: s.NodeID}, nil
+		return &pb.AcceptedMessage{Ok: false}, nil
 	}
 
 	// Update State

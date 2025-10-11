@@ -8,7 +8,10 @@ import (
 	pb "github.com/mavleo96/cft-mavleo96/pb/paxos"
 	log "github.com/sirupsen/logrus"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/grpc/status"
+	"google.golang.org/protobuf/types/known/wrapperspb"
 )
 
 // SendPrepareRequest sends a prepare request to all peers except self and returns the response from each peer to PrepareRoutine
@@ -134,11 +137,13 @@ func (s *PaxosServer) SendNewViewRequest(req *pb.NewViewMessage) (map[int64]int,
 }
 
 // SendAcceptRequest handles the accept request rpc on node client side
+// Returns: (accepted, rejected, error)
 // This code is part of Proposer structure
-func (s *PaxosServer) SendAcceptRequest(req *pb.AcceptMessage) (bool, error) {
+func (s *PaxosServer) SendAcceptRequest(req *pb.AcceptMessage) (bool, bool, error) {
 
 	mu := sync.Mutex{}
 	acceptCount := 1
+	rejectedCount := 0
 
 	// Multicast accept request to all peers except self
 	wg := sync.WaitGroup{}
@@ -165,23 +170,28 @@ func (s *PaxosServer) SendAcceptRequest(req *pb.AcceptMessage) (bool, error) {
 				log.Warn(err)
 				return
 			}
-			if !resp.Ok {
-				return // if not accepted, return without incrementing acceptCount
-			}
 			mu.Lock()
 			defer mu.Unlock()
+			if !resp.Ok {
+				rejectedCount++
+				return // if not accepted, return without incrementing acceptCount
+			}
 			acceptCount++
 			// TODO: is server mutex needed here?; yes need to sync
-			s.AcceptedMessages = append(s.AcceptedMessages, resp)
+			// s.AcceptedMessages = append(s.AcceptedMessages, resp)
 		}(id, addr)
 	}
 	wg.Wait()
 
-	// Check if acceptCount is less than quorum
-	if acceptCount < s.Quorum {
-		return false, nil
+	if rejectedCount >= s.Quorum {
+		return false, true, nil
 	}
-	return true, nil
+
+	// Check if acceptCount is less than quorum
+	if acceptCount >= s.Quorum {
+		return true, false, nil
+	}
+	return false, false, nil
 }
 
 // SendCommitRequest handles the commit request rpc on node client side

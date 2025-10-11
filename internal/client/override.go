@@ -23,6 +23,7 @@ func ReconfigureNodes(aliveNodes []string, nodeClients map[string]pb.PaxosClient
 }
 
 func KillLeader(nodeClients map[string]pb.PaxosClient) {
+	log.Infof("Killing leader")
 	for _, nodeClients := range nodeClients {
 		_, err := nodeClients.KillLeader(context.Background(), &emptypb.Empty{})
 		if err != nil {

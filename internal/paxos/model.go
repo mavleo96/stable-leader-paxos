@@ -81,6 +81,7 @@ func (s *PaxosServer) PrepareRoutine() {
 			Address: s.Peers[latestPrepareMessage.B.NodeID].Address,
 		}
 		s.State.PromisedBallotNum = latestPrepareMessage.B
+		log.Infof("Promised ballot number set to %s", utils.BallotNumberString(s.State.PromisedBallotNum))
 		// s.State.Mutex.Unlock()
 		log.Infof("Leader set to %s", s.State.Leader.ID)
 
@@ -95,6 +96,7 @@ func (s *PaxosServer) PrepareRoutine() {
 
 	// If there is not, initiate an election, set ballot number and release mutex
 	s.State.PromisedBallotNum = &pb.BallotNumber{N: s.State.PromisedBallotNum.N + 1, NodeID: s.NodeID}
+	log.Infof("Changed ballot number set to %s", utils.BallotNumberString(s.State.PromisedBallotNum))
 	newPrepareMessage := &pb.PrepareMessage{
 		B: &pb.BallotNumber{
 			N:      s.State.PromisedBallotNum.N,

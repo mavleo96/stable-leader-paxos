@@ -16,8 +16,12 @@ func (s *PaxosServer) PrintLog(ctx context.Context, req *emptypb.Empty) (*emptyp
 	s.State.Mutex.RLock()
 	defer s.State.Mutex.RUnlock()
 	fmt.Println("Printing log")
-	for _, record := range s.State.AcceptLog {
-		fmt.Printf("Accept log: %v\n", utils.PrintLogString(record))
+	sequenceNum := MaxSequenceNumber(s.State.AcceptLog)
+	for i := int64(0); i <= sequenceNum; i++ {
+		record, ok := s.State.AcceptLog[i]
+		if ok {
+			fmt.Printf("Accept log: %v\n", utils.PrintLogString(record))
+		}
 	}
 	return &emptypb.Empty{}, nil
 }

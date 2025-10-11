@@ -13,6 +13,7 @@ service Paxos {
     rpc NewViewRequest (NewViewMessage) returns (stream AcceptedMessage);
     rpc AcceptRequest (AcceptMessage) returns (AcceptedMessage);
     rpc CommitRequest (CommitMessage) returns (google.protobuf.Empty);
+    rpc CatchupRequest (google.protobuf.Int64Value) returns (CatchupMessage);
 
     rpc ChangeNodeStatus (google.protobuf.BoolValue) returns (google.protobuf.Empty);
     rpc KillLeader (google.protobuf.Empty) returns (google.protobuf.Empty);
@@ -72,6 +73,11 @@ message CommitMessage {
     BallotNumber b = 1;
     int64 sequenceNum = 2;
     TransactionRequest transaction = 3;
+}
+
+message CatchupMessage {
+    BallotNumber b = 1;
+    repeated AcceptRecord acceptLog = 2;
 }
 
 message Transaction {

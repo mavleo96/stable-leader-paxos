@@ -21,6 +21,7 @@ func (s *PaxosServer) ChangeNodeStatus(ctx context.Context, status *wrapperspb.B
 	if s.IsAlive {
 		s.State.Leader = &models.Node{ID: ""}
 		go s.PaxosTimer.timerRoutine()
+		go s.CatchupRoutine()
 	}
 	log.Warnf("Node %s status changed to %v", s.NodeID, s.IsAlive)
 	return &emptypb.Empty{}, nil

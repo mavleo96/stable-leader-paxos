@@ -11,6 +11,7 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/emptypb"
+	"google.golang.org/protobuf/types/known/wrapperspb"
 )
 
 // All functions are part of Acceptor structure
@@ -203,6 +204,40 @@ func (s *PaxosServer) CommitRequest(ctx context.Context, req *pb.CommitMessage) 
 	}
 	s.PaxosTimer.DecrementWaitCountAndResetOrStopIfZero(req.String())
 	return &emptypb.Empty{}, nil
+}
+
+// CatchupRequest handles the catchup request rpc on server side
+// This code is part of Acceptor structure
+func (s *PaxosServer) CatchupRequest(ctx context.Context, req *wrapperspb.Int64Value) (*pb.CatchupMessage, error) {
+	// s.State.Mutex.Lock()
+	// defer s.State.Mutex.Unlock()
+
+	if !s.IsAlive {
+		log.Warnf("Node is dead")
+		return nil, status.Errorf(codes.Unavailable, "node is dead")
+	}
+
+	if s.State.Leader.ID != s.NodeID {
+		return nil, status.Errorf(codes.Aborted, "not leader")
+	}
+
+	log.Infof("Received catch up request for sequence number %d", req.Value)
+	catchupLog := []*pb.AcceptRecord{}
+	maxSequenceNum := MaxSequenceNumber(s.State.AcceptLog)
+
+	for sequenceNum := req.Value + 1; sequenceNum <= maxSequenceNum; sequenceNum++ {
+		record, ok := s.State.AcceptLog[sequenceNum]
+		if !ok || !record.Committed {
+			continue
+		}
+		catchupLog = append(catchupLog, record)
+	}
+
+	log.Infof("Catchup sent %d records", len(catchupLog))
+	return &pb.CatchupMessage{
+		B:         s.State.PromisedBallotNum,
+		AcceptLog: catchupLog,
+	}, nil
 }
 
 // TryExecute tries to execute the transaction

@@ -26,6 +26,7 @@ const (
 	Paxos_NewViewRequest_FullMethodName   = "/paxos.Paxos/NewViewRequest"
 	Paxos_AcceptRequest_FullMethodName    = "/paxos.Paxos/AcceptRequest"
 	Paxos_CommitRequest_FullMethodName    = "/paxos.Paxos/CommitRequest"
+	Paxos_CatchupRequest_FullMethodName   = "/paxos.Paxos/CatchupRequest"
 	Paxos_ChangeNodeStatus_FullMethodName = "/paxos.Paxos/ChangeNodeStatus"
 	Paxos_KillLeader_FullMethodName       = "/paxos.Paxos/KillLeader"
 	Paxos_PrintLog_FullMethodName         = "/paxos.Paxos/PrintLog"
@@ -44,6 +45,7 @@ type PaxosClient interface {
 	NewViewRequest(ctx context.Context, in *NewViewMessage, opts ...grpc.CallOption) (Paxos_NewViewRequestClient, error)
 	AcceptRequest(ctx context.Context, in *AcceptMessage, opts ...grpc.CallOption) (*AcceptedMessage, error)
 	CommitRequest(ctx context.Context, in *CommitMessage, opts ...grpc.CallOption) (*emptypb.Empty, error)
+	CatchupRequest(ctx context.Context, in *wrapperspb.Int64Value, opts ...grpc.CallOption) (*CatchupMessage, error)
 	ChangeNodeStatus(ctx context.Context, in *wrapperspb.BoolValue, opts ...grpc.CallOption) (*emptypb.Empty, error)
 	KillLeader(ctx context.Context, in *emptypb.Empty, opts ...grpc.CallOption) (*emptypb.Empty, error)
 	PrintLog(ctx context.Context, in *emptypb.Empty, opts ...grpc.CallOption) (*emptypb.Empty, error)
@@ -129,6 +131,15 @@ func (c *paxosClient) CommitRequest(ctx context.Context, in *CommitMessage, opts
 	return out, nil
 }
 
+func (c *paxosClient) CatchupRequest(ctx context.Context, in *wrapperspb.Int64Value, opts ...grpc.CallOption) (*CatchupMessage, error) {
+	out := new(CatchupMessage)
+	err := c.cc.Invoke(ctx, Paxos_CatchupRequest_FullMethodName, in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *paxosClient) ChangeNodeStatus(ctx context.Context, in *wrapperspb.BoolValue, opts ...grpc.CallOption) (*emptypb.Empty, error) {
 	out := new(emptypb.Empty)
 	err := c.cc.Invoke(ctx, Paxos_ChangeNodeStatus_FullMethodName, in, out, opts...)
@@ -201,6 +212,7 @@ type PaxosServer interface {
 	NewViewRequest(*NewViewMessage, Paxos_NewViewRequestServer) error
 	AcceptRequest(context.Context, *AcceptMessage) (*AcceptedMessage, error)
 	CommitRequest(context.Context, *CommitMessage) (*emptypb.Empty, error)
+	CatchupRequest(context.Context, *wrapperspb.Int64Value) (*CatchupMessage, error)
 	ChangeNodeStatus(context.Context, *wrapperspb.BoolValue) (*emptypb.Empty, error)
 	KillLeader(context.Context, *emptypb.Empty) (*emptypb.Empty, error)
 	PrintLog(context.Context, *emptypb.Empty) (*emptypb.Empty, error)
@@ -229,6 +241,9 @@ func (UnimplementedPaxosServer) AcceptRequest(context.Context, *AcceptMessage) (
 }
 func (UnimplementedPaxosServer) CommitRequest(context.Context, *CommitMessage) (*emptypb.Empty, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method CommitRequest not implemented")
+}
+func (UnimplementedPaxosServer) CatchupRequest(context.Context, *wrapperspb.Int64Value) (*CatchupMessage, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method CatchupRequest not implemented")
 }
 func (UnimplementedPaxosServer) ChangeNodeStatus(context.Context, *wrapperspb.BoolValue) (*emptypb.Empty, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method ChangeNodeStatus not implemented")
@@ -353,6 +368,24 @@ func _Paxos_CommitRequest_Handler(srv interface{}, ctx context.Context, dec func
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(PaxosServer).CommitRequest(ctx, req.(*CommitMessage))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Paxos_CatchupRequest_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(wrapperspb.Int64Value)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PaxosServer).CatchupRequest(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Paxos_CatchupRequest_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PaxosServer).CatchupRequest(ctx, req.(*wrapperspb.Int64Value))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -505,6 +538,10 @@ var Paxos_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "CommitRequest",
 			Handler:    _Paxos_CommitRequest_Handler,
+		},
+		{
+			MethodName: "CatchupRequest",
+			Handler:    _Paxos_CatchupRequest_Handler,
 		},
 		{
 			MethodName: "ChangeNodeStatus",

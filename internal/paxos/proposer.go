@@ -212,3 +212,42 @@ func (s *PaxosServer) SendCommitRequest(req *pb.CommitMessage) error {
 	}
 	return nil
 }
+
+func (s *PaxosServer) SendCatchUpRequest(sequenceNum int64) (*pb.CatchupMessage, error) {
+	// Multicast catch up request to all peers except self
+	responseChan := make(chan *pb.CatchupMessage)
+	log.Infof("Sending catch up request to all peers except self for sequence number %d", sequenceNum)
+	for _, peer := range s.Peers {
+		id := peer.ID
+		if id == s.NodeID {
+			continue
+		}
+		addr := peer.Address
+		go func(id, addr string) {
+			// Initialize connection to peer
+			conn, err := grpc.NewClient(addr, grpc.WithTransportCredentials(insecure.NewCredentials()))
+			if err != nil {
+				log.Warn(err)
+			}
+			defer conn.Close()
+			client := pb.NewPaxosClient(conn)
+			record, err := client.CatchupRequest(context.Background(), &wrapperspb.Int64Value{Value: sequenceNum})
+			if err != nil {
+				log.Warn(err)
+				responseChan <- nil
+				return
+			}
+			responseChan <- record
+		}(id, addr)
+	}
+	log.Infof("Waiting for catch up responses")
+	for i := 0; i < len(s.Peers)-1; i++ {
+		catchupMessage := <-responseChan
+		if catchupMessage != nil {
+			log.Infof("Catch up message received from %s", catchupMessage.String())
+			return catchupMessage, nil
+		}
+	}
+	log.Warn("Failed to get catch up message from leader")
+	return nil, status.Errorf(codes.Unavailable, "failed to get catch up message from leader")
+}

@@ -111,17 +111,14 @@ func (s *PaxosServer) TransferRequest(ctx context.Context, req *pb.TransactionRe
 	// EXECUTE REQUEST LOGIC
 	// Try to execute the request and return the result
 	log.Info("Trying to execute request")
-	var result bool
-	for {
-		var err error
-		result, err = s.TryExecute(sequenceNum)
-		if err != nil {
-			log.Infof("Retry execute request %s", utils.TransactionRequestString(req))
-			continue
-		}
-		break
+	result, err := s.TryExecute(sequenceNum)
+	if err != nil {
+		return UnsuccessfulTransactionResponse, status.Errorf(codes.Aborted, "execute request failed try again")
 	}
-	// s.LastReplyTimestamp[req.Sender] = req.Timestamp
+	s.State.AcceptLog[sequenceNum].Executed = true
+	s.State.AcceptLog[sequenceNum].Result = result
+	log.Infof("Executed request %s", utils.TransactionRequestString(req))
+
 	response := &pb.TransactionResponse{
 		B:         s.State.PromisedBallotNum,
 		Timestamp: req.Timestamp,

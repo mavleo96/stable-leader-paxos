@@ -133,9 +133,6 @@ func (s *PaxosServer) PrepareRoutine() {
 				if BallotNumberIsHigher(currentRecord.AcceptedBallotNum, record.AcceptedBallotNum) {
 					s.State.AcceptLog[sequenceNum].AcceptedBallotNum = record.AcceptedBallotNum
 					s.State.AcceptLog[sequenceNum].AcceptedVal = record.AcceptedVal
-					s.State.AcceptLog[sequenceNum].Committed = false
-					s.State.AcceptLog[sequenceNum].Executed = false
-					s.State.AcceptLog[sequenceNum].Result = false
 				}
 			} else {
 				s.State.AcceptLog[sequenceNum] = &pb.AcceptRecord{

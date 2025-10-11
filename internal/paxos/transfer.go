@@ -173,7 +173,7 @@ func (s *PaxosServer) ForwardToLeader(req *pb.TransactionRequest, leader *models
 		if err != nil {
 			log.Warnf("Error from leader on forwarding request %s", err)
 		} else {
-			s.PaxosTimer.DecrementWaitCountAndResetOrStopIfZero(req.String())
+			s.PaxosTimer.DecrementContextWaitCountAndResetOrStopIfZero(req.String())
 		}
 		return
 	}

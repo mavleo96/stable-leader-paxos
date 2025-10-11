@@ -12,14 +12,15 @@ import (
 
 // SafeTimer is a somewhat safe timer wrapper for paxos algorithm
 type SafeTimer struct {
-	mutex          sync.Mutex
-	timer          *time.Timer
-	timeout        time.Duration
-	running        bool
-	waitCount      int64
-	timerContext   context.Context
-	timerCtxCancel context.CancelFunc
-	TimeoutChannel chan bool
+	mutex            sync.Mutex
+	timer            *time.Timer
+	timeout          time.Duration
+	running          bool
+	waitCount        int64
+	contextWaitCount int64
+	timerContext     context.Context
+	timerCtxCancel   context.CancelFunc
+	TimeoutChannel   chan bool
 }
 
 // IncrementWaitCountOrStart is used to increment the wait count and start the timer if it is not running
@@ -30,19 +31,22 @@ func (t *SafeTimer) IncrementWaitCountOrStart(message string) {
 	// If timer is not running, start it
 	if !t.running {
 		t.timer.Reset(t.timeout)
-		// log.Infof("Timer started, Wait count: %d -> %d %d %s ok: %t", t.waitCount, 1, time.Now().UnixMilli(), message, ok)
+		t.waitCount++
+		log.Infof("Timer started, Wait count: %d -> %d %d %s", t.waitCount-1, t.waitCount, time.Now().UnixMilli(), message)
 		t.running = true
-		t.waitCount = 1
 	} else {
 		// If timer is running, increment the wait count
-		// log.Infof("Timer wait count incremented, Wait count: %d -> %d %s", t.waitCount, t.waitCount+1, message)
 		t.waitCount++
+		log.Infof("Timer wait count incremented, Wait count: %d -> %d %s", t.waitCount-1, t.waitCount, message)
 	}
 }
 
 // IncrementWaitCountOrStartAndGetContext is used to increment the wait count and start the timer if it is not running
 // and return the timer context which will be cancelled by the timer routine after it expires
 func (t *SafeTimer) IncrementWaitCountOrStartAndGetContext(message string) context.Context {
+	t.mutex.Lock()
+	t.contextWaitCount++
+	t.mutex.Unlock()
 	t.IncrementWaitCountOrStart(message)
 	return t.timerContext
 }
@@ -59,22 +63,32 @@ func (t *SafeTimer) DecrementWaitCountAndResetOrStopIfZero(message string) {
 	// Decrement the wait count
 	t.waitCount--
 	if t.waitCount < 0 {
-		log.Fatal("Wait count is negative")
+		log.Fatalf("Wait count is negative: %d %s", t.waitCount, message)
 	} else if t.waitCount == 0 {
 		t.running = false
-		// log.Infof("Timer stopped, Wait count: %d -> %d %d %s", t.waitCount+1, 0, time.Now().UnixMilli(), message)
+		log.Infof("Timer stopped, Wait count: %d -> %d %d %s", t.waitCount+1, 0, time.Now().UnixMilli(), message)
 	} else {
 		if !t.running {
-			log.Fatal("Wait count positive but timer was not running")
+			log.Warn("Wait count positive but timer was not running")
 		}
 		t.running = true
 		t.timer.Reset(t.timeout)
-		// log.Infof("Timer reset, Wait count: %d -> %d %d %s", t.waitCount+1, t.waitCount, time.Now().UnixMilli(), message)
+		log.Infof("Timer reset, Wait count: %d -> %d %d %s", t.waitCount+1, t.waitCount, time.Now().UnixMilli(), message)
 	}
 }
 
+func (t *SafeTimer) DecrementContextWaitCountAndResetOrStopIfZero(message string) {
+	t.mutex.Lock()
+	t.contextWaitCount--
+	if t.contextWaitCount < 0 {
+		log.Fatal("Context wait count is negative")
+	}
+	t.mutex.Unlock()
+	t.DecrementWaitCountAndResetOrStopIfZero(message)
+}
+
 // timerCleanup resets the timer and clears the wait count
-func (t *SafeTimer) timerCleanup() {
+func (t *SafeTimer) TimerCleanup() {
 	t.mutex.Lock()
 	defer t.mutex.Unlock()
 
@@ -85,8 +99,10 @@ func (t *SafeTimer) timerCleanup() {
 	}
 	// Reset the timer state
 	t.running = false
-	t.waitCount = 0
+	t.waitCount -= t.contextWaitCount
+	t.contextWaitCount = 0
 	t.timerContext, t.timerCtxCancel = context.WithCancel(context.Background())
+	log.Infof("Timer cleaned up; current wait count -> (%d, %d)", t.waitCount, t.contextWaitCount)
 }
 
 // timerRoutine is a persistent routine that waits for the timer to expire and then cancels the timer and cleans up the timer
@@ -96,7 +112,7 @@ func (t *SafeTimer) timerRoutine() {
 	for {
 		<-t.timer.C
 		t.timerCtxCancel()
-		t.timerCleanup()
+		t.TimerCleanup()
 		t.TimeoutChannel <- true
 	}
 }
@@ -109,12 +125,15 @@ func (t *SafeTimer) GetTimerState() (int64, bool, time.Duration) {
 }
 
 // CreateSafeTimer creates a new safe timer
-func CreateSafeTimer() *SafeTimer {
+func CreateSafeTimer(i int, n int) *SafeTimer {
 	// Randomize timeout
-	timeout, err := RandomTimeout(minBackupTimeout, maxBackupTimeout)
-	if err != nil {
-		log.Fatal(err)
-	}
+	// timeout, err := RandomTimeout(minBackupTimeout, maxBackupTimeout)
+	// if err != nil {
+	// 	log.Fatal(err)
+	// }
+
+	// Staggered timeout
+	timeout := minBackupTimeout + (maxBackupTimeout-minBackupTimeout)*time.Duration(i)/time.Duration(n)
 
 	// Create a timer and stop/drain it
 	timer := time.NewTimer(timeout)
@@ -128,14 +147,15 @@ func CreateSafeTimer() *SafeTimer {
 
 	// Create a timer instance
 	timerInstance := &SafeTimer{
-		mutex:          sync.Mutex{},
-		timer:          timer,
-		timeout:        timeout,
-		running:        false,
-		waitCount:      0,
-		timerContext:   timerContext,
-		timerCtxCancel: timerCtxCancel,
-		TimeoutChannel: make(chan bool),
+		mutex:            sync.Mutex{},
+		timer:            timer,
+		timeout:          timeout,
+		running:          false,
+		waitCount:        0,
+		contextWaitCount: 0,
+		timerContext:     timerContext,
+		timerCtxCancel:   timerCtxCancel,
+		TimeoutChannel:   make(chan bool),
 	}
 
 	// Start timer routine

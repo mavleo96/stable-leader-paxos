@@ -16,6 +16,14 @@ import (
 
 // TransferRequest is the main function that rpc server calls to handle the transaction request
 func (s *PaxosServer) TransferRequest(ctx context.Context, req *pb.TransactionRequest) (*pb.TransactionResponse, error) {
+	s.State.Mutex.RLock()
+	if !s.IsAlive {
+		s.State.Mutex.RUnlock()
+		log.Warnf("Node is dead")
+		return nil, status.Errorf(codes.Unavailable, "node is dead")
+	}
+	s.State.Mutex.RUnlock()
+
 	// Forward request if not leader
 	s.State.Mutex.Lock()
 	defer s.State.Mutex.Unlock()
@@ -130,8 +138,8 @@ func (s *PaxosServer) ForwardToLeader(req *pb.TransactionRequest, leader *models
 
 	// Forward request to leader
 	responseChan := make(chan error)
-	defer close(responseChan)
 	go func(ctx context.Context, responseChan chan error, leader *models.Node) {
+		defer close(responseChan)
 		if leader.ID == "" {
 			responseChan <- status.Errorf(codes.Aborted, "leader is empty")
 			return

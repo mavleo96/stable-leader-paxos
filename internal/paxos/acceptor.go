@@ -8,6 +8,8 @@ import (
 	"github.com/mavleo96/cft-mavleo96/internal/utils"
 	pb "github.com/mavleo96/cft-mavleo96/pb/paxos"
 	log "github.com/sirupsen/logrus"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/emptypb"
 )
 
@@ -16,8 +18,14 @@ import (
 
 // PrepareRequest handles the prepare request rpc on server side
 func (s *PaxosServer) PrepareRequest(ctx context.Context, req *pb.PrepareMessage) (*pb.AckMessage, error) {
-	log.Infof("Received prepare request %v", utils.BallotNumberString(req.B))
 	s.State.Mutex.RLock()
+	if !s.IsAlive {
+		s.State.Mutex.RUnlock()
+		log.Warnf("Node is dead")
+		return &pb.AckMessage{Ok: false}, status.Errorf(codes.Unavailable, "node is dead")
+	}
+
+	log.Infof("Received prepare request %v", utils.BallotNumberString(req.B))
 
 	// Reject immediately if ballot number is lower or equal to promise
 	if !BallotNumberIsHigher(s.State.PromisedBallotNum, req.B) {
@@ -58,6 +66,14 @@ func (s *PaxosServer) PrepareRequest(ctx context.Context, req *pb.PrepareMessage
 
 // NewViewRequest handles the new view request rpc on server side
 func (s *PaxosServer) NewViewRequest(req *pb.NewViewMessage, stream pb.Paxos_NewViewRequestServer) error {
+	s.State.Mutex.RLock()
+	if !s.IsAlive {
+		s.State.Mutex.RUnlock()
+		log.Warnf("Node is dead")
+		return status.Errorf(codes.Unavailable, "node is dead")
+	}
+	s.State.Mutex.RUnlock()
+
 	// No need to acquire state mutex since AcceptRequest acquires it
 	log.Infof("Received new view message %v", utils.BallotNumberString(req.B))
 	for _, record := range req.AcceptLog {
@@ -80,6 +96,14 @@ func (s *PaxosServer) NewViewRequest(req *pb.NewViewMessage, stream pb.Paxos_New
 // AcceptRequest handles the accept request rpc on server side
 // This code is part of Acceptor structure
 func (s *PaxosServer) AcceptRequest(ctx context.Context, req *pb.AcceptMessage) (*pb.AcceptedMessage, error) {
+	s.State.Mutex.RLock()
+	if !s.IsAlive {
+		s.State.Mutex.RUnlock()
+		log.Warnf("Node is dead")
+		return nil, status.Errorf(codes.Unavailable, "node is dead")
+	}
+	s.State.Mutex.RUnlock()
+
 	s.State.Mutex.Lock()
 	defer s.State.Mutex.Unlock()
 
@@ -122,6 +146,14 @@ func (s *PaxosServer) AcceptRequest(ctx context.Context, req *pb.AcceptMessage) 
 // CommitRequest handles the commit request rpc on server side
 // This code is part of Acceptor structure
 func (s *PaxosServer) CommitRequest(ctx context.Context, req *pb.CommitMessage) (*emptypb.Empty, error) {
+	s.State.Mutex.RLock()
+	if !s.IsAlive {
+		s.State.Mutex.RUnlock()
+		log.Warnf("Node is dead")
+		return nil, status.Errorf(codes.Unavailable, "node is dead")
+	}
+	s.State.Mutex.RUnlock()
+
 	s.State.Mutex.Lock()
 	defer s.State.Mutex.Unlock()
 

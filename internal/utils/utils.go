@@ -26,6 +26,16 @@ func TransactionResponseString(x *pb.TransactionResponse) string {
 // 	)
 // }
 
+func PrintLogString(x *pb.AcceptRecord) string {
+	return fmt.Sprintf(
+		"%s, <Committed: %t, Executed: %t, Result: %t>",
+		AcceptRecordString(x),
+		x.Committed,
+		x.Executed,
+		x.Result,
+	)
+}
+
 func AcceptRecordString(x *pb.AcceptRecord) string {
 	return fmt.Sprintf(
 		"<ACCEPT, %s, %d, %s>",

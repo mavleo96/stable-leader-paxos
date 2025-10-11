@@ -2,6 +2,7 @@ package client
 
 import (
 	"context"
+	"sync"
 	"time"
 
 	"github.com/mavleo96/cft-mavleo96/internal/utils"
@@ -11,7 +12,7 @@ import (
 )
 
 const (
-	clientTimeout = 300 * time.Millisecond
+	clientTimeout = 500 * time.Millisecond
 	maxAttempts   = 1000
 )
 
@@ -19,6 +20,31 @@ const (
 type result struct {
 	Response *pb.TransactionResponse
 	Err      error
+}
+
+func QueueRoutine(ctx context.Context, queueChan chan SetNumber, clientChannels map[string]chan SetNumber, nodeClients map[string]pb.PaxosClient) {
+	for {
+		select {
+		case setNum := <-queueChan:
+			if setNum.N2 > 1 {
+				KillLeader(nodeClients)
+			}
+			wg := sync.WaitGroup{}
+			for _, clientChan := range clientChannels {
+				wg.Add(1)
+				go func(clientChan chan SetNumber) {
+					defer wg.Done()
+					clientChan <- setNum
+					<-clientChan
+				}(clientChan)
+			}
+			wg.Wait()
+			log.Infof("Set %d processed", setNum.N1)
+		case <-ctx.Done():
+			log.Info("Queue routine received exit signal")
+			return
+		}
+	}
 }
 
 // ClientRoutine is a persistent routine that processes transactions for a client
@@ -59,27 +85,30 @@ func processTransaction(clientID string, t *pb.Transaction, nodeClients map[stri
 retryLoop:
 	for attempt := 1; attempt <= maxAttempts; attempt++ {
 		// Context for each attempt with timeout
+		timeStart := time.Now().UnixMilli()
 		ctx, cancel := context.WithTimeout(context.Background(), clientTimeout)
 		if attempt == 1 { // First attempt to leader
 			response, err = nodeClients[*leaderNode].TransferRequest(ctx, request)
 			if err == nil {
 				log.Infof(
-					"%s <- %s: %s, %s hola",
+					"%s <- %s: %s, %s hola at %d",
 					clientID,
 					*leaderNode,
 					utils.TransactionString(request.Transaction),
 					utils.TransactionResponseString(response),
+					time.Now().UnixMilli()-timeStart,
 				)
 				cancel()
 				break retryLoop
 				// return
 			} else {
 				log.Warnf(
-					"%s <- %s: %s, %v amigo",
+					"%s <- %s: %s, %v amigo at %d",
 					clientID,
 					*leaderNode,
 					utils.TransactionString(request.Transaction),
 					status.Convert(err).Message(),
+					time.Now().UnixMilli()-timeStart,
 				)
 				cancel()
 				time.Sleep(clientTimeout)
@@ -97,19 +126,21 @@ retryLoop:
 					resp, err := nodeClient.TransferRequest(ctx, request)
 					if err == nil {
 						log.Infof(
-							"%s <- %s: %s, %s buenos",
+							"%s <- %s: %s, %s buenos at %d",
 							clientID,
 							nodeID,
 							utils.TransactionString(request.Transaction),
 							utils.TransactionResponseString(resp),
+							time.Now().UnixMilli()-timeStart,
 						)
 					} else {
 						log.Warnf(
-							"%s <- %s: %s, %v dias",
+							"%s <- %s: %s, %v dias at %d",
 							clientID,
 							nodeID,
 							utils.TransactionString(request.Transaction),
 							status.Convert(err).Message(),
+							time.Now().UnixMilli()-timeStart,
 						)
 					}
 					responsesCh <- result{Response: resp, Err: err}

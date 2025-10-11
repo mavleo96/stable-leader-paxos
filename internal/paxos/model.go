@@ -20,6 +20,7 @@ const (
 // TODO: Need to decompose this into Proposer and Acceptor structures
 type PaxosServer struct {
 	Mutex             sync.RWMutex
+	IsAlive           bool
 	NodeID            string // Compose from Node struct
 	Addr              string // Compose from Node struct
 	State             AcceptorState

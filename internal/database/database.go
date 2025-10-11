@@ -1,7 +1,6 @@
 package database
 
 import (
-	"fmt"
 	"strconv"
 
 	pb "github.com/mavleo96/cft-mavleo96/pb/paxos"
@@ -101,15 +100,21 @@ func (d *Database) UpdateDB(t *pb.Transaction) (bool, error) {
 	return success, err
 }
 
-func (d *Database) PrintDB() {
-	d.db.View(func(tx *bbolt.Tx) error {
+func (d *Database) PrintDB() (map[string]int, error) {
+	db_state := make(map[string]int)
+	err := d.db.View(func(tx *bbolt.Tx) error {
 		b := tx.Bucket([]byte("balances"))
 		b.ForEach(func(k, v []byte) error {
-			fmt.Printf("Balance: %s: %s\n", k, v)
+			n, err := strconv.Atoi(string(v))
+			if err != nil {
+				return err
+			}
+			db_state[string(k)] = n
 			return nil
 		})
 		return nil
 	})
+	return db_state, err
 }
 
 // Close closes the database

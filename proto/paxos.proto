@@ -3,19 +3,25 @@ syntax="proto3";
 package paxos;
 
 import "google/protobuf/empty.proto";
+import "google/protobuf/wrappers.proto";
 
 option go_package = "github.com/mavleo96/cft-mavleo96/pb/paxos;pb";
 
 service Paxos {
     rpc TransferRequest (TransactionRequest) returns (TransactionResponse);
-    rpc PrintLog (google.protobuf.Empty) returns (google.protobuf.Empty);
-    rpc PrintDB (google.protobuf.Empty) returns (google.protobuf.Empty);
-    rpc PrintTimerState (google.protobuf.Empty) returns (google.protobuf.Empty);
-
     rpc PrepareRequest (PrepareMessage) returns (AckMessage);
     rpc NewViewRequest (NewViewMessage) returns (stream AcceptedMessage);
     rpc AcceptRequest (AcceptMessage) returns (AcceptedMessage);
     rpc CommitRequest (CommitMessage) returns (google.protobuf.Empty);
+
+    rpc ChangeNodeStatus (google.protobuf.BoolValue) returns (google.protobuf.Empty);
+    rpc KillLeader (google.protobuf.Empty) returns (google.protobuf.Empty);
+
+    rpc PrintLog (google.protobuf.Empty) returns (google.protobuf.Empty);
+    rpc PrintDB (google.protobuf.Empty) returns (google.protobuf.Empty);
+    rpc PrintStatus (google.protobuf.Int64Value) returns (google.protobuf.Empty);
+    rpc PrintView (google.protobuf.Empty) returns (google.protobuf.Empty);
+    rpc PrintTimerState (google.protobuf.Empty) returns (google.protobuf.Empty);
 }
 
 message BallotNumber {

@@ -12,6 +12,7 @@ import (
 	codes "google.golang.org/grpc/codes"
 	status "google.golang.org/grpc/status"
 	emptypb "google.golang.org/protobuf/types/known/emptypb"
+	wrapperspb "google.golang.org/protobuf/types/known/wrapperspb"
 )
 
 // This is a compile-time assertion to ensure that this generated file
@@ -20,14 +21,18 @@ import (
 const _ = grpc.SupportPackageIsVersion7
 
 const (
-	Paxos_TransferRequest_FullMethodName = "/paxos.Paxos/TransferRequest"
-	Paxos_PrintLog_FullMethodName        = "/paxos.Paxos/PrintLog"
-	Paxos_PrintDB_FullMethodName         = "/paxos.Paxos/PrintDB"
-	Paxos_PrintTimerState_FullMethodName = "/paxos.Paxos/PrintTimerState"
-	Paxos_PrepareRequest_FullMethodName  = "/paxos.Paxos/PrepareRequest"
-	Paxos_NewViewRequest_FullMethodName  = "/paxos.Paxos/NewViewRequest"
-	Paxos_AcceptRequest_FullMethodName   = "/paxos.Paxos/AcceptRequest"
-	Paxos_CommitRequest_FullMethodName   = "/paxos.Paxos/CommitRequest"
+	Paxos_TransferRequest_FullMethodName  = "/paxos.Paxos/TransferRequest"
+	Paxos_PrepareRequest_FullMethodName   = "/paxos.Paxos/PrepareRequest"
+	Paxos_NewViewRequest_FullMethodName   = "/paxos.Paxos/NewViewRequest"
+	Paxos_AcceptRequest_FullMethodName    = "/paxos.Paxos/AcceptRequest"
+	Paxos_CommitRequest_FullMethodName    = "/paxos.Paxos/CommitRequest"
+	Paxos_ChangeNodeStatus_FullMethodName = "/paxos.Paxos/ChangeNodeStatus"
+	Paxos_KillLeader_FullMethodName       = "/paxos.Paxos/KillLeader"
+	Paxos_PrintLog_FullMethodName         = "/paxos.Paxos/PrintLog"
+	Paxos_PrintDB_FullMethodName          = "/paxos.Paxos/PrintDB"
+	Paxos_PrintStatus_FullMethodName      = "/paxos.Paxos/PrintStatus"
+	Paxos_PrintView_FullMethodName        = "/paxos.Paxos/PrintView"
+	Paxos_PrintTimerState_FullMethodName  = "/paxos.Paxos/PrintTimerState"
 )
 
 // PaxosClient is the client API for Paxos service.
@@ -35,13 +40,17 @@ const (
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type PaxosClient interface {
 	TransferRequest(ctx context.Context, in *TransactionRequest, opts ...grpc.CallOption) (*TransactionResponse, error)
-	PrintLog(ctx context.Context, in *emptypb.Empty, opts ...grpc.CallOption) (*emptypb.Empty, error)
-	PrintDB(ctx context.Context, in *emptypb.Empty, opts ...grpc.CallOption) (*emptypb.Empty, error)
-	PrintTimerState(ctx context.Context, in *emptypb.Empty, opts ...grpc.CallOption) (*emptypb.Empty, error)
 	PrepareRequest(ctx context.Context, in *PrepareMessage, opts ...grpc.CallOption) (*AckMessage, error)
 	NewViewRequest(ctx context.Context, in *NewViewMessage, opts ...grpc.CallOption) (Paxos_NewViewRequestClient, error)
 	AcceptRequest(ctx context.Context, in *AcceptMessage, opts ...grpc.CallOption) (*AcceptedMessage, error)
 	CommitRequest(ctx context.Context, in *CommitMessage, opts ...grpc.CallOption) (*emptypb.Empty, error)
+	ChangeNodeStatus(ctx context.Context, in *wrapperspb.BoolValue, opts ...grpc.CallOption) (*emptypb.Empty, error)
+	KillLeader(ctx context.Context, in *emptypb.Empty, opts ...grpc.CallOption) (*emptypb.Empty, error)
+	PrintLog(ctx context.Context, in *emptypb.Empty, opts ...grpc.CallOption) (*emptypb.Empty, error)
+	PrintDB(ctx context.Context, in *emptypb.Empty, opts ...grpc.CallOption) (*emptypb.Empty, error)
+	PrintStatus(ctx context.Context, in *wrapperspb.Int64Value, opts ...grpc.CallOption) (*emptypb.Empty, error)
+	PrintView(ctx context.Context, in *emptypb.Empty, opts ...grpc.CallOption) (*emptypb.Empty, error)
+	PrintTimerState(ctx context.Context, in *emptypb.Empty, opts ...grpc.CallOption) (*emptypb.Empty, error)
 }
 
 type paxosClient struct {
@@ -55,33 +64,6 @@ func NewPaxosClient(cc grpc.ClientConnInterface) PaxosClient {
 func (c *paxosClient) TransferRequest(ctx context.Context, in *TransactionRequest, opts ...grpc.CallOption) (*TransactionResponse, error) {
 	out := new(TransactionResponse)
 	err := c.cc.Invoke(ctx, Paxos_TransferRequest_FullMethodName, in, out, opts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *paxosClient) PrintLog(ctx context.Context, in *emptypb.Empty, opts ...grpc.CallOption) (*emptypb.Empty, error) {
-	out := new(emptypb.Empty)
-	err := c.cc.Invoke(ctx, Paxos_PrintLog_FullMethodName, in, out, opts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *paxosClient) PrintDB(ctx context.Context, in *emptypb.Empty, opts ...grpc.CallOption) (*emptypb.Empty, error) {
-	out := new(emptypb.Empty)
-	err := c.cc.Invoke(ctx, Paxos_PrintDB_FullMethodName, in, out, opts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *paxosClient) PrintTimerState(ctx context.Context, in *emptypb.Empty, opts ...grpc.CallOption) (*emptypb.Empty, error) {
-	out := new(emptypb.Empty)
-	err := c.cc.Invoke(ctx, Paxos_PrintTimerState_FullMethodName, in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -147,18 +129,85 @@ func (c *paxosClient) CommitRequest(ctx context.Context, in *CommitMessage, opts
 	return out, nil
 }
 
+func (c *paxosClient) ChangeNodeStatus(ctx context.Context, in *wrapperspb.BoolValue, opts ...grpc.CallOption) (*emptypb.Empty, error) {
+	out := new(emptypb.Empty)
+	err := c.cc.Invoke(ctx, Paxos_ChangeNodeStatus_FullMethodName, in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *paxosClient) KillLeader(ctx context.Context, in *emptypb.Empty, opts ...grpc.CallOption) (*emptypb.Empty, error) {
+	out := new(emptypb.Empty)
+	err := c.cc.Invoke(ctx, Paxos_KillLeader_FullMethodName, in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *paxosClient) PrintLog(ctx context.Context, in *emptypb.Empty, opts ...grpc.CallOption) (*emptypb.Empty, error) {
+	out := new(emptypb.Empty)
+	err := c.cc.Invoke(ctx, Paxos_PrintLog_FullMethodName, in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *paxosClient) PrintDB(ctx context.Context, in *emptypb.Empty, opts ...grpc.CallOption) (*emptypb.Empty, error) {
+	out := new(emptypb.Empty)
+	err := c.cc.Invoke(ctx, Paxos_PrintDB_FullMethodName, in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *paxosClient) PrintStatus(ctx context.Context, in *wrapperspb.Int64Value, opts ...grpc.CallOption) (*emptypb.Empty, error) {
+	out := new(emptypb.Empty)
+	err := c.cc.Invoke(ctx, Paxos_PrintStatus_FullMethodName, in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *paxosClient) PrintView(ctx context.Context, in *emptypb.Empty, opts ...grpc.CallOption) (*emptypb.Empty, error) {
+	out := new(emptypb.Empty)
+	err := c.cc.Invoke(ctx, Paxos_PrintView_FullMethodName, in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *paxosClient) PrintTimerState(ctx context.Context, in *emptypb.Empty, opts ...grpc.CallOption) (*emptypb.Empty, error) {
+	out := new(emptypb.Empty)
+	err := c.cc.Invoke(ctx, Paxos_PrintTimerState_FullMethodName, in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // PaxosServer is the server API for Paxos service.
 // All implementations must embed UnimplementedPaxosServer
 // for forward compatibility
 type PaxosServer interface {
 	TransferRequest(context.Context, *TransactionRequest) (*TransactionResponse, error)
-	PrintLog(context.Context, *emptypb.Empty) (*emptypb.Empty, error)
-	PrintDB(context.Context, *emptypb.Empty) (*emptypb.Empty, error)
-	PrintTimerState(context.Context, *emptypb.Empty) (*emptypb.Empty, error)
 	PrepareRequest(context.Context, *PrepareMessage) (*AckMessage, error)
 	NewViewRequest(*NewViewMessage, Paxos_NewViewRequestServer) error
 	AcceptRequest(context.Context, *AcceptMessage) (*AcceptedMessage, error)
 	CommitRequest(context.Context, *CommitMessage) (*emptypb.Empty, error)
+	ChangeNodeStatus(context.Context, *wrapperspb.BoolValue) (*emptypb.Empty, error)
+	KillLeader(context.Context, *emptypb.Empty) (*emptypb.Empty, error)
+	PrintLog(context.Context, *emptypb.Empty) (*emptypb.Empty, error)
+	PrintDB(context.Context, *emptypb.Empty) (*emptypb.Empty, error)
+	PrintStatus(context.Context, *wrapperspb.Int64Value) (*emptypb.Empty, error)
+	PrintView(context.Context, *emptypb.Empty) (*emptypb.Empty, error)
+	PrintTimerState(context.Context, *emptypb.Empty) (*emptypb.Empty, error)
 	mustEmbedUnimplementedPaxosServer()
 }
 
@@ -168,15 +217,6 @@ type UnimplementedPaxosServer struct {
 
 func (UnimplementedPaxosServer) TransferRequest(context.Context, *TransactionRequest) (*TransactionResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method TransferRequest not implemented")
-}
-func (UnimplementedPaxosServer) PrintLog(context.Context, *emptypb.Empty) (*emptypb.Empty, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method PrintLog not implemented")
-}
-func (UnimplementedPaxosServer) PrintDB(context.Context, *emptypb.Empty) (*emptypb.Empty, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method PrintDB not implemented")
-}
-func (UnimplementedPaxosServer) PrintTimerState(context.Context, *emptypb.Empty) (*emptypb.Empty, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method PrintTimerState not implemented")
 }
 func (UnimplementedPaxosServer) PrepareRequest(context.Context, *PrepareMessage) (*AckMessage, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method PrepareRequest not implemented")
@@ -189,6 +229,27 @@ func (UnimplementedPaxosServer) AcceptRequest(context.Context, *AcceptMessage) (
 }
 func (UnimplementedPaxosServer) CommitRequest(context.Context, *CommitMessage) (*emptypb.Empty, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method CommitRequest not implemented")
+}
+func (UnimplementedPaxosServer) ChangeNodeStatus(context.Context, *wrapperspb.BoolValue) (*emptypb.Empty, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ChangeNodeStatus not implemented")
+}
+func (UnimplementedPaxosServer) KillLeader(context.Context, *emptypb.Empty) (*emptypb.Empty, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method KillLeader not implemented")
+}
+func (UnimplementedPaxosServer) PrintLog(context.Context, *emptypb.Empty) (*emptypb.Empty, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method PrintLog not implemented")
+}
+func (UnimplementedPaxosServer) PrintDB(context.Context, *emptypb.Empty) (*emptypb.Empty, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method PrintDB not implemented")
+}
+func (UnimplementedPaxosServer) PrintStatus(context.Context, *wrapperspb.Int64Value) (*emptypb.Empty, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method PrintStatus not implemented")
+}
+func (UnimplementedPaxosServer) PrintView(context.Context, *emptypb.Empty) (*emptypb.Empty, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method PrintView not implemented")
+}
+func (UnimplementedPaxosServer) PrintTimerState(context.Context, *emptypb.Empty) (*emptypb.Empty, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method PrintTimerState not implemented")
 }
 func (UnimplementedPaxosServer) mustEmbedUnimplementedPaxosServer() {}
 
@@ -217,60 +278,6 @@ func _Paxos_TransferRequest_Handler(srv interface{}, ctx context.Context, dec fu
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(PaxosServer).TransferRequest(ctx, req.(*TransactionRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _Paxos_PrintLog_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(emptypb.Empty)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(PaxosServer).PrintLog(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: Paxos_PrintLog_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(PaxosServer).PrintLog(ctx, req.(*emptypb.Empty))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _Paxos_PrintDB_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(emptypb.Empty)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(PaxosServer).PrintDB(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: Paxos_PrintDB_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(PaxosServer).PrintDB(ctx, req.(*emptypb.Empty))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _Paxos_PrintTimerState_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(emptypb.Empty)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(PaxosServer).PrintTimerState(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: Paxos_PrintTimerState_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(PaxosServer).PrintTimerState(ctx, req.(*emptypb.Empty))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -350,6 +357,132 @@ func _Paxos_CommitRequest_Handler(srv interface{}, ctx context.Context, dec func
 	return interceptor(ctx, in, info, handler)
 }
 
+func _Paxos_ChangeNodeStatus_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(wrapperspb.BoolValue)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PaxosServer).ChangeNodeStatus(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Paxos_ChangeNodeStatus_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PaxosServer).ChangeNodeStatus(ctx, req.(*wrapperspb.BoolValue))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Paxos_KillLeader_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(emptypb.Empty)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PaxosServer).KillLeader(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Paxos_KillLeader_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PaxosServer).KillLeader(ctx, req.(*emptypb.Empty))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Paxos_PrintLog_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(emptypb.Empty)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PaxosServer).PrintLog(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Paxos_PrintLog_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PaxosServer).PrintLog(ctx, req.(*emptypb.Empty))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Paxos_PrintDB_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(emptypb.Empty)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PaxosServer).PrintDB(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Paxos_PrintDB_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PaxosServer).PrintDB(ctx, req.(*emptypb.Empty))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Paxos_PrintStatus_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(wrapperspb.Int64Value)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PaxosServer).PrintStatus(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Paxos_PrintStatus_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PaxosServer).PrintStatus(ctx, req.(*wrapperspb.Int64Value))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Paxos_PrintView_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(emptypb.Empty)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PaxosServer).PrintView(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Paxos_PrintView_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PaxosServer).PrintView(ctx, req.(*emptypb.Empty))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Paxos_PrintTimerState_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(emptypb.Empty)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PaxosServer).PrintTimerState(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Paxos_PrintTimerState_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PaxosServer).PrintTimerState(ctx, req.(*emptypb.Empty))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // Paxos_ServiceDesc is the grpc.ServiceDesc for Paxos service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -362,18 +495,6 @@ var Paxos_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _Paxos_TransferRequest_Handler,
 		},
 		{
-			MethodName: "PrintLog",
-			Handler:    _Paxos_PrintLog_Handler,
-		},
-		{
-			MethodName: "PrintDB",
-			Handler:    _Paxos_PrintDB_Handler,
-		},
-		{
-			MethodName: "PrintTimerState",
-			Handler:    _Paxos_PrintTimerState_Handler,
-		},
-		{
 			MethodName: "PrepareRequest",
 			Handler:    _Paxos_PrepareRequest_Handler,
 		},
@@ -384,6 +505,34 @@ var Paxos_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "CommitRequest",
 			Handler:    _Paxos_CommitRequest_Handler,
+		},
+		{
+			MethodName: "ChangeNodeStatus",
+			Handler:    _Paxos_ChangeNodeStatus_Handler,
+		},
+		{
+			MethodName: "KillLeader",
+			Handler:    _Paxos_KillLeader_Handler,
+		},
+		{
+			MethodName: "PrintLog",
+			Handler:    _Paxos_PrintLog_Handler,
+		},
+		{
+			MethodName: "PrintDB",
+			Handler:    _Paxos_PrintDB_Handler,
+		},
+		{
+			MethodName: "PrintStatus",
+			Handler:    _Paxos_PrintStatus_Handler,
+		},
+		{
+			MethodName: "PrintView",
+			Handler:    _Paxos_PrintView_Handler,
+		},
+		{
+			MethodName: "PrintTimerState",
+			Handler:    _Paxos_PrintTimerState_Handler,
 		},
 	},
 	Streams: []grpc.StreamDesc{

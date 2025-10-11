@@ -3,8 +3,10 @@ package paxos
 import (
 	"context"
 	"fmt"
+	"sort"
 
 	"github.com/mavleo96/cft-mavleo96/internal/utils"
+	log "github.com/sirupsen/logrus"
 	"google.golang.org/protobuf/types/known/emptypb"
 )
 
@@ -15,14 +17,7 @@ func (s *PaxosServer) PrintLog(ctx context.Context, req *emptypb.Empty) (*emptyp
 	defer s.State.Mutex.RUnlock()
 	fmt.Println("Printing log")
 	for _, record := range s.State.AcceptLog {
-		fmt.Printf("Accept log: %v\n", utils.AcceptRecordString(record))
-	}
-
-	for clientID, timestamp := range s.LastReplyTimestamp {
-		fmt.Printf("Last reply timestamp: <%s, %d>\n", clientID, timestamp)
-	}
-	for _, record := range s.AcceptedMessages {
-		fmt.Printf("Accepted messages: %v\n", utils.AcceptedMessageString(record))
+		fmt.Printf("Accept log: %v\n", utils.PrintLogString(record))
 	}
 	return &emptypb.Empty{}, nil
 }
@@ -33,13 +28,25 @@ func (s *PaxosServer) PrintDB(ctx context.Context, req *emptypb.Empty) (*emptypb
 	s.State.Mutex.RLock()
 	defer s.State.Mutex.RUnlock()
 	fmt.Println("Printing database")
-	s.DB.PrintDB()
+	db_state, err := s.DB.PrintDB()
+	if err != nil {
+		log.Fatal(err)
+	}
+	//TODO: print by client id
+	keys := make([]string, 0, len(db_state))
+	for k := range db_state {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	for _, k := range keys {
+		fmt.Printf("Balance: %s: %d\n", k, db_state[k])
+	}
 	return &emptypb.Empty{}, nil
 }
 
 // PrintTimerState prints the timer state
 func (s *PaxosServer) PrintTimerState(ctx context.Context, req *emptypb.Empty) (*emptypb.Empty, error) {
-	waitCount, running := s.PaxosTimer.GetTimerState()
-	fmt.Printf("Timer state: %d, %t\n", waitCount, running)
+	waitCount, running, timeout := s.PaxosTimer.GetTimerState()
+	fmt.Printf("Timer state: %d, %t, %d\n", waitCount, running, timeout)
 	return &emptypb.Empty{}, nil
 }

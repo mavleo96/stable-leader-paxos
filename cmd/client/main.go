@@ -4,8 +4,8 @@ import (
 	"bufio"
 	"context"
 	"flag"
-	"fmt"
 	"os"
+	"strconv"
 	"strings"
 	"sync"
 
@@ -55,7 +55,7 @@ func main() {
 		log.Fatal(err)
 	}
 	// masterQueue is a nested map of client id to set number to list of transactions.
-	masterQueue, setNumList, err := client.CreateMasterQueue(records, cfg.Clients)
+	masterQueue, setNumList, aliveNodesMap, err := client.ParseRecords(records, cfg.Clients)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -64,92 +64,101 @@ func main() {
 	// Each client has its own goroutine and channel. The channel is used by main routine and client routine to communicate.
 	// - main routine sends set number to client routine
 	// - client routine sends {nil, nil} to main routine when set is done
+	wg := sync.WaitGroup{}
 	clientChannels := make(map[string]chan client.SetNumber)
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	for _, clientID := range cfg.Clients {
 		clientChannels[clientID] = make(chan client.SetNumber)
-		go client.ClientRoutine(ctx, clientID, clientChannels[clientID], masterQueue[clientID], nodeClients)
+		wg.Add(1)
+		go func(ctx context.Context, id string) {
+			defer wg.Done()
+			client.ClientRoutine(ctx, id, clientChannels[id], masterQueue[id], nodeClients)
+		}(ctx, clientID)
+
 	}
+	queueChan := make(chan client.SetNumber, 5)
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		client.QueueRoutine(ctx, queueChan, clientChannels, nodeClients)
+	}()
 
 	scanner := bufio.NewScanner(os.Stdin)
 
-	// Main Interactive Loop to control set processing
-mainLoop:
-	for i, setNum := range setNumList {
-		if setNum.N2 == 1 {
-			// TODO: Signal dead nodes
-		}
-		// Signal all clients to process set and wait for all to finish
-		wg := sync.WaitGroup{}
-		for _, clientID := range cfg.Clients {
-			wg.Add(1)
-			go func(id string) {
-				defer wg.Done()
-				clientChannels[id] <- setNum
-				<-clientChannels[id]
-			}(clientID)
-		}
-		wg.Wait()
-		// if next set number N1 is same then continue
-		if i < len(setNumList)-1 && setNumList[i+1].N1 == setNum.N1 {
-			continue
-		}
-		log.Infof("Set %d processed by all clients", setNum.N1)
-
-		// Interaction loop
-	interactionLoop:
-		for {
-			fmt.Print("> ")
-			if !scanner.Scan() {
-				if err := scanner.Err(); err != nil {
-					log.Panic(err)
-				}
+interactionLoop:
+	for {
+		if !scanner.Scan() {
+			if err := scanner.Err(); err != nil {
+				log.Panic(err)
 			}
-			cmd := strings.TrimSpace(scanner.Text())
-			switch cmd {
-			case "next":
-				break interactionLoop
-			case "exit":
-				break mainLoop
-			case "print log":
-				log.Info("Print log command received")
-				// TODO: implement print log
-				for _, nodeClient := range nodeClients {
-					_, err = nodeClient.PrintLog(context.Background(), &emptypb.Empty{})
-					if err != nil {
-						log.Panic(err)
-					}
-				}
-			case "print db":
-				log.Info("Print db command received")
-				// TODO: implement print db
-				for _, nodeClient := range nodeClients {
-					_, err = nodeClient.PrintDB(context.Background(), &emptypb.Empty{})
-					if err != nil {
-						log.Panic(err)
-					}
-				}
-			case "print status":
-				log.Info("Print status command received")
-				// TODO: implement print status
-			case "print view":
-				log.Info("Print view command received")
-				// TODO: implement print view
-			case "print timer state":
-				log.Info("Print timer state command received")
-				// TODO: implement print timer state
-				for _, nodeClient := range nodeClients {
-					_, err = nodeClient.PrintTimerState(context.Background(), &emptypb.Empty{})
-					if err != nil {
-						log.Panic(err)
-					}
-				}
-			default:
+		}
+		cmd := strings.TrimSpace(scanner.Text())
+		var arg int
+		if strings.HasPrefix(cmd, "print status") {
+			var err error
+			n := strings.TrimPrefix(cmd, "print status")
+			n = strings.TrimSpace(n)
+			arg, err = strconv.Atoi(n)
+			if err != nil {
+				log.Warn(err)
+				continue interactionLoop
+			}
+			cmd = "print status"
+			if arg <= 0 {
+				log.Warn("Invalid argument for print status")
 				continue interactionLoop
 			}
 		}
+		// If command contains "print status", then
+		switch cmd {
+		case "next":
+			// send set number to queue routine
+			var setNum client.SetNumber
+			for {
+				if len(setNumList) == 0 {
+					break interactionLoop
+				} else if len(setNumList) > 1 {
+					setNum, setNumList = setNumList[0], setNumList[1:]
+				} else {
+					setNum, setNumList = setNumList[0], make([]client.SetNumber, 0)
+				}
+				if setNum.N2 == 1 {
+					client.ReconfigureNodes(aliveNodesMap[setNum], nodeClients)
+				}
+				queueChan <- setNum
+				if len(setNumList) > 0 && setNumList[0].N2 > 1 {
+					continue
+				}
+				break
+			}
+		case "print log":
+			log.Info("Print log command received")
+			for _, nodeClient := range nodeClients {
+				_, err = nodeClient.PrintLog(context.Background(), &emptypb.Empty{})
+				if err != nil {
+					log.Warn(err)
+				}
+			}
+		case "print db":
+			log.Info("Print db command received")
+			for _, nodeClient := range nodeClients {
+				_, err = nodeClient.PrintDB(context.Background(), &emptypb.Empty{})
+				if err != nil {
+					log.Warn(err)
+				}
+			}
+		case "print status":
+			log.Infof("Print status command received for %d", arg)
+		case "print view":
+			log.Info("Print view command received")
+		case "exit":
+			break interactionLoop
+		default:
+			continue interactionLoop
+		}
 	}
 	cancel()
-	log.Info("Exiting...")
+	wg.Wait()
+	log.Info("Client main routine exiting...")
 }

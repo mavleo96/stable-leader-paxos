@@ -57,12 +57,13 @@ func (s *PaxosServer) ServerTimeoutRoutine() {
 	for timeoutCount := 1; ; timeoutCount++ {
 		<-s.PaxosTimer.TimeoutChannel
 		log.Warnf("Backup timer has expired: %d at %d", timeoutCount, time.Now().UnixMilli())
-		s.PrepareRoutine()
+		go s.PrepareRoutine()
 	}
 }
 
 // TODO: what sohuld this routine do if i concurrently receive new view message
 func (s *PaxosServer) PrepareRoutine() {
+	log.Info("Prepare routine has been called")
 	// Reset Leader
 	s.State.Mutex.Lock()
 	s.State.Leader = &models.Node{ID: ""}
@@ -81,6 +82,7 @@ func (s *PaxosServer) PrepareRoutine() {
 		}
 		s.State.PromisedBallotNum = latestPrepareMessage.B
 		// s.State.Mutex.Unlock()
+		log.Infof("Leader set to %s", s.State.Leader.ID)
 
 		for timestamp, prepareMessageEntry := range s.PrepareMessageLog {
 			prepareMessageEntry.ResponseChannel <- latestPrepareMessage
@@ -201,16 +203,9 @@ func (s *PaxosServer) NewViewRoutine(newViewMessage *pb.NewViewMessage) {
 		if err != nil {
 			log.Fatal(err)
 		}
-		for {
-			if s.State.AcceptLog[sequenceNum].Executed {
-				break
-			}
-			_, err := s.TryExecute(sequenceNum)
-			if err != nil {
-				log.Infof("Retry execute request %s", utils.TransactionRequestString(newViewMessage.AcceptLog[sequenceNum-1].AcceptedVal))
-				continue
-			}
-			break
+		_, err = s.TryExecute(sequenceNum)
+		if err != nil {
+			log.Infof("Failed to execute request %s", utils.TransactionRequestString(newViewMessage.AcceptLog[sequenceNum-1].AcceptedVal))
 		}
 		s.State.Mutex.Unlock()
 	}

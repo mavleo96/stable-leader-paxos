@@ -191,20 +191,17 @@ func (s *PaxosServer) CommitRequest(ctx context.Context, req *pb.CommitMessage) 
 	log.Infof("Commited %s", utils.TransactionRequestString(req.Transaction))
 
 	// Try to execute the request
-	// TODO: this busy retry logic can be problematic; need to fix this
-	for {
-		if s.State.AcceptLog[req.SequenceNum].Executed {
-			break
-		}
-		_, err := s.TryExecute(req.SequenceNum)
-		if err != nil {
-			log.Infof("Retry execute request %s", utils.TransactionRequestString(req.Transaction))
-			continue
-		}
-		// Decrement wait count since request is executed
-		s.PaxosTimer.DecrementWaitCountAndResetOrStopIfZero(req.String())
-		break
+	if s.State.AcceptLog[req.SequenceNum].Executed {
+		log.Infof("Request %s already executed", utils.TransactionRequestString(req.Transaction))
+		return &emptypb.Empty{}, nil
 	}
+
+	_, err := s.TryExecute(req.SequenceNum)
+	if err != nil {
+		log.Infof("Failed to execute request %s", utils.TransactionRequestString(req.Transaction))
+		return &emptypb.Empty{}, nil
+	}
+	s.PaxosTimer.DecrementWaitCountAndResetOrStopIfZero(req.String())
 	return &emptypb.Empty{}, nil
 }
 

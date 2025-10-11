@@ -74,20 +74,20 @@ func (s *PaxosServer) TransferRequest(ctx context.Context, req *pb.TransactionRe
 	// Check if the request is already committed
 	if !s.State.AcceptLog[sequenceNum].Committed {
 		// Retry accept request until quorum of accepts is received
-		for {
-			ok, err := s.SendAcceptRequest(&pb.AcceptMessage{
-				B:           s.State.PromisedBallotNum,
-				SequenceNum: sequenceNum,
-				Message:     s.State.AcceptLog[sequenceNum].AcceptedVal,
-			})
-			if err != nil {
-				log.Fatal(err)
-			}
-			if !ok {
-				log.Warnf("Retry accept request %s", utils.TransactionRequestString(req))
-				continue
-			}
-			break
+		ok, err := s.SendAcceptRequest(&pb.AcceptMessage{
+			B:           s.State.PromisedBallotNum,
+			SequenceNum: sequenceNum,
+			Message:     s.State.AcceptLog[sequenceNum].AcceptedVal,
+		})
+		if err != nil {
+			log.Fatal(err)
+		}
+		if !ok {
+			log.Warnf("Failed to get quorum of accepts for request %s", utils.TransactionRequestString(req))
+			// TODO: should you just step down or try to become the leader?
+			s.State.Leader = &models.Node{ID: ""}
+			log.Warnf("Leader set to %s", s.State.Leader.ID)
+			return UnsuccessfulTransactionResponse, status.Errorf(codes.Aborted, "accept request failed")
 		}
 
 		// Once quorum of accepts received, commit it immediately and multicast the commit request
@@ -95,7 +95,7 @@ func (s *PaxosServer) TransferRequest(ctx context.Context, req *pb.TransactionRe
 		log.Infof("Committed %s", utils.TransactionRequestString(req))
 
 		log.Infof("Multicasting commit request for sequence number %d", sequenceNum)
-		err := s.SendCommitRequest(&pb.CommitMessage{
+		err = s.SendCommitRequest(&pb.CommitMessage{
 			B:           s.State.PromisedBallotNum,
 			SequenceNum: sequenceNum,
 			Transaction: req,

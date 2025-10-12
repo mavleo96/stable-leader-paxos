@@ -67,10 +67,12 @@ func main() {
 	// - client routine sends {nil, nil} to main routine when set is done
 	wg := sync.WaitGroup{}
 	clientChannels := make(map[string]chan client.SetNumber)
+	for _, clientID := range cfg.Clients {
+		clientChannels[clientID] = make(chan client.SetNumber)
+	}
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	for _, clientID := range cfg.Clients {
-		clientChannels[clientID] = make(chan client.SetNumber)
 		wg.Add(1)
 		go func(ctx context.Context, id string) {
 			defer wg.Done()

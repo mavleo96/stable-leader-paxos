@@ -16,13 +16,15 @@ import (
 
 // TransferRequest is the main function that rpc server calls to handle the transaction request
 func (s *PaxosServer) TransferRequest(ctx context.Context, req *pb.TransactionRequest) (*pb.TransactionResponse, error) {
-	s.State.Mutex.RLock()
 	if !s.IsAlive {
-		s.State.Mutex.RUnlock()
 		log.Warnf("Node is dead")
 		return nil, status.Errorf(codes.Unavailable, "node is dead")
 	}
-	s.State.Mutex.RUnlock()
+
+	// System is not initialized yet
+	if !s.SysInitialized {
+		s.InitializeSystem()
+	}
 
 	// Forward request if not leader
 	s.State.Mutex.Lock()

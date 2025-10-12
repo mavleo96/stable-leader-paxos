@@ -5,6 +5,7 @@ import (
 	"errors"
 	"time"
 
+	"github.com/mavleo96/cft-mavleo96/internal/models"
 	"github.com/mavleo96/cft-mavleo96/internal/utils"
 	pb "github.com/mavleo96/cft-mavleo96/pb/paxos"
 	log "github.com/sirupsen/logrus"
@@ -42,6 +43,23 @@ func (s *PaxosServer) PrepareRequest(ctx context.Context, req *pb.PrepareMessage
 		PrepareMessage:  req,
 	}
 	s.PrepareMessageLog[time.Now()] = prepareRequestRecord
+
+	if !s.SysInitialized {
+		log.Infof("System not initialized, immediately accepting prepare request %s", utils.BallotNumberString(req.B))
+		s.SysInitialized = true
+		s.State.PromisedBallotNum = req.B
+		close(prepareRequestRecord.ResponseChannel)
+		prepareRequestRecord.ResponseChannel = nil
+		s.State.Leader = &models.Node{
+			ID:      s.NodeID,
+			Address: s.Addr,
+		}
+		return &pb.AckMessage{
+			Ok:        true,
+			AcceptNum: req.B,
+			AcceptLog: make([]*pb.AcceptRecord, 0),
+		}, nil
+	}
 
 	// Wait for prepare routine to send prepare message
 	if resp := <-prepareRequestRecord.ResponseChannel; resp != prepareRequestRecord.PrepareMessage {

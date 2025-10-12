@@ -80,14 +80,16 @@ func main() {
 
 	// Initialize paxos server
 	paxosServer := paxos.PaxosServer{
-		Mutex:   sync.RWMutex{},
-		IsAlive: true,
-		NodeID:  selfNode.ID,
-		Addr:    selfNode.Address,
+		SysInitializedMutex: sync.Mutex{},
+		SysInitialized:      false,
+		Mutex:               sync.RWMutex{},
+		IsAlive:             true,
+		NodeID:              selfNode.ID,
+		Addr:                selfNode.Address,
 		State: paxos.AcceptorState{
 			Mutex:               sync.RWMutex{},
-			Leader:              &models.Node{ID: "n1", Address: "localhost:5001"},
-			PromisedBallotNum:   &pb.BallotNumber{N: 1, NodeID: "n1"},
+			Leader:              &models.Node{ID: ""},
+			PromisedBallotNum:   &pb.BallotNumber{N: 0, NodeID: ""},
 			AcceptLog:           make(map[int64]*pb.AcceptRecord),
 			ExecutedSequenceNum: 0,
 		},

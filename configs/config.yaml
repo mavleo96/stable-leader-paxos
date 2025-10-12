@@ -21,3 +21,5 @@ clients:
 - H
 - I
 - J
+
+db_dir: ./data

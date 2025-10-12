@@ -19,18 +19,20 @@ const (
 
 // TODO: Need to decompose this into Proposer and Acceptor structures
 type PaxosServer struct {
-	Mutex             sync.RWMutex
-	IsAlive           bool
-	NodeID            string // Compose from Node struct
-	Addr              string // Compose from Node struct
-	State             AcceptorState
-	DB                *database.Database
-	LastReply         map[string]*pb.TransactionResponse // Proposer only
-	Peers             map[string]*models.Node
-	Quorum            int        // Compose from Proposer
-	PaxosTimer        *SafeTimer // Proposer only
-	AcceptedMessages  []*pb.AcceptedMessage
-	PrepareMessageLog map[time.Time]*PrepareRequestRecord // timestamp mapped to prepare message
+	SysInitializedMutex sync.Mutex
+	SysInitialized      bool
+	Mutex               sync.RWMutex
+	IsAlive             bool
+	NodeID              string // Compose from Node struct
+	Addr                string // Compose from Node struct
+	State               AcceptorState
+	DB                  *database.Database
+	LastReply           map[string]*pb.TransactionResponse // Proposer only
+	Peers               map[string]*models.Node
+	Quorum              int        // Compose from Proposer
+	PaxosTimer          *SafeTimer // Proposer only
+	AcceptedMessages    []*pb.AcceptedMessage
+	PrepareMessageLog   map[time.Time]*PrepareRequestRecord // timestamp mapped to prepare message
 	pb.UnimplementedPaxosServer
 }
 
@@ -51,6 +53,19 @@ type AcceptorState struct {
 var UnsuccessfulTransactionResponse = &pb.TransactionResponse{}
 
 var NoOperation = &pb.TransactionRequest{}
+
+func (s *PaxosServer) InitializeSystem() {
+	s.SysInitializedMutex.Lock()
+	defer s.SysInitializedMutex.Unlock()
+	if !s.SysInitialized {
+		log.Infof("Initializing system by leader election")
+		s.PrepareRoutine()
+		s.SysInitialized = true
+		log.Infof("System initialized")
+		return
+	}
+	log.Infof("System already initialized")
+}
 
 func (s *PaxosServer) ServerTimeoutRoutine() {
 	log.Warn("Server timeout routine is active")
@@ -85,8 +100,10 @@ func (s *PaxosServer) PrepareRoutine() {
 		log.Infof("Leader set to %s", s.State.Leader.ID)
 
 		for timestamp, prepareMessageEntry := range s.PrepareMessageLog {
-			prepareMessageEntry.ResponseChannel <- latestPrepareMessage
-			close(prepareMessageEntry.ResponseChannel)
+			if prepareMessageEntry.ResponseChannel != nil {
+				prepareMessageEntry.ResponseChannel <- latestPrepareMessage
+				close(prepareMessageEntry.ResponseChannel)
+			}
 			delete(s.PrepareMessageLog, timestamp)
 		}
 		s.State.Mutex.Unlock()

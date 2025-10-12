@@ -75,7 +75,6 @@ func (x *BallotNumber) GetNodeID() string {
 	return ""
 }
 
-// TODO: this need not be part of proto
 type AcceptRecord struct {
 	state               protoimpl.MessageState `protogen:"open.v1"`
 	AcceptedBallotNum   *BallotNumber          `protobuf:"bytes,1,opt,name=acceptedBallotNum,proto3" json:"acceptedBallotNum,omitempty"`

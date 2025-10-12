@@ -30,7 +30,6 @@ message BallotNumber {
     string nodeID = 2;
 }
 
-// TODO: this need not be part of proto
 message AcceptRecord  {
     BallotNumber acceptedBallotNum = 1;
 	int64 acceptedSequenceNum = 2;

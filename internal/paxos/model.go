@@ -61,28 +61,26 @@ func (s *PaxosServer) ServerTimeoutRoutine() {
 	}
 }
 
-// TODO: what sohuld this routine do if i concurrently receive new view message
+// PrepareRoutine is used to prepare the leader for an election
 func (s *PaxosServer) PrepareRoutine() {
 	log.Info("Prepare routine has been called")
 	// Reset Leader
 	s.State.Mutex.Lock()
 	s.State.Leader = &models.Node{ID: ""}
 	log.Infof("Setting leader to nil")
-	// s.State.Mutex.Unlock()
 
 	// Decide if there is a latest prepare message
 	latestPrepareMessage := FindHighestValidPrepareMessage(s.PrepareMessageLog, time.Now())
+	highestBallotNumber := FindHighestBallotNumberInPrepareMessageLog(s.PrepareMessageLog)
 
 	// If there is, set the leader and promised ballot number
 	if latestPrepareMessage != nil {
-		// s.State.Mutex.Lock()
 		s.State.Leader = &models.Node{
 			ID:      latestPrepareMessage.B.NodeID,
 			Address: s.Peers[latestPrepareMessage.B.NodeID].Address,
 		}
 		s.State.PromisedBallotNum = latestPrepareMessage.B
 		log.Infof("Promised ballot number set to %s", utils.BallotNumberString(s.State.PromisedBallotNum))
-		// s.State.Mutex.Unlock()
 		log.Infof("Leader set to %s", s.State.Leader.ID)
 
 		for timestamp, prepareMessageEntry := range s.PrepareMessageLog {
@@ -95,7 +93,11 @@ func (s *PaxosServer) PrepareRoutine() {
 	}
 
 	// If there is not, initiate an election, set ballot number and release mutex
-	s.State.PromisedBallotNum = &pb.BallotNumber{N: s.State.PromisedBallotNum.N + 1, NodeID: s.NodeID}
+	if highestBallotNumber != nil && BallotNumberIsHigher(s.State.PromisedBallotNum, highestBallotNumber) {
+		s.State.PromisedBallotNum = &pb.BallotNumber{N: highestBallotNumber.N + 1, NodeID: s.NodeID}
+	} else {
+		s.State.PromisedBallotNum = &pb.BallotNumber{N: s.State.PromisedBallotNum.N + 1, NodeID: s.NodeID}
+	}
 	log.Infof("Changed ballot number set to %s", utils.BallotNumberString(s.State.PromisedBallotNum))
 	newPrepareMessage := &pb.PrepareMessage{
 		B: &pb.BallotNumber{
@@ -110,7 +112,7 @@ func (s *PaxosServer) PrepareRoutine() {
 		return
 	}
 	if !ok {
-		log.Warn("Failed to get a quorum of promises")
+		log.Warnf("Failed to get a quorum of promises for %s", utils.BallotNumberString(newPrepareMessage.B))
 		return
 	}
 
@@ -118,8 +120,8 @@ func (s *PaxosServer) PrepareRoutine() {
 	// acquire mutex -> set leader -> synchronize accept log -> send new view request -> release mutex
 	s.State.Mutex.Lock()
 	s.State.Leader = &models.Node{
-		ID:      newPrepareMessage.B.NodeID,
-		Address: s.Peers[newPrepareMessage.B.NodeID].Address,
+		ID:      s.NodeID,
+		Address: s.Peers[s.NodeID].Address,
 	}
 	log.Infof("Leader for %s is %s", utils.BallotNumberString(newPrepareMessage.B), s.State.Leader.ID)
 	log.Infof("Accept log map: %v", acceptLogMap)
@@ -174,12 +176,6 @@ func (s *PaxosServer) PrepareRoutine() {
 	s.State.Mutex.Unlock()
 	log.Infof("New view accept log: %v", newViewMessage)
 	go s.NewViewRoutine(newViewMessage)
-	// go func() {
-	// 	err := s.SendNewViewRequest(newViewMessage)
-	// 	if err != nil {
-	// 		log.Warn(err)
-	// 	}
-	// }()
 }
 
 func (s *PaxosServer) NewViewRoutine(newViewMessage *pb.NewViewMessage) {
@@ -254,4 +250,16 @@ func FindHighestValidPrepareMessage(messageLog map[time.Time]*PrepareRequestReco
 		}
 	}
 	return latestPrepareMessage
+}
+
+func FindHighestBallotNumberInPrepareMessageLog(messageLog map[time.Time]*PrepareRequestRecord) *pb.BallotNumber {
+	var highestBallotNumber *pb.BallotNumber
+	for _, prepareMessageEntry := range messageLog {
+		if highestBallotNumber == nil {
+			highestBallotNumber = prepareMessageEntry.PrepareMessage.B
+		} else if BallotNumberIsHigher(highestBallotNumber, prepareMessageEntry.PrepareMessage.B) {
+			highestBallotNumber = prepareMessageEntry.PrepareMessage.B
+		}
+	}
+	return highestBallotNumber
 }

@@ -53,8 +53,6 @@ func (d *Database) UpdateDB(t *pb.Transaction) (bool, error) {
 		// Retrieve sender and receiver balances
 		senderBalBytes := b.Get([]byte(t.Sender))
 		if senderBalBytes == nil {
-			// TODO: need to define error somewhere else
-			// TODO: should message be included?
 			success = false
 			return nil
 		}
@@ -75,12 +73,10 @@ func (d *Database) UpdateDB(t *pb.Transaction) (bool, error) {
 		// Check if amount is valid and sender has sufficient balance
 		amount := int(t.Amount)
 		if amount <= 0 {
-			// TODO: should message be included?
 			success = false
 			return nil
 		}
 		if senderBal < amount {
-			// TODO: should message be included?
 			success = false
 			return nil
 		}

@@ -131,7 +131,7 @@ func (s *PaxosServer) AcceptRequest(ctx context.Context, req *pb.AcceptMessage) 
 			Executed:            false,
 		}
 		// We increment wait count since this is a new request
-		s.PaxosTimer.IncrementWaitCountOrStart(req.String())
+		s.PaxosTimer.IncrementWaitCountOrStart()
 	}
 
 	log.Infof("Accepted %s", utils.TransactionRequestString(req.Message))
@@ -167,7 +167,7 @@ func (s *PaxosServer) CommitRequest(ctx context.Context, req *pb.CommitMessage) 
 	// If not already in log then increment wait count
 	_, ok := s.State.AcceptLog[req.SequenceNum]
 	if !ok {
-		s.PaxosTimer.IncrementWaitCountOrStart(req.String())
+		s.PaxosTimer.IncrementWaitCountOrStart()
 	}
 
 	// Update State
@@ -202,7 +202,7 @@ func (s *PaxosServer) CommitRequest(ctx context.Context, req *pb.CommitMessage) 
 		log.Infof("Failed to execute request %s", utils.TransactionRequestString(req.Transaction))
 		return &emptypb.Empty{}, nil
 	}
-	s.PaxosTimer.DecrementWaitCountAndResetOrStopIfZero(req.String())
+	s.PaxosTimer.DecrementWaitCountAndResetOrStopIfZero()
 	return &emptypb.Empty{}, nil
 }
 
@@ -221,7 +221,7 @@ func (s *PaxosServer) CatchupRequest(ctx context.Context, req *wrapperspb.Int64V
 		return nil, status.Errorf(codes.Aborted, "not leader")
 	}
 
-	log.Infof("Received catch up request for sequence number %d", req.Value)
+	log.Infof("Received catch up request logs with sequence number >%d", req.Value)
 	catchupLog := []*pb.AcceptRecord{}
 	maxSequenceNum := MaxSequenceNumber(s.State.AcceptLog)
 
@@ -243,11 +243,6 @@ func (s *PaxosServer) CatchupRequest(ctx context.Context, req *wrapperspb.Int64V
 // TryExecute tries to execute the transaction
 // The state mutex should be acquired before calling this function
 func (s *PaxosServer) TryExecute(sequenceNum int64) (bool, error) {
-	// TODO: This is a development hack; need to remove this
-	if s.State.Mutex.TryLock() {
-		log.Fatal("State mutex was not acquired before trying to execute!")
-	}
-
 	// Execute transactions until the sequence number is executed
 	for s.State.ExecutedSequenceNum < sequenceNum {
 		nextSequenceNum := s.State.ExecutedSequenceNum + 1

@@ -8,8 +8,6 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
-// TODO: need to remove redundant log statements
-
 // SafeTimer is a somewhat safe timer wrapper for paxos algorithm
 type SafeTimer struct {
 	mutex            sync.Mutex
@@ -24,7 +22,7 @@ type SafeTimer struct {
 }
 
 // IncrementWaitCountOrStart is used to increment the wait count and start the timer if it is not running
-func (t *SafeTimer) IncrementWaitCountOrStart(message string) {
+func (t *SafeTimer) IncrementWaitCountOrStart() {
 	t.mutex.Lock()
 	defer t.mutex.Unlock()
 
@@ -32,28 +30,28 @@ func (t *SafeTimer) IncrementWaitCountOrStart(message string) {
 	if !t.running {
 		t.timer.Reset(t.timeout)
 		t.waitCount++
-		log.Infof("Timer started, Wait count: %d -> %d %d %s", t.waitCount-1, t.waitCount, time.Now().UnixMilli(), message)
+		log.Infof("Timer started, Wait count: %d -> %d %d", t.waitCount-1, t.waitCount, time.Now().UnixMilli())
 		t.running = true
 	} else {
 		// If timer is running, increment the wait count
 		t.waitCount++
-		log.Infof("Timer wait count incremented, Wait count: %d -> %d %s", t.waitCount-1, t.waitCount, message)
+		log.Infof("Timer wait count incremented, Wait count: %d -> %d", t.waitCount-1, t.waitCount)
 	}
 }
 
 // IncrementWaitCountOrStartAndGetContext is used to increment the wait count and start the timer if it is not running
 // and return the timer context which will be cancelled by the timer routine after it expires
-func (t *SafeTimer) IncrementWaitCountOrStartAndGetContext(message string) context.Context {
+func (t *SafeTimer) IncrementWaitCountOrStartAndGetContext() context.Context {
 	t.mutex.Lock()
 	t.contextWaitCount++
 	t.mutex.Unlock()
-	t.IncrementWaitCountOrStart(message)
+	t.IncrementWaitCountOrStart()
 	return t.timerContext
 }
 
 // DecrementWaitCountAndResetOrStopIfZero is used to decrement the wait count and reset the timer if it is not zero
 // and stop the timer if the wait count is zero
-func (t *SafeTimer) DecrementWaitCountAndResetOrStopIfZero(message string) {
+func (t *SafeTimer) DecrementWaitCountAndResetOrStopIfZero() {
 	t.mutex.Lock()
 	defer t.mutex.Unlock()
 
@@ -63,31 +61,33 @@ func (t *SafeTimer) DecrementWaitCountAndResetOrStopIfZero(message string) {
 	// Decrement the wait count
 	t.waitCount--
 	if t.waitCount < 0 {
-		log.Fatalf("Wait count is negative: %d %s", t.waitCount, message)
+		log.Warnf("Wait count is negative: %d %s", t.waitCount)
 	} else if t.waitCount == 0 {
 		t.running = false
-		log.Infof("Timer stopped, Wait count: %d -> %d %d %s", t.waitCount+1, 0, time.Now().UnixMilli(), message)
+		log.Infof("Timer stopped, Wait count: %d -> %d %d", t.waitCount+1, 0, time.Now().UnixMilli())
 	} else {
 		if !t.running {
 			log.Warn("Wait count positive but timer was not running")
 		}
 		t.running = true
 		t.timer.Reset(t.timeout)
-		log.Infof("Timer reset, Wait count: %d -> %d %d %s", t.waitCount+1, t.waitCount, time.Now().UnixMilli(), message)
+		log.Infof("Timer reset, Wait count: %d -> %d %d", t.waitCount+1, t.waitCount, time.Now().UnixMilli())
 	}
 }
 
-func (t *SafeTimer) DecrementContextWaitCountAndResetOrStopIfZero(message string) {
+// DecrementContextWaitCountAndResetOrStopIfZero is used to decrement the context wait count and reset the timer if it is not zero
+// and stop the timer if the wait count is zero
+func (t *SafeTimer) DecrementContextWaitCountAndResetOrStopIfZero() {
 	t.mutex.Lock()
 	t.contextWaitCount--
 	if t.contextWaitCount < 0 {
-		log.Fatal("Context wait count is negative")
+		log.Warn("Context wait count is negative")
 	}
 	t.mutex.Unlock()
-	t.DecrementWaitCountAndResetOrStopIfZero(message)
+	t.DecrementWaitCountAndResetOrStopIfZero()
 }
 
-// timerCleanup resets the timer and clears the wait count
+// TimerCleanup resets the timer and clears the wait count
 func (t *SafeTimer) TimerCleanup() {
 	t.mutex.Lock()
 	defer t.mutex.Unlock()

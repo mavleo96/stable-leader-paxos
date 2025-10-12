@@ -28,17 +28,8 @@ func (s *PaxosServer) TransferRequest(ctx context.Context, req *pb.TransactionRe
 	s.State.Mutex.Lock()
 	defer s.State.Mutex.Unlock()
 	if s.State.Leader.ID != s.NodeID {
-		// Forward request to leader and return to client immediately
-		// if s.State.Leader.ID != "" {
 		log.Warnf("Not leader, forwarding to leader %s", s.State.Leader.ID)
 		go s.ForwardToLeader(req, s.State.Leader)
-		// }
-		// else {
-		// 	// TODO: try to become the leader without returning to client
-		// 	// TODO: i need to start a timer to become the leader if election is not happening
-		// 	// Need to handle this case when system initialization vs failed election
-		// 	log.Warn("Leader is empty, Need to become leader if election is not happening")
-		// }
 		return UnsuccessfulTransactionResponse, status.Errorf(codes.Aborted, "not leader")
 	}
 
@@ -131,8 +122,7 @@ func (s *PaxosServer) TransferRequest(ctx context.Context, req *pb.TransactionRe
 
 // ForwardToLeader forwards the request to the leader
 func (s *PaxosServer) ForwardToLeader(req *pb.TransactionRequest, leader *models.Node) {
-	// TODO: Need to increase time only if node has not executed the request
-	timerCtx := s.PaxosTimer.IncrementWaitCountOrStartAndGetContext(req.String())
+	timerCtx := s.PaxosTimer.IncrementWaitCountOrStartAndGetContext()
 	ctx, cancel := context.WithCancel(timerCtx)
 	defer cancel()
 
@@ -144,7 +134,6 @@ func (s *PaxosServer) ForwardToLeader(req *pb.TransactionRequest, leader *models
 			responseChan <- status.Errorf(codes.Aborted, "leader is empty")
 			return
 		}
-		// defer close(responseChan)
 		// Initialize connection to leader
 		conn, err := grpc.NewClient(leader.Address, grpc.WithTransportCredentials(insecure.NewCredentials()))
 		if err != nil {
@@ -173,7 +162,7 @@ func (s *PaxosServer) ForwardToLeader(req *pb.TransactionRequest, leader *models
 		if err != nil {
 			log.Warnf("Error from leader on forwarding request %s", err)
 		} else {
-			s.PaxosTimer.DecrementContextWaitCountAndResetOrStopIfZero(req.String())
+			s.PaxosTimer.DecrementContextWaitCountAndResetOrStopIfZero()
 		}
 		return
 	}

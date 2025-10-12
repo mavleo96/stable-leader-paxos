@@ -177,8 +177,6 @@ func (s *PaxosServer) SendAcceptRequest(req *pb.AcceptMessage) (bool, bool, erro
 				return // if not accepted, return without incrementing acceptCount
 			}
 			acceptCount++
-			// TODO: is server mutex needed here?; yes need to sync
-			// s.AcceptedMessages = append(s.AcceptedMessages, resp)
 		}(id, addr)
 	}
 	wg.Wait()
@@ -226,7 +224,6 @@ func (s *PaxosServer) SendCommitRequest(req *pb.CommitMessage) error {
 func (s *PaxosServer) SendCatchUpRequest(sequenceNum int64) (*pb.CatchupMessage, error) {
 	// Multicast catch up request to all peers except self
 	responseChan := make(chan *pb.CatchupMessage)
-	log.Infof("Sending catch up request to all peers except self for sequence number %d", sequenceNum)
 	for _, peer := range s.Peers {
 		id := peer.ID
 		if id == s.NodeID {
@@ -250,14 +247,11 @@ func (s *PaxosServer) SendCatchUpRequest(sequenceNum int64) (*pb.CatchupMessage,
 			responseChan <- record
 		}(id, addr)
 	}
-	log.Infof("Waiting for catch up responses")
 	for i := 0; i < len(s.Peers)-1; i++ {
 		catchupMessage := <-responseChan
 		if catchupMessage != nil {
-			log.Infof("Catch up message received from %s", catchupMessage.String())
 			return catchupMessage, nil
 		}
 	}
-	log.Warn("Failed to get catch up message from leader")
 	return nil, status.Errorf(codes.Unavailable, "failed to get catch up message from leader")
 }

@@ -118,8 +118,6 @@ retryLoop:
 			// Responses channel to collect responses from goroutines of requests to all nodes
 			// (By recreating this channel in each attempt we don't have to drain it)
 			responsesCh := make(chan result, len(nodeClients))
-			// TODO: need a context manager for multi-casted request
-
 			// Multi-cast to all nodes and collect responses
 			for nodeID, nodeClient := range nodeClients {
 				go func(nodeID string, nodeClient pb.PaxosClient) {

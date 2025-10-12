@@ -32,7 +32,6 @@ func main() {
 		log.Fatal(err)
 	}
 
-	// TODO: maybe redundant
 	// Find self node configuration
 	var selfNode *models.Node
 	for _, node := range cfg.Nodes {
@@ -62,6 +61,7 @@ func main() {
 	}
 	grpcServer := grpc.NewServer()
 
+	// Initialize last reply map and peers map
 	lastReply := make(map[string]*pb.TransactionResponse)
 	for _, client := range cfg.Clients {
 		lastReply[client] = nil
@@ -71,11 +71,14 @@ func main() {
 		peers[node.ID] = node
 	}
 
+	// Initialize paxos timer
 	i, err := strconv.Atoi(selfNode.ID[1:])
 	if err != nil {
 		log.Fatal(err)
 	}
 	paxosTimer := paxos.CreateSafeTimer(i, len(cfg.Nodes))
+
+	// Initialize paxos server
 	paxosServer := paxos.PaxosServer{
 		Mutex:   sync.RWMutex{},
 		IsAlive: true,
@@ -95,13 +98,11 @@ func main() {
 		PrepareMessageLog: make(map[time.Time]*paxos.PrepareRequestRecord),
 		PaxosTimer:        paxosTimer,
 	}
-	// if selfNode.ID == "n1" {
-	// 	paxosServer.CurrentBallotNum = &pb.BallotNumber{N: 1, NodeID: "n1"}
-	// }
-	// bankpb.RegisterTransactionServiceServer(grpcServer, &paxosServer)
+
+	// Register paxos server
 	pb.RegisterPaxosServer(grpcServer, &paxosServer)
 
-	// TODO: check if wait group is needed here
+	// Start gRPC server and paxos server timeout routine
 	var wg sync.WaitGroup
 	wg.Go(func() {
 		if err := grpcServer.Serve(lis); err != nil {
@@ -113,11 +114,6 @@ func main() {
 	})
 	log.Infof("gRPC server listening on %s", selfNode.Address)
 
-	// proposer := paxos.ProposerClient{
-	// 	NodeID: selfNode.ID,
-	// 	Peers:  cfg.Nodes,
-	// 	Quorum: len(cfg.Nodes)/2 + 1,
-	// }
-
+	// Wait for gRPC server and paxos server timeout routine to finish
 	wg.Wait()
 }

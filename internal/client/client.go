@@ -39,7 +39,7 @@ func QueueRoutine(ctx context.Context, queueChan chan SetNumber, clientChannels 
 				}(clientChan)
 			}
 			wg.Wait()
-			log.Infof("Set %d processed", setNum.N1)
+			log.Infof("Set (%d, %d) processed", setNum.N1, setNum.N2)
 		case <-ctx.Done():
 			log.Info("Queue routine received exit signal")
 			return
@@ -85,30 +85,27 @@ func processTransaction(clientID string, t *pb.Transaction, nodeClients map[stri
 retryLoop:
 	for attempt := 1; attempt <= maxAttempts; attempt++ {
 		// Context for each attempt with timeout
-		timeStart := time.Now().UnixMilli()
 		ctx, cancel := context.WithTimeout(context.Background(), clientTimeout)
 		if attempt == 1 { // First attempt to leader
 			response, err = nodeClients[*leaderNode].TransferRequest(ctx, request)
 			if err == nil {
 				log.Infof(
-					"%s <- %s: %s, %s hola at %d",
+					"%s <- %s: %s, %s",
 					clientID,
 					*leaderNode,
 					utils.TransactionString(request.Transaction),
 					utils.TransactionResponseString(response),
-					time.Now().UnixMilli()-timeStart,
 				)
 				cancel()
 				break retryLoop
 				// return
 			} else {
 				log.Warnf(
-					"%s <- %s: %s, %v amigo at %d",
+					"%s <- %s: %s, %v",
 					clientID,
 					*leaderNode,
 					utils.TransactionString(request.Transaction),
 					status.Convert(err).Message(),
-					time.Now().UnixMilli()-timeStart,
 				)
 				cancel()
 				time.Sleep(clientTimeout)
@@ -124,21 +121,19 @@ retryLoop:
 					resp, err := nodeClient.TransferRequest(ctx, request)
 					if err == nil {
 						log.Infof(
-							"%s <- %s: %s, %s buenos at %d",
+							"%s <- %s: %s, %s",
 							clientID,
 							nodeID,
 							utils.TransactionString(request.Transaction),
 							utils.TransactionResponseString(resp),
-							time.Now().UnixMilli()-timeStart,
 						)
 					} else {
 						log.Warnf(
-							"%s <- %s: %s, %v dias at %d",
+							"%s <- %s: %s, %v",
 							clientID,
 							nodeID,
 							utils.TransactionString(request.Transaction),
 							status.Convert(err).Message(),
-							time.Now().UnixMilli()-timeStart,
 						)
 					}
 					responsesCh <- result{Response: resp, Err: err}

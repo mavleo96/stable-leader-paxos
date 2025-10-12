@@ -77,6 +77,10 @@ func (s *PaxosServer) NewViewRequest(req *pb.NewViewMessage, stream pb.Paxos_New
 
 	// No need to acquire state mutex since AcceptRequest acquires it
 	log.Infof("Received new view message %v", utils.BallotNumberString(req.B))
+	s.State.Mutex.Lock()
+	s.State.NewViewLog = append(s.State.NewViewLog, req)
+	s.State.Mutex.Unlock()
+
 	for _, record := range req.AcceptLog {
 		acceptedMessage, err := s.AcceptRequest(context.Background(), &pb.AcceptMessage{
 			B:           record.AcceptedBallotNum,

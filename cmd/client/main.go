@@ -16,6 +16,7 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/protobuf/types/known/emptypb"
+	"google.golang.org/protobuf/types/known/wrapperspb"
 )
 
 func main() {
@@ -150,8 +151,28 @@ interactionLoop:
 			}
 		case "print status":
 			log.Infof("Print status command received for %d", arg)
+			for _, nodeClient := range nodeClients {
+				_, err = nodeClient.PrintStatus(context.Background(), &wrapperspb.Int64Value{Value: int64(arg)})
+				if err != nil {
+					log.Warn(err)
+				}
+			}
 		case "print view":
 			log.Info("Print view command received")
+			for _, nodeClient := range nodeClients {
+				_, err = nodeClient.PrintView(context.Background(), &emptypb.Empty{})
+				if err != nil {
+					log.Warn(err)
+				}
+			}
+		case "kill leader":
+			log.Info("lf command received")
+			for _, nodeClient := range nodeClients {
+				_, err = nodeClient.KillLeader(context.Background(), &emptypb.Empty{})
+				if err != nil {
+					log.Warn(err)
+				}
+			}
 		case "exit":
 			break interactionLoop
 		default:

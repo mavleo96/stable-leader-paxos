@@ -44,6 +44,7 @@ type AcceptorState struct {
 	Leader              *models.Node
 	PromisedBallotNum   *pb.BallotNumber
 	AcceptLog           map[int64]*pb.AcceptRecord
+	NewViewLog          []*pb.NewViewMessage
 	ExecutedSequenceNum int64
 }
 
@@ -172,6 +173,7 @@ func (s *PaxosServer) PrepareRoutine() {
 		B:         s.State.PromisedBallotNum,
 		AcceptLog: newAcceptLog,
 	}
+	s.State.NewViewLog = append(s.State.NewViewLog, newViewMessage)
 	// Mutex is released here so that new client requests can be processed
 	s.State.Mutex.Unlock()
 	log.Infof("New view accept log: %v", newViewMessage)

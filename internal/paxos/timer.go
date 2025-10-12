@@ -61,7 +61,9 @@ func (t *SafeTimer) DecrementWaitCountAndResetOrStopIfZero() {
 	// Decrement the wait count
 	t.waitCount--
 	if t.waitCount < 0 {
-		log.Warnf("Wait count is negative: %d %s", t.waitCount)
+		log.Warnf("Wait count is negative: %d", t.waitCount)
+		t.waitCount = 0
+		t.running = false
 	} else if t.waitCount == 0 {
 		t.running = false
 		log.Infof("Timer stopped, Wait count: %d -> %d %d", t.waitCount+1, 0, time.Now().UnixMilli())
@@ -82,6 +84,7 @@ func (t *SafeTimer) DecrementContextWaitCountAndResetOrStopIfZero() {
 	t.contextWaitCount--
 	if t.contextWaitCount < 0 {
 		log.Warn("Context wait count is negative")
+		t.contextWaitCount = 0
 	}
 	t.mutex.Unlock()
 	t.DecrementWaitCountAndResetOrStopIfZero()
@@ -99,7 +102,8 @@ func (t *SafeTimer) TimerCleanup() {
 	}
 	// Reset the timer state
 	t.running = false
-	t.waitCount -= t.contextWaitCount
+	// t.waitCount -= t.contextWaitCount
+	t.waitCount = 0
 	t.contextWaitCount = 0
 	t.timerContext, t.timerCtxCancel = context.WithCancel(context.Background())
 	log.Infof("Timer cleaned up; current wait count -> (%d, %d)", t.waitCount, t.contextWaitCount)

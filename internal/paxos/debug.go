@@ -15,13 +15,53 @@ import (
 func (s *PaxosServer) PrintLog(ctx context.Context, req *emptypb.Empty) (*emptypb.Empty, error) {
 	s.State.Mutex.RLock()
 	defer s.State.Mutex.RUnlock()
-	fmt.Println("Printing log:")
+	fmt.Println("Printing Current Accept Log:")
 	sequenceNum := MaxSequenceNumber(s.State.AcceptLog)
 	for i := int64(0); i <= sequenceNum; i++ {
 		record, ok := s.State.AcceptLog[i]
 		if ok {
 			fmt.Printf("%v\n", utils.PrintLogString(record))
 		}
+	}
+	fmt.Println("")
+	fmt.Println("Printing Sent Accept Log:")
+	for _, record := range s.State.SentAcceptMessages {
+		fmt.Printf("%v\n", record.String())
+	}
+	fmt.Println("")
+	fmt.Println("Printing Received Accept Log:")
+	for _, record := range s.State.ReceivedAcceptMessages {
+		fmt.Printf("%v\n", record.String())
+	}
+	fmt.Println("")
+	fmt.Println("Printing Sent Prepare Log:")
+	for _, record := range s.State.SentPrepareMessages {
+		fmt.Printf("%v\n", record.String())
+	}
+	fmt.Println("")
+	fmt.Println("Printing Received Prepare Log:")
+	for _, record := range s.State.ReceivedPrepareMessages {
+		fmt.Printf("%v\n", record.String())
+	}
+	fmt.Println("")
+	fmt.Println("Printing Sent Commit Log:")
+	for _, record := range s.State.SentCommitMessages {
+		fmt.Printf("%v\n", record.String())
+	}
+	fmt.Println("")
+	fmt.Println("Printing Received Commit Log:")
+	for _, record := range s.State.ReceivedCommitMessages {
+		fmt.Printf("%v\n", record.String())
+	}
+	fmt.Println("")
+	fmt.Println("Printing Sent Accepted Log:")
+	for _, record := range s.State.SentAcceptedMessages {
+		fmt.Printf("%v\n", record.String())
+	}
+	fmt.Println("")
+	fmt.Println("Printing Received Accepted Log:")
+	for _, record := range s.State.ReceivedAcceptedMessages {
+		fmt.Printf("%v\n", record.String())
 	}
 	fmt.Println("")
 	return &emptypb.Empty{}, nil

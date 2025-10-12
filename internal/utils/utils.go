@@ -16,15 +16,15 @@ func TransactionResponseString(x *pb.TransactionResponse) string {
 	)
 }
 
-// func AcceptedMessageString(x *pb.AcceptedMessage) string {
-// 	return fmt.Sprintf(
-// 		"<ACCEPTED, %s, %d, %s, %s>",
-// 		BallotNumberString(x.B),
-// 		x.SequenceNum,
-// 		TransactionRequestString(x.Message),
-// 		x.AcceptorID,
-// 	)
-// }
+func AcceptedMessageString(x *pb.AcceptedMessage) string {
+	return fmt.Sprintf(
+		"<ACCEPTED, %s, %d, %s, %s>",
+		BallotNumberString(x.B),
+		x.SequenceNum,
+		TransactionRequestString(x.Message),
+		x.AcceptorID,
+	)
+}
 
 func PrintLogString(x *pb.AcceptRecord) string {
 	return fmt.Sprintf(

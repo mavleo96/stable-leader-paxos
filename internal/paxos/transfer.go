@@ -67,6 +67,11 @@ func (s *PaxosServer) TransferRequest(ctx context.Context, req *pb.TransactionRe
 	// Check if the request is already committed
 	if !s.State.AcceptLog[sequenceNum].Committed {
 		// Retry accept request until quorum of accepts is received
+		s.State.SentAcceptMessages = append(s.State.SentAcceptMessages, &pb.AcceptMessage{
+			B:           s.State.PromisedBallotNum,
+			SequenceNum: sequenceNum,
+			Message:     s.State.AcceptLog[sequenceNum].AcceptedVal,
+		})
 		ok, rejected, err := s.SendAcceptRequest(&pb.AcceptMessage{
 			B:           s.State.PromisedBallotNum,
 			SequenceNum: sequenceNum,
@@ -92,6 +97,11 @@ func (s *PaxosServer) TransferRequest(ctx context.Context, req *pb.TransactionRe
 
 		log.Infof("Multicasting commit request for sequence number %d", sequenceNum)
 		err = s.SendCommitRequest(&pb.CommitMessage{
+			B:           s.State.PromisedBallotNum,
+			SequenceNum: sequenceNum,
+			Transaction: req,
+		})
+		s.State.SentCommitMessages = append(s.State.SentCommitMessages, &pb.CommitMessage{
 			B:           s.State.PromisedBallotNum,
 			SequenceNum: sequenceNum,
 			Transaction: req,

@@ -42,12 +42,22 @@ type PrepareRequestRecord struct {
 }
 
 type AcceptorState struct {
-	Mutex               sync.RWMutex
-	Leader              *models.Node
-	PromisedBallotNum   *pb.BallotNumber
-	AcceptLog           map[int64]*pb.AcceptRecord
-	NewViewLog          []*pb.NewViewMessage
-	ExecutedSequenceNum int64
+	Mutex                    sync.RWMutex
+	Leader                   *models.Node
+	PromisedBallotNum        *pb.BallotNumber
+	AcceptLog                map[int64]*pb.AcceptRecord
+	NewViewLog               []*pb.NewViewMessage
+	SentPrepareMessages      []*pb.PrepareMessage
+	ReceivedPrepareMessages  []*pb.PrepareMessage
+	SentPromiseMessages      []*pb.BallotNumber
+	ReceivedPromiseMessages  []*pb.BallotNumber
+	SentAcceptMessages       []*pb.AcceptMessage
+	ReceivedAcceptMessages   []*pb.AcceptMessage
+	SentAcceptedMessages     []*pb.AcceptedMessage
+	ReceivedAcceptedMessages []*pb.AcceptedMessage
+	SentCommitMessages       []*pb.CommitMessage
+	ReceivedCommitMessages   []*pb.CommitMessage
+	ExecutedSequenceNum      int64
 }
 
 var UnsuccessfulTransactionResponse = &pb.TransactionResponse{}
@@ -124,6 +134,7 @@ func (s *PaxosServer) PrepareRoutine() {
 		},
 	}
 	s.State.Mutex.Unlock()
+	s.State.SentPrepareMessages = append(s.State.SentPrepareMessages, newPrepareMessage)
 	ok, acceptLogMap, err := s.SendPrepareRequest(newPrepareMessage)
 	if err != nil {
 		log.Warn(err)
@@ -210,6 +221,11 @@ func (s *PaxosServer) NewViewRoutine(newViewMessage *pb.NewViewMessage) {
 		s.State.Mutex.Lock()
 		s.State.AcceptLog[sequenceNum].Committed = true
 		err := s.SendCommitRequest(&pb.CommitMessage{
+			B:           newViewMessage.B,
+			SequenceNum: sequenceNum,
+			Transaction: newViewMessage.AcceptLog[sequenceNum-1].AcceptedVal,
+		})
+		s.State.SentCommitMessages = append(s.State.SentCommitMessages, &pb.CommitMessage{
 			B:           newViewMessage.B,
 			SequenceNum: sequenceNum,
 			Transaction: newViewMessage.AcceptLog[sequenceNum-1].AcceptedVal,

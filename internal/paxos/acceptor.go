@@ -43,6 +43,7 @@ func (s *PaxosServer) PrepareRequest(ctx context.Context, req *pb.PrepareMessage
 		PrepareMessage:  req,
 	}
 	s.PrepareMessageLog[time.Now()] = prepareRequestRecord
+	s.State.ReceivedPrepareMessages = append(s.State.ReceivedPrepareMessages, req)
 
 	if !s.SysInitialized {
 		log.Infof("System not initialized, immediately accepting prepare request %s", utils.BallotNumberString(req.B))
@@ -156,6 +157,8 @@ func (s *PaxosServer) AcceptRequest(ctx context.Context, req *pb.AcceptMessage) 
 		s.PaxosTimer.IncrementWaitCountOrStart()
 	}
 
+	s.State.ReceivedAcceptMessages = append(s.State.ReceivedAcceptMessages, req)
+
 	log.Infof("Accepted %s", utils.TransactionRequestString(req.Message))
 	return &pb.AcceptedMessage{
 		Ok:          true,
@@ -185,6 +188,8 @@ func (s *PaxosServer) CommitRequest(ctx context.Context, req *pb.CommitMessage) 
 		log.Warnf("Rejected %s", utils.TransactionRequestString(req.Transaction))
 		return &emptypb.Empty{}, nil
 	}
+
+	s.State.ReceivedCommitMessages = append(s.State.ReceivedCommitMessages, req)
 
 	// If not already in log then increment wait count
 	_, ok := s.State.AcceptLog[req.SequenceNum]

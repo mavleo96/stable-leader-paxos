@@ -99,10 +99,10 @@ func (s *PaxosServer) PrintStatus(ctx context.Context, req *wrapperspb.Int64Valu
 	record, ok := s.State.AcceptLog[req.Value]
 	if !ok {
 		fmt.Printf("Sequence Number: %d, Status: X\n", req.Value)
-	} else if record.Committed {
-		fmt.Printf("Sequence Number: %d, Status: C, Message: %s\n", req.Value, utils.TransactionRequestString(record.AcceptedVal))
 	} else if record.Executed {
 		fmt.Printf("Sequence Number: %d, Status: E, Message: %s\n", req.Value, utils.TransactionRequestString(record.AcceptedVal))
+	} else if record.Committed {
+		fmt.Printf("Sequence Number: %d, Status: C, Message: %s\n", req.Value, utils.TransactionRequestString(record.AcceptedVal))
 	} else {
 		fmt.Printf("Sequence Number: %d, Status: A, Message: %s\n", req.Value, utils.TransactionRequestString(record.AcceptedVal))
 	}

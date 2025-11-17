@@ -3,3 +3,7 @@ logs/**
 debug/**
 testdata/**
 .DS_Store
+
+!testdata/test.csv
+!testdata/single.csv
+!testdata/concurrent.csv

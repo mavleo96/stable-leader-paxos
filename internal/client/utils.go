@@ -6,7 +6,7 @@ import (
 	"strconv"
 	"strings"
 
-	pb "github.com/mavleo96/cft-mavleo96/pb/paxos"
+	pb "github.com/mavleo96/stable-leader-paxos/pb/paxos"
 )
 
 // SetNumber represent test set number

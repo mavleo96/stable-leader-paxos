@@ -822,7 +822,7 @@ const file_paxos_proto_rawDesc = "" +
 	"\aPrintDB\x12\x16.google.protobuf.Empty\x1a\x16.google.protobuf.Empty\x12B\n" +
 	"\vPrintStatus\x12\x1b.google.protobuf.Int64Value\x1a\x16.google.protobuf.Empty\x12;\n" +
 	"\tPrintView\x12\x16.google.protobuf.Empty\x1a\x16.google.protobuf.Empty\x12A\n" +
-	"\x0fPrintTimerState\x12\x16.google.protobuf.Empty\x1a\x16.google.protobuf.EmptyB.Z,github.com/mavleo96/cft-mavleo96/pb/paxos;pbb\x06proto3"
+	"\x0fPrintTimerState\x12\x16.google.protobuf.Empty\x1a\x16.google.protobuf.EmptyB5Z3github.com/mavleo96/stable-leader-paxos/pb/paxos;pbb\x06proto3"
 
 var (
 	file_paxos_proto_rawDescOnce sync.Once

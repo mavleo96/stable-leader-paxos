@@ -1,4 +1,4 @@
-module github.com/mavleo96/cft-mavleo96
+module github.com/mavleo96/stable-leader-paxos
 
 go 1.25.1
 

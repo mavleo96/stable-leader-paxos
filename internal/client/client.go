@@ -5,8 +5,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/mavleo96/cft-mavleo96/internal/utils"
-	pb "github.com/mavleo96/cft-mavleo96/pb/paxos"
+	"github.com/mavleo96/stable-leader-paxos/internal/utils"
+	pb "github.com/mavleo96/stable-leader-paxos/pb/paxos"
 	log "github.com/sirupsen/logrus"
 	"google.golang.org/grpc/status"
 )

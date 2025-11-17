@@ -5,7 +5,7 @@ import (
 	"math/big"
 	"time"
 
-	pb "github.com/mavleo96/cft-mavleo96/pb/paxos"
+	pb "github.com/mavleo96/stable-leader-paxos/pb/paxos"
 )
 
 // BallotNumber Utilities

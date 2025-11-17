@@ -3,7 +3,7 @@ package config
 import (
 	"os"
 
-	"github.com/mavleo96/cft-mavleo96/internal/models"
+	"github.com/mavleo96/stable-leader-paxos/internal/models"
 	"gopkg.in/yaml.v3"
 )
 

@@ -5,7 +5,7 @@ package paxos;
 import "google/protobuf/empty.proto";
 import "google/protobuf/wrappers.proto";
 
-option go_package = "github.com/mavleo96/cft-mavleo96/pb/paxos;pb";
+option go_package = "github.com/mavleo96/stable-leader-paxos/pb/paxos;pb";
 
 service Paxos {
     rpc TransferRequest (TransactionRequest) returns (TransactionResponse);

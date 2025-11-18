@@ -7,7 +7,7 @@ import (
 
 	"github.com/mavleo96/stable-leader-paxos/internal/models"
 	"github.com/mavleo96/stable-leader-paxos/internal/utils"
-	pb "github.com/mavleo96/stable-leader-paxos/pb/paxos"
+	pb "github.com/mavleo96/stable-leader-paxos/pb"
 	log "github.com/sirupsen/logrus"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"

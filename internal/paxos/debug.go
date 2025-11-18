@@ -127,10 +127,3 @@ func (s *PaxosServer) PrintView(ctx context.Context, req *emptypb.Empty) (*empty
 	fmt.Println("")
 	return &emptypb.Empty{}, nil
 }
-
-// // PrintTimerState prints the timer state
-// func (s *PaxosServer) PrintTimerState(ctx context.Context, req *emptypb.Empty) (*emptypb.Empty, error) {
-// 	waitCount, running, timeout := s.PaxosTimer.GetTimerState()
-// 	fmt.Printf("Timer state: %d, %t, %d\n", waitCount, running, timeout)
-// 	return &emptypb.Empty{}, nil
-// }

@@ -755,74 +755,73 @@ var File_paxos_proto protoreflect.FileDescriptor
 
 const file_paxos_proto_rawDesc = "" +
 	"\n" +
-	"\vpaxos.proto\x12\x05paxos\x1a\x1bgoogle/protobuf/empty.proto\x1a\x1egoogle/protobuf/wrappers.proto\"4\n" +
+	"\vpaxos.proto\x12\x02pb\x1a\x1bgoogle/protobuf/empty.proto\x1a\x1egoogle/protobuf/wrappers.proto\"4\n" +
 	"\fBallotNumber\x12\f\n" +
 	"\x01n\x18\x01 \x01(\x03R\x01n\x12\x16\n" +
-	"\x06nodeID\x18\x02 \x01(\tR\x06nodeID\"\x92\x02\n" +
-	"\fAcceptRecord\x12A\n" +
-	"\x11acceptedBallotNum\x18\x01 \x01(\v2\x13.paxos.BallotNumberR\x11acceptedBallotNum\x120\n" +
-	"\x13acceptedSequenceNum\x18\x02 \x01(\x03R\x13acceptedSequenceNum\x12;\n" +
-	"\vacceptedVal\x18\x03 \x01(\v2\x19.paxos.TransactionRequestR\vacceptedVal\x12\x1c\n" +
+	"\x06nodeID\x18\x02 \x01(\tR\x06nodeID\"\x8c\x02\n" +
+	"\fAcceptRecord\x12>\n" +
+	"\x11acceptedBallotNum\x18\x01 \x01(\v2\x10.pb.BallotNumberR\x11acceptedBallotNum\x120\n" +
+	"\x13acceptedSequenceNum\x18\x02 \x01(\x03R\x13acceptedSequenceNum\x128\n" +
+	"\vacceptedVal\x18\x03 \x01(\v2\x16.pb.TransactionRequestR\vacceptedVal\x12\x1c\n" +
 	"\tCommitted\x18\x04 \x01(\bR\tCommitted\x12\x1a\n" +
 	"\bExecuted\x18\x05 \x01(\bR\bExecuted\x12\x16\n" +
-	"\x06Result\x18\x06 \x01(\bR\x06Result\"3\n" +
-	"\x0ePrepareMessage\x12!\n" +
-	"\x01b\x18\x01 \x01(\v2\x13.paxos.BallotNumberR\x01b\"\x82\x01\n" +
+	"\x06Result\x18\x06 \x01(\bR\x06Result\"0\n" +
+	"\x0ePrepareMessage\x12\x1e\n" +
+	"\x01b\x18\x01 \x01(\v2\x10.pb.BallotNumberR\x01b\"|\n" +
 	"\n" +
 	"AckMessage\x12\x0e\n" +
-	"\x02ok\x18\x01 \x01(\bR\x02ok\x121\n" +
-	"\tacceptNum\x18\x02 \x01(\v2\x13.paxos.BallotNumberR\tacceptNum\x121\n" +
-	"\tacceptLog\x18\x03 \x03(\v2\x13.paxos.AcceptRecordR\tacceptLog\"\x89\x01\n" +
-	"\rAcceptMessage\x12!\n" +
-	"\x01b\x18\x01 \x01(\v2\x13.paxos.BallotNumberR\x01b\x12 \n" +
-	"\vsequenceNum\x18\x02 \x01(\x03R\vsequenceNum\x123\n" +
-	"\amessage\x18\x03 \x01(\v2\x19.paxos.TransactionRequestR\amessage\"\xbb\x01\n" +
+	"\x02ok\x18\x01 \x01(\bR\x02ok\x12.\n" +
+	"\tacceptNum\x18\x02 \x01(\v2\x10.pb.BallotNumberR\tacceptNum\x12.\n" +
+	"\tacceptLog\x18\x03 \x03(\v2\x10.pb.AcceptRecordR\tacceptLog\"\x83\x01\n" +
+	"\rAcceptMessage\x12\x1e\n" +
+	"\x01b\x18\x01 \x01(\v2\x10.pb.BallotNumberR\x01b\x12 \n" +
+	"\vsequenceNum\x18\x02 \x01(\x03R\vsequenceNum\x120\n" +
+	"\amessage\x18\x03 \x01(\v2\x16.pb.TransactionRequestR\amessage\"\xb5\x01\n" +
 	"\x0fAcceptedMessage\x12\x0e\n" +
-	"\x02ok\x18\x01 \x01(\bR\x02ok\x12!\n" +
-	"\x01b\x18\x02 \x01(\v2\x13.paxos.BallotNumberR\x01b\x12 \n" +
-	"\vsequenceNum\x18\x03 \x01(\x03R\vsequenceNum\x123\n" +
-	"\amessage\x18\x04 \x01(\v2\x19.paxos.TransactionRequestR\amessage\x12\x1e\n" +
+	"\x02ok\x18\x01 \x01(\bR\x02ok\x12\x1e\n" +
+	"\x01b\x18\x02 \x01(\v2\x10.pb.BallotNumberR\x01b\x12 \n" +
+	"\vsequenceNum\x18\x03 \x01(\x03R\vsequenceNum\x120\n" +
+	"\amessage\x18\x04 \x01(\v2\x16.pb.TransactionRequestR\amessage\x12\x1e\n" +
 	"\n" +
 	"acceptorID\x18\x05 \x01(\tR\n" +
-	"acceptorID\"f\n" +
-	"\x0eNewViewMessage\x12!\n" +
-	"\x01b\x18\x01 \x01(\v2\x13.paxos.BallotNumberR\x01b\x121\n" +
-	"\tacceptLog\x18\x02 \x03(\v2\x13.paxos.AcceptRecordR\tacceptLog\"\x91\x01\n" +
-	"\rCommitMessage\x12!\n" +
-	"\x01b\x18\x01 \x01(\v2\x13.paxos.BallotNumberR\x01b\x12 \n" +
-	"\vsequenceNum\x18\x02 \x01(\x03R\vsequenceNum\x12;\n" +
-	"\vtransaction\x18\x03 \x01(\v2\x19.paxos.TransactionRequestR\vtransaction\"f\n" +
-	"\x0eCatchupMessage\x12!\n" +
-	"\x01b\x18\x01 \x01(\v2\x13.paxos.BallotNumberR\x01b\x121\n" +
-	"\tacceptLog\x18\x02 \x03(\v2\x13.paxos.AcceptRecordR\tacceptLog\"Y\n" +
+	"acceptorID\"`\n" +
+	"\x0eNewViewMessage\x12\x1e\n" +
+	"\x01b\x18\x01 \x01(\v2\x10.pb.BallotNumberR\x01b\x12.\n" +
+	"\tacceptLog\x18\x02 \x03(\v2\x10.pb.AcceptRecordR\tacceptLog\"\x8b\x01\n" +
+	"\rCommitMessage\x12\x1e\n" +
+	"\x01b\x18\x01 \x01(\v2\x10.pb.BallotNumberR\x01b\x12 \n" +
+	"\vsequenceNum\x18\x02 \x01(\x03R\vsequenceNum\x128\n" +
+	"\vtransaction\x18\x03 \x01(\v2\x16.pb.TransactionRequestR\vtransaction\"`\n" +
+	"\x0eCatchupMessage\x12\x1e\n" +
+	"\x01b\x18\x01 \x01(\v2\x10.pb.BallotNumberR\x01b\x12.\n" +
+	"\tacceptLog\x18\x02 \x03(\v2\x10.pb.AcceptRecordR\tacceptLog\"Y\n" +
 	"\vTransaction\x12\x16\n" +
 	"\x06sender\x18\x01 \x01(\tR\x06sender\x12\x1a\n" +
 	"\breceiver\x18\x02 \x01(\tR\breceiver\x12\x16\n" +
-	"\x06amount\x18\x03 \x01(\x03R\x06amount\"\x80\x01\n" +
-	"\x12TransactionRequest\x124\n" +
-	"\vtransaction\x18\x01 \x01(\v2\x12.paxos.TransactionR\vtransaction\x12\x1c\n" +
+	"\x06amount\x18\x03 \x01(\x03R\x06amount\"}\n" +
+	"\x12TransactionRequest\x121\n" +
+	"\vtransaction\x18\x01 \x01(\v2\x0f.pb.TransactionR\vtransaction\x12\x1c\n" +
 	"\ttimestamp\x18\x02 \x01(\x03R\ttimestamp\x12\x16\n" +
-	"\x06sender\x18\x03 \x01(\tR\x06sender\"\x86\x01\n" +
-	"\x13TransactionResponse\x12!\n" +
-	"\x01b\x18\x01 \x01(\v2\x13.paxos.BallotNumberR\x01b\x12\x1c\n" +
+	"\x06sender\x18\x03 \x01(\tR\x06sender\"\x83\x01\n" +
+	"\x13TransactionResponse\x12\x1e\n" +
+	"\x01b\x18\x01 \x01(\v2\x10.pb.BallotNumberR\x01b\x12\x1c\n" +
 	"\ttimestamp\x18\x02 \x01(\x03R\ttimestamp\x12\x16\n" +
 	"\x06sender\x18\x03 \x01(\tR\x06sender\x12\x16\n" +
-	"\x06result\x18\x04 \x01(\bR\x06result2\xd5\x06\n" +
-	"\x05Paxos\x12H\n" +
-	"\x0fTransferRequest\x12\x19.paxos.TransactionRequest\x1a\x1a.paxos.TransactionResponse\x12:\n" +
-	"\x0ePrepareRequest\x12\x15.paxos.PrepareMessage\x1a\x11.paxos.AckMessage\x12A\n" +
-	"\x0eNewViewRequest\x12\x15.paxos.NewViewMessage\x1a\x16.paxos.AcceptedMessage0\x01\x12=\n" +
-	"\rAcceptRequest\x12\x14.paxos.AcceptMessage\x1a\x16.paxos.AcceptedMessage\x12=\n" +
-	"\rCommitRequest\x12\x14.paxos.CommitMessage\x1a\x16.google.protobuf.Empty\x12D\n" +
-	"\x0eCatchupRequest\x12\x1b.google.protobuf.Int64Value\x1a\x15.paxos.CatchupMessage\x12F\n" +
+	"\x06result\x18\x04 \x01(\bR\x06result2\xf4\x05\n" +
+	"\x05Paxos\x12B\n" +
+	"\x0fTransferRequest\x12\x16.pb.TransactionRequest\x1a\x17.pb.TransactionResponse\x124\n" +
+	"\x0ePrepareRequest\x12\x12.pb.PrepareMessage\x1a\x0e.pb.AckMessage\x12;\n" +
+	"\x0eNewViewRequest\x12\x12.pb.NewViewMessage\x1a\x13.pb.AcceptedMessage0\x01\x127\n" +
+	"\rAcceptRequest\x12\x11.pb.AcceptMessage\x1a\x13.pb.AcceptedMessage\x12:\n" +
+	"\rCommitRequest\x12\x11.pb.CommitMessage\x1a\x16.google.protobuf.Empty\x12A\n" +
+	"\x0eCatchupRequest\x12\x1b.google.protobuf.Int64Value\x1a\x12.pb.CatchupMessage\x12F\n" +
 	"\x10ChangeNodeStatus\x12\x1a.google.protobuf.BoolValue\x1a\x16.google.protobuf.Empty\x12<\n" +
 	"\n" +
 	"KillLeader\x12\x16.google.protobuf.Empty\x1a\x16.google.protobuf.Empty\x12:\n" +
 	"\bPrintLog\x12\x16.google.protobuf.Empty\x1a\x16.google.protobuf.Empty\x129\n" +
 	"\aPrintDB\x12\x16.google.protobuf.Empty\x1a\x16.google.protobuf.Empty\x12B\n" +
 	"\vPrintStatus\x12\x1b.google.protobuf.Int64Value\x1a\x16.google.protobuf.Empty\x12;\n" +
-	"\tPrintView\x12\x16.google.protobuf.Empty\x1a\x16.google.protobuf.Empty\x12A\n" +
-	"\x0fPrintTimerState\x12\x16.google.protobuf.Empty\x1a\x16.google.protobuf.EmptyB5Z3github.com/mavleo96/stable-leader-paxos/pb/paxos;pbb\x06proto3"
+	"\tPrintView\x12\x16.google.protobuf.Empty\x1a\x16.google.protobuf.EmptyB,Z*github.com/mavleo96/stable-leader-paxos/pbb\x06proto3"
 
 var (
 	file_paxos_proto_rawDescOnce sync.Once
@@ -838,68 +837,66 @@ func file_paxos_proto_rawDescGZIP() []byte {
 
 var file_paxos_proto_msgTypes = make([]protoimpl.MessageInfo, 12)
 var file_paxos_proto_goTypes = []any{
-	(*BallotNumber)(nil),          // 0: paxos.BallotNumber
-	(*AcceptRecord)(nil),          // 1: paxos.AcceptRecord
-	(*PrepareMessage)(nil),        // 2: paxos.PrepareMessage
-	(*AckMessage)(nil),            // 3: paxos.AckMessage
-	(*AcceptMessage)(nil),         // 4: paxos.AcceptMessage
-	(*AcceptedMessage)(nil),       // 5: paxos.AcceptedMessage
-	(*NewViewMessage)(nil),        // 6: paxos.NewViewMessage
-	(*CommitMessage)(nil),         // 7: paxos.CommitMessage
-	(*CatchupMessage)(nil),        // 8: paxos.CatchupMessage
-	(*Transaction)(nil),           // 9: paxos.Transaction
-	(*TransactionRequest)(nil),    // 10: paxos.TransactionRequest
-	(*TransactionResponse)(nil),   // 11: paxos.TransactionResponse
+	(*BallotNumber)(nil),          // 0: pb.BallotNumber
+	(*AcceptRecord)(nil),          // 1: pb.AcceptRecord
+	(*PrepareMessage)(nil),        // 2: pb.PrepareMessage
+	(*AckMessage)(nil),            // 3: pb.AckMessage
+	(*AcceptMessage)(nil),         // 4: pb.AcceptMessage
+	(*AcceptedMessage)(nil),       // 5: pb.AcceptedMessage
+	(*NewViewMessage)(nil),        // 6: pb.NewViewMessage
+	(*CommitMessage)(nil),         // 7: pb.CommitMessage
+	(*CatchupMessage)(nil),        // 8: pb.CatchupMessage
+	(*Transaction)(nil),           // 9: pb.Transaction
+	(*TransactionRequest)(nil),    // 10: pb.TransactionRequest
+	(*TransactionResponse)(nil),   // 11: pb.TransactionResponse
 	(*wrapperspb.Int64Value)(nil), // 12: google.protobuf.Int64Value
 	(*wrapperspb.BoolValue)(nil),  // 13: google.protobuf.BoolValue
 	(*emptypb.Empty)(nil),         // 14: google.protobuf.Empty
 }
 var file_paxos_proto_depIdxs = []int32{
-	0,  // 0: paxos.AcceptRecord.acceptedBallotNum:type_name -> paxos.BallotNumber
-	10, // 1: paxos.AcceptRecord.acceptedVal:type_name -> paxos.TransactionRequest
-	0,  // 2: paxos.PrepareMessage.b:type_name -> paxos.BallotNumber
-	0,  // 3: paxos.AckMessage.acceptNum:type_name -> paxos.BallotNumber
-	1,  // 4: paxos.AckMessage.acceptLog:type_name -> paxos.AcceptRecord
-	0,  // 5: paxos.AcceptMessage.b:type_name -> paxos.BallotNumber
-	10, // 6: paxos.AcceptMessage.message:type_name -> paxos.TransactionRequest
-	0,  // 7: paxos.AcceptedMessage.b:type_name -> paxos.BallotNumber
-	10, // 8: paxos.AcceptedMessage.message:type_name -> paxos.TransactionRequest
-	0,  // 9: paxos.NewViewMessage.b:type_name -> paxos.BallotNumber
-	1,  // 10: paxos.NewViewMessage.acceptLog:type_name -> paxos.AcceptRecord
-	0,  // 11: paxos.CommitMessage.b:type_name -> paxos.BallotNumber
-	10, // 12: paxos.CommitMessage.transaction:type_name -> paxos.TransactionRequest
-	0,  // 13: paxos.CatchupMessage.b:type_name -> paxos.BallotNumber
-	1,  // 14: paxos.CatchupMessage.acceptLog:type_name -> paxos.AcceptRecord
-	9,  // 15: paxos.TransactionRequest.transaction:type_name -> paxos.Transaction
-	0,  // 16: paxos.TransactionResponse.b:type_name -> paxos.BallotNumber
-	10, // 17: paxos.Paxos.TransferRequest:input_type -> paxos.TransactionRequest
-	2,  // 18: paxos.Paxos.PrepareRequest:input_type -> paxos.PrepareMessage
-	6,  // 19: paxos.Paxos.NewViewRequest:input_type -> paxos.NewViewMessage
-	4,  // 20: paxos.Paxos.AcceptRequest:input_type -> paxos.AcceptMessage
-	7,  // 21: paxos.Paxos.CommitRequest:input_type -> paxos.CommitMessage
-	12, // 22: paxos.Paxos.CatchupRequest:input_type -> google.protobuf.Int64Value
-	13, // 23: paxos.Paxos.ChangeNodeStatus:input_type -> google.protobuf.BoolValue
-	14, // 24: paxos.Paxos.KillLeader:input_type -> google.protobuf.Empty
-	14, // 25: paxos.Paxos.PrintLog:input_type -> google.protobuf.Empty
-	14, // 26: paxos.Paxos.PrintDB:input_type -> google.protobuf.Empty
-	12, // 27: paxos.Paxos.PrintStatus:input_type -> google.protobuf.Int64Value
-	14, // 28: paxos.Paxos.PrintView:input_type -> google.protobuf.Empty
-	14, // 29: paxos.Paxos.PrintTimerState:input_type -> google.protobuf.Empty
-	11, // 30: paxos.Paxos.TransferRequest:output_type -> paxos.TransactionResponse
-	3,  // 31: paxos.Paxos.PrepareRequest:output_type -> paxos.AckMessage
-	5,  // 32: paxos.Paxos.NewViewRequest:output_type -> paxos.AcceptedMessage
-	5,  // 33: paxos.Paxos.AcceptRequest:output_type -> paxos.AcceptedMessage
-	14, // 34: paxos.Paxos.CommitRequest:output_type -> google.protobuf.Empty
-	8,  // 35: paxos.Paxos.CatchupRequest:output_type -> paxos.CatchupMessage
-	14, // 36: paxos.Paxos.ChangeNodeStatus:output_type -> google.protobuf.Empty
-	14, // 37: paxos.Paxos.KillLeader:output_type -> google.protobuf.Empty
-	14, // 38: paxos.Paxos.PrintLog:output_type -> google.protobuf.Empty
-	14, // 39: paxos.Paxos.PrintDB:output_type -> google.protobuf.Empty
-	14, // 40: paxos.Paxos.PrintStatus:output_type -> google.protobuf.Empty
-	14, // 41: paxos.Paxos.PrintView:output_type -> google.protobuf.Empty
-	14, // 42: paxos.Paxos.PrintTimerState:output_type -> google.protobuf.Empty
-	30, // [30:43] is the sub-list for method output_type
-	17, // [17:30] is the sub-list for method input_type
+	0,  // 0: pb.AcceptRecord.acceptedBallotNum:type_name -> pb.BallotNumber
+	10, // 1: pb.AcceptRecord.acceptedVal:type_name -> pb.TransactionRequest
+	0,  // 2: pb.PrepareMessage.b:type_name -> pb.BallotNumber
+	0,  // 3: pb.AckMessage.acceptNum:type_name -> pb.BallotNumber
+	1,  // 4: pb.AckMessage.acceptLog:type_name -> pb.AcceptRecord
+	0,  // 5: pb.AcceptMessage.b:type_name -> pb.BallotNumber
+	10, // 6: pb.AcceptMessage.message:type_name -> pb.TransactionRequest
+	0,  // 7: pb.AcceptedMessage.b:type_name -> pb.BallotNumber
+	10, // 8: pb.AcceptedMessage.message:type_name -> pb.TransactionRequest
+	0,  // 9: pb.NewViewMessage.b:type_name -> pb.BallotNumber
+	1,  // 10: pb.NewViewMessage.acceptLog:type_name -> pb.AcceptRecord
+	0,  // 11: pb.CommitMessage.b:type_name -> pb.BallotNumber
+	10, // 12: pb.CommitMessage.transaction:type_name -> pb.TransactionRequest
+	0,  // 13: pb.CatchupMessage.b:type_name -> pb.BallotNumber
+	1,  // 14: pb.CatchupMessage.acceptLog:type_name -> pb.AcceptRecord
+	9,  // 15: pb.TransactionRequest.transaction:type_name -> pb.Transaction
+	0,  // 16: pb.TransactionResponse.b:type_name -> pb.BallotNumber
+	10, // 17: pb.Paxos.TransferRequest:input_type -> pb.TransactionRequest
+	2,  // 18: pb.Paxos.PrepareRequest:input_type -> pb.PrepareMessage
+	6,  // 19: pb.Paxos.NewViewRequest:input_type -> pb.NewViewMessage
+	4,  // 20: pb.Paxos.AcceptRequest:input_type -> pb.AcceptMessage
+	7,  // 21: pb.Paxos.CommitRequest:input_type -> pb.CommitMessage
+	12, // 22: pb.Paxos.CatchupRequest:input_type -> google.protobuf.Int64Value
+	13, // 23: pb.Paxos.ChangeNodeStatus:input_type -> google.protobuf.BoolValue
+	14, // 24: pb.Paxos.KillLeader:input_type -> google.protobuf.Empty
+	14, // 25: pb.Paxos.PrintLog:input_type -> google.protobuf.Empty
+	14, // 26: pb.Paxos.PrintDB:input_type -> google.protobuf.Empty
+	12, // 27: pb.Paxos.PrintStatus:input_type -> google.protobuf.Int64Value
+	14, // 28: pb.Paxos.PrintView:input_type -> google.protobuf.Empty
+	11, // 29: pb.Paxos.TransferRequest:output_type -> pb.TransactionResponse
+	3,  // 30: pb.Paxos.PrepareRequest:output_type -> pb.AckMessage
+	5,  // 31: pb.Paxos.NewViewRequest:output_type -> pb.AcceptedMessage
+	5,  // 32: pb.Paxos.AcceptRequest:output_type -> pb.AcceptedMessage
+	14, // 33: pb.Paxos.CommitRequest:output_type -> google.protobuf.Empty
+	8,  // 34: pb.Paxos.CatchupRequest:output_type -> pb.CatchupMessage
+	14, // 35: pb.Paxos.ChangeNodeStatus:output_type -> google.protobuf.Empty
+	14, // 36: pb.Paxos.KillLeader:output_type -> google.protobuf.Empty
+	14, // 37: pb.Paxos.PrintLog:output_type -> google.protobuf.Empty
+	14, // 38: pb.Paxos.PrintDB:output_type -> google.protobuf.Empty
+	14, // 39: pb.Paxos.PrintStatus:output_type -> google.protobuf.Empty
+	14, // 40: pb.Paxos.PrintView:output_type -> google.protobuf.Empty
+	29, // [29:41] is the sub-list for method output_type
+	17, // [17:29] is the sub-list for method input_type
 	17, // [17:17] is the sub-list for extension type_name
 	17, // [17:17] is the sub-list for extension extendee
 	0,  // [0:17] is the sub-list for field type_name

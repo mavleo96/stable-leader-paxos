@@ -3,7 +3,7 @@ package utils
 import (
 	"fmt"
 
-	pb "github.com/mavleo96/stable-leader-paxos/pb/paxos"
+	pb "github.com/mavleo96/stable-leader-paxos/pb"
 )
 
 func TransactionResponseString(x *pb.TransactionResponse) string {

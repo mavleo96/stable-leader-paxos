@@ -12,7 +12,7 @@ import (
 	"github.com/mavleo96/stable-leader-paxos/internal/database"
 	"github.com/mavleo96/stable-leader-paxos/internal/models"
 	"github.com/mavleo96/stable-leader-paxos/internal/paxos"
-	pb "github.com/mavleo96/stable-leader-paxos/pb/paxos"
+	pb "github.com/mavleo96/stable-leader-paxos/pb"
 
 	log "github.com/sirupsen/logrus"
 	"google.golang.org/grpc"

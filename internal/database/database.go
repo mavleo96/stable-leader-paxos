@@ -3,7 +3,7 @@ package database
 import (
 	"strconv"
 
-	pb "github.com/mavleo96/stable-leader-paxos/pb/paxos"
+	pb "github.com/mavleo96/stable-leader-paxos/pb"
 	"go.etcd.io/bbolt"
 )
 

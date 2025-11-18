@@ -11,7 +11,7 @@ import (
 
 	"github.com/mavleo96/stable-leader-paxos/internal/client"
 	"github.com/mavleo96/stable-leader-paxos/internal/config"
-	pb "github.com/mavleo96/stable-leader-paxos/pb/paxos"
+	pb "github.com/mavleo96/stable-leader-paxos/pb"
 	log "github.com/sirupsen/logrus"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"

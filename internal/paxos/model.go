@@ -1,6 +1,8 @@
 package paxos
 
 import (
+	"context"
+	"strconv"
 	"sync"
 	"time"
 
@@ -33,6 +35,9 @@ type PaxosServer struct {
 	PaxosTimer          *SafeTimer // Proposer only
 	AcceptedMessages    []*pb.AcceptedMessage
 	PrepareMessageLog   map[time.Time]*PrepareRequestRecord // timestamp mapped to prepare message
+
+	wg sync.WaitGroup
+
 	pb.UnimplementedPaxosNodeServer
 }
 
@@ -148,9 +153,13 @@ func (s *PaxosServer) PrepareRoutine() {
 	// If election won
 	// acquire mutex -> set leader -> synchronize accept log -> send new view request -> release mutex
 	s.State.Mutex.Lock()
+	selfAddress := s.Addr
+	if selfPeer, ok := s.Peers[s.NodeID]; ok && selfPeer != nil && selfPeer.Address != "" {
+		selfAddress = selfPeer.Address
+	}
 	s.State.Leader = &models.Node{
 		ID:      s.NodeID,
-		Address: s.Peers[s.NodeID].Address,
+		Address: selfAddress,
 	}
 	log.Infof("Leader for %s is %s", utils.BallotNumberString(newPrepareMessage.B), s.State.Leader.ID)
 	log.Infof("Accept log map: %v", acceptLogMap)
@@ -297,4 +306,52 @@ func FindHighestBallotNumberInPrepareMessageLog(messageLog map[time.Time]*Prepar
 		}
 	}
 	return highestBallotNumber
+}
+
+func (s *PaxosServer) Start(ctx context.Context) {
+	s.wg.Add(1)
+	go func() {
+		defer s.wg.Done()
+		s.ServerTimeoutRoutine()
+	}()
+
+	s.wg.Wait()
+}
+
+func CreatePaxosServer(selfNode *models.Node, peerNodes map[string]*models.Node, clients []string, bankDB *database.Database) *PaxosServer {
+
+	lastReply := make(map[string]*pb.TransactionResponse)
+	for _, client := range clients {
+		lastReply[client] = nil
+	}
+
+	i, err := strconv.Atoi(selfNode.ID[1:])
+	if err != nil {
+		log.Fatal(err)
+	}
+	paxosTimer := CreateSafeTimer(i, len(peerNodes)+1)
+
+	return &PaxosServer{
+		SysInitializedMutex: sync.Mutex{},
+		SysInitialized:      false,
+		Mutex:               sync.RWMutex{},
+		IsAlive:             true,
+		NodeID:              selfNode.ID,
+		Addr:                selfNode.Address,
+		State: AcceptorState{
+			Mutex:               sync.RWMutex{},
+			Leader:              &models.Node{ID: ""},
+			PromisedBallotNum:   &pb.BallotNumber{N: 0, NodeID: ""},
+			AcceptLog:           make(map[int64]*pb.AcceptRecord),
+			ExecutedSequenceNum: 0,
+		},
+		DB:                bankDB,
+		LastReply:         lastReply,
+		Peers:             peerNodes,
+		Quorum:            len(peerNodes) / 2,
+		PaxosTimer:        paxosTimer,
+		AcceptedMessages:  make([]*pb.AcceptedMessage, 0),
+		PrepareMessageLog: make(map[time.Time]*PrepareRequestRecord),
+		wg:                sync.WaitGroup{},
+	}
 }

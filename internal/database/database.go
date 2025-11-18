@@ -12,15 +12,15 @@ type Database struct {
 }
 
 // InitDB initializes the database with "balances" bucket and adds accounts
-// for the given account IDs, setting their initial balance to 10.
-func (d *Database) InitDB(dbPath string, accountIds []string) (err error) {
+// for the given account IDs, setting their initial balance.
+func (d *Database) InitDB(dbPath string, accountIds []string, initBalance int64) (err error) {
 	boltDB, err := bbolt.Open(dbPath, 0600, nil)
 	if err != nil {
 		return err
 	}
 	d.db = boltDB
 
-	err = d.db.Update(func(tx *bbolt.Tx) error {
+	return d.db.Update(func(tx *bbolt.Tx) error {
 		// Create the "balances" bucket
 		_, err := tx.CreateBucket([]byte("balances"))
 		if err != nil {
@@ -28,19 +28,15 @@ func (d *Database) InitDB(dbPath string, accountIds []string) (err error) {
 			return err
 		}
 
-		// Add each account with an initial balance of 10
+		// Add each account with an initial balance
 		b := tx.Bucket([]byte("balances"))
 		for _, id := range accountIds {
-			if err := b.Put([]byte(id), []byte("10")); err != nil {
+			if err := b.Put([]byte(id), []byte(strconv.FormatInt(initBalance, 10))); err != nil {
 				return err
 			}
 		}
 		return nil
 	})
-	if err != nil {
-		return err
-	}
-	return nil
 }
 
 // UpdateDB processes a transaction by updating the balances of the sender and receiver.

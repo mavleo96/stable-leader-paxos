@@ -1,12 +1,14 @@
 package main
 
 import (
+	"context"
 	"flag"
 	"net"
-	"strconv"
-	"strings"
+	"os"
+	"os/signal"
+	"path/filepath"
 	"sync"
-	"time"
+	"syscall"
 
 	"github.com/mavleo96/stable-leader-paxos/internal/config"
 	"github.com/mavleo96/stable-leader-paxos/internal/database"
@@ -31,91 +33,127 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-
-	// Find self node configuration
-	var selfNode *models.Node
-	for _, node := range cfg.Nodes {
-		if node.ID == *id {
-			selfNode = node
-			break
-		}
-	}
-	if selfNode == nil {
-		log.Fatal("Node ID not found in config")
-	}
-
-	// Create database
-	bankDB := &database.Database{}
-	log.Info("Initializing database at " + cfg.DBDir + "/" + *id + ".db" + " with clients " + strings.Join(cfg.Clients, ", "))
-	err = bankDB.InitDB(cfg.DBDir+"/"+*id+".db", cfg.Clients)
+	nodeMap := models.GetNodeMap(cfg.Nodes)
 	if err != nil {
 		log.Fatal(err)
 	}
-	defer bankDB.Close()
-	log.Infof("Database initialized at %s", cfg.DBDir+"/"+*id+".db")
 
-	// Create gRPC server
+	// Find self node configuration
+	selfNode, ok := nodeMap[*id]
+	if !ok {
+		log.Fatal("Node ID not found in config")
+	}
+	log.Infof("Self node configuration: %s", selfNode.ID)
+	peerNodes := make(map[string]*models.Node)
+	for _, node := range nodeMap {
+		if node.ID != *id {
+			peerNodes[node.ID] = node
+		}
+	}
+
+	// Create context for graceful shutdown (will be cancelled on signal)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	serverData, err := CreateServer(selfNode, peerNodes, cfg.Clients, cfg.DBDir, cfg.InitBalance, ctx)
+	if err != nil {
+		log.Fatal(err)
+	}
+	grpcServer := serverData.grpcServer
+	bankDB := serverData.bankDB
+
 	lis, err := net.Listen("tcp", selfNode.Address)
 	if err != nil {
 		log.Fatal(err)
 	}
+
+	// Setup signal handling for graceful shutdown
+	sigChan := make(chan os.Signal, 1)
+	signal.Notify(sigChan, os.Interrupt, syscall.SIGINT, syscall.SIGTERM)
+
+	// Start gRPC server in a goroutine
+	var wg sync.WaitGroup
+	var serveErr error
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		log.Infof("gRPC server listening on %s", selfNode.Address)
+		if err := grpcServer.Serve(lis); err != nil {
+			serveErr = err
+			// Only log the error if it's from closing the listener
+			if err.Error() != "use of closed network connection" {
+				log.Errorf("gRPC server error: %v", err)
+			}
+		}
+	}()
+
+	// Wait for shutdown signal
+	<-sigChan
+	log.Info("Received shutdown signal, shutting down gracefully...")
+
+	// Cancel context to stop paxos server
+	cancel()
+
+	// Stop gRPC server gracefully (waits for existing RPCs to complete)
+	// This stops accepting new connections and waits for existing RPCs to finish
+	log.Info("Stopping gRPC server...")
+	grpcServer.GracefulStop()
+	log.Info("gRPC server stopped")
+
+	// Close all node connections
+	log.Info("Closing node connections...")
+	for _, node := range nodeMap {
+		if err := node.Close(); err != nil {
+			log.Warnf("Error closing node connection %s: %v", node.ID, err)
+		}
+	}
+
+	// Close database
+	if bankDB != nil {
+		log.Info("Closing database...")
+		if err := bankDB.Close(); err != nil {
+			log.Warnf("Error closing database: %v", err)
+		}
+	}
+
+	// Wait for gRPC server to finish
+	wg.Wait()
+
+	if serveErr != nil && serveErr.Error() != "use of closed network connection" {
+		log.Fatalf("gRPC server error: %v", serveErr)
+	}
+
+	log.Info("Server shut down complete")
+}
+
+// ServerData represents the data needed to create a server
+type ServerData struct {
+	grpcServer *grpc.Server
+	bankDB     *database.Database
+	paxosNode  *paxos.PaxosServer
+}
+
+// CreateServer creates a server with the given data
+func CreateServer(selfNode *models.Node, peerNodes map[string]*models.Node, clients []string, dbDir string, initBalance int64, ctx context.Context) (*ServerData, error) {
+
+	bankDB := &database.Database{}
+	dbPath := filepath.Join(dbDir, selfNode.ID+".db")
+	log.Infof("Initializing database at %s", dbPath)
+	if err := bankDB.InitDB(dbPath, clients, initBalance); err != nil {
+		return nil, err
+	}
+
 	grpcServer := grpc.NewServer()
 
-	// Initialize last reply map and peers map
-	lastReply := make(map[string]*pb.TransactionResponse)
-	for _, client := range cfg.Clients {
-		lastReply[client] = nil
-	}
-	peers := make(map[string]*models.Node)
-	for _, node := range cfg.Nodes {
-		peers[node.ID] = node
-	}
+	node := paxos.CreatePaxosServer(selfNode, peerNodes, clients, bankDB)
+	pb.RegisterPaxosNodeServer(grpcServer, node)
 
-	// Initialize paxos timer
-	i, err := strconv.Atoi(selfNode.ID[1:])
-	if err != nil {
-		log.Fatal(err)
-	}
-	paxosTimer := paxos.CreateSafeTimer(i, len(cfg.Nodes))
+	// Start paxos server (it will stop when ctx is cancelled)
+	go node.Start(ctx)
 
-	// Initialize paxos server
-	paxosServer := paxos.PaxosServer{
-		SysInitializedMutex: sync.Mutex{},
-		SysInitialized:      false,
-		Mutex:               sync.RWMutex{},
-		IsAlive:             true,
-		NodeID:              selfNode.ID,
-		Addr:                selfNode.Address,
-		State: paxos.AcceptorState{
-			Mutex:               sync.RWMutex{},
-			Leader:              &models.Node{ID: ""},
-			PromisedBallotNum:   &pb.BallotNumber{N: 0, NodeID: ""},
-			AcceptLog:           make(map[int64]*pb.AcceptRecord),
-			ExecutedSequenceNum: 0,
-		},
-		DB:                bankDB,
-		LastReply:         lastReply,
-		Peers:             peers,
-		Quorum:            len(cfg.Nodes)/2 + 1,
-		PrepareMessageLog: make(map[time.Time]*paxos.PrepareRequestRecord),
-		PaxosTimer:        paxosTimer,
-	}
-
-	// Register paxos server
-	pb.RegisterPaxosNodeServer(grpcServer, &paxosServer)
-
-	// Start gRPC server and paxos server timeout routine
-	var wg sync.WaitGroup
-	wg.Go(func() {
-		if err := grpcServer.Serve(lis); err != nil {
-			log.Fatal(err)
-		}
-	})
-	wg.Go(func() {
-		paxosServer.ServerTimeoutRoutine()
-	})
-	log.Infof("gRPC server listening on %s", selfNode.Address)
-
-	// Wait for gRPC server and paxos server timeout routine to finish
-	wg.Wait()
+	return &ServerData{
+		grpcServer: grpcServer,
+		bankDB:     bankDB,
+		paxosNode:  node,
+	}, nil
 }

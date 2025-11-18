@@ -31,7 +31,7 @@ func main() {
 	}
 
 	// Create gRPC clients for each node
-	nodeClients := make(map[string]pb.PaxosClient)
+	nodeClients := make(map[string]pb.PaxosNodeClient)
 	for _, node := range cfg.Nodes {
 		var conn *grpc.ClientConn
 		var err error
@@ -43,7 +43,7 @@ func main() {
 			}
 			break
 		}
-		txnClient := pb.NewPaxosClient(conn)
+		txnClient := pb.NewPaxosNodeClient(conn)
 		nodeClients[node.ID] = txnClient
 		defer conn.Close()
 	}

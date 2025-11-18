@@ -37,7 +37,7 @@ func (s *PaxosServer) SendPrepareRequest(req *pb.PrepareMessage) (bool, map[stri
 				log.Warn(err)
 			}
 			defer conn.Close()
-			client := pb.NewPaxosClient(conn)
+			client := pb.NewPaxosNodeClient(conn)
 
 			// Send prepare request to peer
 			resp, err := client.PrepareRequest(context.Background(), req)
@@ -106,7 +106,7 @@ func (s *PaxosServer) SendNewViewRequest(req *pb.NewViewMessage) (map[int64]int,
 				log.Warn(err)
 			}
 			defer conn.Close()
-			client := pb.NewPaxosClient(conn)
+			client := pb.NewPaxosNodeClient(conn)
 
 			// Send new view request to peer
 			stream, err := client.NewViewRequest(context.Background(), req)
@@ -162,7 +162,7 @@ func (s *PaxosServer) SendAcceptRequest(req *pb.AcceptMessage) (bool, bool, erro
 				log.Warn(err)
 			}
 			defer conn.Close()
-			client := pb.NewPaxosClient(conn)
+			client := pb.NewPaxosNodeClient(conn)
 
 			// Send accept request to peer
 			resp, err := client.AcceptRequest(context.Background(), req)
@@ -211,7 +211,7 @@ func (s *PaxosServer) SendCommitRequest(req *pb.CommitMessage) error {
 			defer conn.Close()
 
 			// Send commit request to peer
-			client := pb.NewPaxosClient(conn)
+			client := pb.NewPaxosNodeClient(conn)
 			_, err = client.CommitRequest(context.Background(), req)
 			if err != nil {
 				log.Warn(err)
@@ -237,7 +237,7 @@ func (s *PaxosServer) SendCatchUpRequest(sequenceNum int64) (*pb.CatchupMessage,
 				log.Warn(err)
 			}
 			defer conn.Close()
-			client := pb.NewPaxosClient(conn)
+			client := pb.NewPaxosNodeClient(conn)
 			record, err := client.CatchupRequest(context.Background(), &wrapperspb.Int64Value{Value: sequenceNum})
 			if err != nil {
 				log.Warn(err)

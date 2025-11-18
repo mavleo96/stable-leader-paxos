@@ -102,7 +102,7 @@ func main() {
 	}
 
 	// Register paxos server
-	pb.RegisterPaxosServer(grpcServer, &paxosServer)
+	pb.RegisterPaxosNodeServer(grpcServer, &paxosServer)
 
 	// Start gRPC server and paxos server timeout routine
 	var wg sync.WaitGroup

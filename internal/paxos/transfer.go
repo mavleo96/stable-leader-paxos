@@ -154,7 +154,7 @@ func (s *PaxosServer) ForwardToLeader(req *pb.TransactionRequest, leader *models
 			return
 		}
 		defer conn.Close()
-		leaderClient := pb.NewPaxosClient(conn)
+		leaderClient := pb.NewPaxosNodeClient(conn)
 
 		// Forward request to leader
 		_, err = leaderClient.TransferRequest(ctx, req)

@@ -7,36 +7,51 @@ import "google/protobuf/wrappers.proto";
 
 option go_package = "github.com/mavleo96/stable-leader-paxos/pb";
 
-service Paxos {
+service PaxosNode {
     rpc TransferRequest (TransactionRequest) returns (TransactionResponse);
+
     rpc PrepareRequest (PrepareMessage) returns (AckMessage);
-    rpc NewViewRequest (NewViewMessage) returns (stream AcceptedMessage);
     rpc AcceptRequest (AcceptMessage) returns (AcceptedMessage);
     rpc CommitRequest (CommitMessage) returns (google.protobuf.Empty);
-    rpc CatchupRequest (google.protobuf.Int64Value) returns (CatchupMessage);
 
-    rpc ChangeNodeStatus (google.protobuf.BoolValue) returns (google.protobuf.Empty);
-    rpc KillLeader (google.protobuf.Empty) returns (google.protobuf.Empty);
+    rpc NewViewRequest (NewViewMessage) returns (stream AcceptedMessage);
+    rpc CatchupRequest (google.protobuf.Int64Value) returns (CatchupMessage);
 
     rpc PrintLog (google.protobuf.Empty) returns (google.protobuf.Empty);
     rpc PrintDB (google.protobuf.Empty) returns (google.protobuf.Empty);
     rpc PrintStatus (google.protobuf.Int64Value) returns (google.protobuf.Empty);
     rpc PrintView (google.protobuf.Empty) returns (google.protobuf.Empty);
+
+    rpc ChangeNodeStatus (google.protobuf.BoolValue) returns (google.protobuf.Empty);
+    rpc KillLeader (google.protobuf.Empty) returns (google.protobuf.Empty);
 }
 
-message BallotNumber {
-    int64 n = 1;
-    string nodeID = 2;
+// ---------- TransactionResponse ----------
+
+message TransactionResponse {
+    BallotNumber b = 1;
+    int64 timestamp = 2;
+    string sender = 3;
+    bool result = 4;
 }
 
-message AcceptRecord  {
-    BallotNumber acceptedBallotNum = 1;
-	int64 acceptedSequenceNum = 2;
-    TransactionRequest acceptedVal = 3;
-    bool Committed = 4;
-    bool Executed = 5;
-    bool Result = 6;
+// ---------- TransactionRequest ----------
+
+message TransactionRequest {
+    Transaction transaction = 1;
+    int64 timestamp = 2;
+    string sender = 3;
 }
+
+// ---------- Transaction ----------
+
+message Transaction {
+    string sender = 1;
+    string receiver = 2;
+    int64 amount = 3;
+}
+
+// ---------- Prepare ----------
 
 message PrepareMessage {
     BallotNumber b = 1;
@@ -46,6 +61,22 @@ message AckMessage {
     bool ok = 1;
     BallotNumber acceptNum = 2;
     repeated AcceptRecord acceptLog = 3;
+}
+
+message BallotNumber {
+    int64 n = 1;
+    string nodeID = 2;
+}
+
+// ---------- Accept ----------
+
+message AcceptRecord  {
+    BallotNumber acceptedBallotNum = 1;
+	int64 acceptedSequenceNum = 2;
+    TransactionRequest acceptedVal = 3;
+    bool Committed = 4;
+    bool Executed = 5;
+    bool Result = 6;
 }
 
 message AcceptMessage {
@@ -62,10 +93,7 @@ message AcceptedMessage {
     string acceptorID = 5;
 }
 
-message NewViewMessage {
-    BallotNumber b = 1;
-    repeated AcceptRecord acceptLog = 2;
-}
+// ---------- Commit ----------
 
 message CommitMessage {
     BallotNumber b = 1;
@@ -73,26 +101,16 @@ message CommitMessage {
     TransactionRequest transaction = 3;
 }
 
-message CatchupMessage {
+// ---------- NewView ----------
+
+message NewViewMessage {
     BallotNumber b = 1;
     repeated AcceptRecord acceptLog = 2;
 }
 
-message Transaction {
-    string sender = 1;
-    string receiver = 2;
-    int64 amount = 3;
-}
+// ---------- Catchup ----------
 
-message TransactionRequest {
-    Transaction transaction = 1;
-    int64 timestamp = 2;
-    string sender = 3;
-}
-
-message TransactionResponse {
+message CatchupMessage {
     BallotNumber b = 1;
-    int64 timestamp = 2;
-    string sender = 3;
-    bool result = 4;
+    repeated AcceptRecord acceptLog = 2;
 }

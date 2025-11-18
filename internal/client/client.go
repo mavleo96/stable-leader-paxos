@@ -22,7 +22,7 @@ type result struct {
 	Err      error
 }
 
-func QueueRoutine(ctx context.Context, queueChan chan SetNumber, clientChannels map[string]chan SetNumber, nodeClients map[string]pb.PaxosClient) {
+func QueueRoutine(ctx context.Context, queueChan chan SetNumber, clientChannels map[string]chan SetNumber, nodeClients map[string]pb.PaxosNodeClient) {
 	for {
 		select {
 		case setNum := <-queueChan:
@@ -48,7 +48,7 @@ func QueueRoutine(ctx context.Context, queueChan chan SetNumber, clientChannels 
 }
 
 // ClientRoutine is a persistent routine that processes transactions for a client
-func ClientRoutine(ctx context.Context, clientID string, signalCh chan SetNumber, txnQueue ClientTxnQueue, nodeClients map[string]pb.PaxosClient) {
+func ClientRoutine(ctx context.Context, clientID string, signalCh chan SetNumber, txnQueue ClientTxnQueue, nodeClients map[string]pb.PaxosNodeClient) {
 	leaderNode := "n1" // leader initialized to n1 by default
 	for {
 		select {
@@ -70,7 +70,7 @@ func ClientRoutine(ctx context.Context, clientID string, signalCh chan SetNumber
 }
 
 // processTransaction processes a transaction with retries and updates the leader node if leader changes
-func processTransaction(clientID string, t *pb.Transaction, nodeClients map[string]pb.PaxosClient, leaderNode *string) {
+func processTransaction(clientID string, t *pb.Transaction, nodeClients map[string]pb.PaxosNodeClient, leaderNode *string) {
 	// Create a TransactionRequest with timestamp (uid) and sender
 	timestamp := time.Now().UnixMilli()
 	request := &pb.TransactionRequest{
@@ -117,7 +117,7 @@ retryLoop:
 			responsesCh := make(chan result, len(nodeClients))
 			// Multi-cast to all nodes and collect responses
 			for nodeID, nodeClient := range nodeClients {
-				go func(nodeID string, nodeClient pb.PaxosClient) {
+				go func(nodeID string, nodeClient pb.PaxosNodeClient) {
 					resp, err := nodeClient.TransferRequest(ctx, request)
 					if err == nil {
 						log.Infof(

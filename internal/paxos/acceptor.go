@@ -85,7 +85,7 @@ func (s *PaxosServer) PrepareRequest(ctx context.Context, req *pb.PrepareMessage
 }
 
 // NewViewRequest handles the new view request rpc on server side
-func (s *PaxosServer) NewViewRequest(req *pb.NewViewMessage, stream pb.Paxos_NewViewRequestServer) error {
+func (s *PaxosServer) NewViewRequest(req *pb.NewViewMessage, stream pb.PaxosNode_NewViewRequestServer) error {
 	s.State.Mutex.RLock()
 	if !s.IsAlive {
 		s.State.Mutex.RUnlock()

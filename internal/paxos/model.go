@@ -33,7 +33,7 @@ type PaxosServer struct {
 	PaxosTimer          *SafeTimer // Proposer only
 	AcceptedMessages    []*pb.AcceptedMessage
 	PrepareMessageLog   map[time.Time]*PrepareRequestRecord // timestamp mapped to prepare message
-	pb.UnimplementedPaxosServer
+	pb.UnimplementedPaxosNodeServer
 }
 
 type PrepareRequestRecord struct {

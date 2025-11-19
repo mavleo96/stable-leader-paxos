@@ -1,6 +1,7 @@
 package database
 
 import (
+	"errors"
 	"strconv"
 
 	pb "github.com/mavleo96/stable-leader-paxos/pb"
@@ -92,21 +93,25 @@ func (d *Database) UpdateDB(t *pb.Transaction) (bool, error) {
 	return success, err
 }
 
-func (d *Database) PrintDB() (map[string]int, error) {
-	db_state := make(map[string]int)
+// GetDBState gets the current state of the database.
+func (d *Database) GetDBState() (map[string]int64, error) {
+	dbState := make(map[string]int64)
+
 	err := d.db.View(func(tx *bbolt.Tx) error {
 		b := tx.Bucket([]byte("balances"))
-		b.ForEach(func(k, v []byte) error {
-			n, err := strconv.Atoi(string(v))
+		if b == nil {
+			return errors.New("balances bucket not found")
+		}
+		return b.ForEach(func(k, v []byte) error {
+			val, err := strconv.ParseInt(string(v), 10, 64)
 			if err != nil {
 				return err
 			}
-			db_state[string(k)] = n
+			dbState[string(k)] = val
 			return nil
 		})
-		return nil
 	})
-	return db_state, err
+	return dbState, err
 }
 
 // Close closes the database

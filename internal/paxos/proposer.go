@@ -58,8 +58,8 @@ func (s *PaxosServer) SendPrepareRequest(req *pb.PrepareMessage) (bool, map[stri
 	log.Infof("Waiting for prepare responses")
 
 	// Count promises and rejects
-	promiseCount := 1 // 1 is for self
-	rejectedCount := 0
+	promiseCount := int64(1) // 1 is for self
+	rejectedCount := int64(0)
 	for i := 0; i < len(s.Peers)-1; i++ {
 		ok := <-responseChan
 		if ok {
@@ -67,13 +67,13 @@ func (s *PaxosServer) SendPrepareRequest(req *pb.PrepareMessage) (bool, map[stri
 		} else {
 			rejectedCount++
 		}
-		if rejectedCount >= s.Quorum || promiseCount >= s.Quorum {
+		if rejectedCount >= s.config.F+1 || promiseCount >= s.config.F+1 {
 			break
 		}
 	}
 
 	// Check if promiseCount is less than quorum
-	if promiseCount < s.Quorum {
+	if promiseCount < s.config.F+1 {
 		return false, nil, nil
 	}
 	return true, peerAcceptLog, nil
@@ -81,10 +81,10 @@ func (s *PaxosServer) SendPrepareRequest(req *pb.PrepareMessage) (bool, map[stri
 
 // SendNewViewRequest sends a new view request to all peers except self and returns the count of accepted requests for each sequence number
 // This code is part of Proposer structure
-func (s *PaxosServer) SendNewViewRequest(req *pb.NewViewMessage) (map[int64]int, error) {
+func (s *PaxosServer) SendNewViewRequest(req *pb.NewViewMessage) (map[int64]int64, error) {
 	// Initialize accept count map with 1 for self
 	mu := sync.Mutex{}
-	acceptCountMap := make(map[int64]int)
+	acceptCountMap := make(map[int64]int64)
 	for _, record := range req.AcceptLog {
 		acceptCountMap[record.AcceptedSequenceNum] = 1
 	}
@@ -142,8 +142,8 @@ func (s *PaxosServer) SendNewViewRequest(req *pb.NewViewMessage) (map[int64]int,
 func (s *PaxosServer) SendAcceptRequest(req *pb.AcceptMessage) (bool, bool, error) {
 
 	mu := sync.Mutex{}
-	acceptCount := 1
-	rejectedCount := 0
+	acceptCount := int64(1)
+	rejectedCount := int64(0)
 
 	// Multicast accept request to all peers except self
 	wg := sync.WaitGroup{}
@@ -181,12 +181,12 @@ func (s *PaxosServer) SendAcceptRequest(req *pb.AcceptMessage) (bool, bool, erro
 	}
 	wg.Wait()
 
-	if rejectedCount >= s.Quorum {
+	if rejectedCount >= s.config.F+1 {
 		return false, true, nil
 	}
 
 	// Check if acceptCount is less than quorum
-	if acceptCount >= s.Quorum {
+	if acceptCount >= s.config.F+1 {
 		return true, false, nil
 	}
 	return false, false, nil

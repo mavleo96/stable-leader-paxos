@@ -13,28 +13,24 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
-const (
-	minBackupTimeout = time.Duration(300 * time.Millisecond)
-	maxBackupTimeout = time.Duration(400 * time.Millisecond)
-	prepareTimeout   = time.Duration(150 * time.Millisecond)
-)
-
 // TODO: Need to decompose this into Proposer and Acceptor structures
 type PaxosServer struct {
 	SysInitializedMutex sync.Mutex
 	SysInitialized      bool
 	Mutex               sync.RWMutex
-	IsAlive             bool
+	config              *ServerConfig
 	NodeID              string // Compose from Node struct
 	Addr                string // Compose from Node struct
-	State               AcceptorState
-	DB                  *database.Database
-	LastReply           map[string]*pb.TransactionResponse // Proposer only
-	Peers               map[string]*models.Node
-	Quorum              int        // Compose from Proposer
-	PaxosTimer          *SafeTimer // Proposer only
-	AcceptedMessages    []*pb.AcceptedMessage
-	PrepareMessageLog   map[time.Time]*PrepareRequestRecord // timestamp mapped to prepare message
+	// State               AcceptorState
+	state             *ServerState
+	DB                *database.Database
+	Peers             map[string]*models.Node
+	PaxosTimer        *SafeTimer // Proposer only
+	AcceptedMessages  []*pb.AcceptedMessage
+	PrepareMessageLog map[time.Time]*PrepareRequestRecord // timestamp mapped to prepare message
+
+	// Component Managers
+	logger *Logger
 
 	wg sync.WaitGroup
 
@@ -44,25 +40,6 @@ type PaxosServer struct {
 type PrepareRequestRecord struct {
 	ResponseChannel chan *pb.PrepareMessage
 	PrepareMessage  *pb.PrepareMessage
-}
-
-type AcceptorState struct {
-	Mutex                    sync.RWMutex
-	Leader                   *models.Node
-	PromisedBallotNum        *pb.BallotNumber
-	AcceptLog                map[int64]*pb.AcceptRecord
-	NewViewLog               []*pb.NewViewMessage
-	SentPrepareMessages      []*pb.PrepareMessage
-	ReceivedPrepareMessages  []*pb.PrepareMessage
-	SentPromiseMessages      []*pb.BallotNumber
-	ReceivedPromiseMessages  []*pb.BallotNumber
-	SentAcceptMessages       []*pb.AcceptMessage
-	ReceivedAcceptMessages   []*pb.AcceptMessage
-	SentAcceptedMessages     []*pb.AcceptedMessage
-	ReceivedAcceptedMessages []*pb.AcceptedMessage
-	SentCommitMessages       []*pb.CommitMessage
-	ReceivedCommitMessages   []*pb.CommitMessage
-	ExecutedSequenceNum      int64
 }
 
 var UnsuccessfulTransactionResponse = &pb.TransactionResponse{}
@@ -96,9 +73,9 @@ func (s *PaxosServer) ServerTimeoutRoutine() {
 func (s *PaxosServer) PrepareRoutine() {
 	log.Info("Prepare routine has been called")
 	// Reset Leader
-	s.State.Mutex.Lock()
-	s.State.Leader = &models.Node{ID: ""}
-	log.Infof("Setting leader to nil")
+	// s.State.Mutex.Lock()
+	// s.State.Leader = &models.Node{ID: ""}
+	// log.Infof("Setting leader to nil")
 
 	// Decide if there is a latest prepare message
 	latestPrepareMessage := FindHighestValidPrepareMessage(s.PrepareMessageLog, time.Now())
@@ -106,13 +83,9 @@ func (s *PaxosServer) PrepareRoutine() {
 
 	// If there is, set the leader and promised ballot number
 	if latestPrepareMessage != nil {
-		s.State.Leader = &models.Node{
-			ID:      latestPrepareMessage.B.NodeID,
-			Address: s.Peers[latestPrepareMessage.B.NodeID].Address,
-		}
-		s.State.PromisedBallotNum = latestPrepareMessage.B
-		log.Infof("Promised ballot number set to %s", utils.BallotNumberString(s.State.PromisedBallotNum))
-		log.Infof("Leader set to %s", s.State.Leader.ID)
+		s.state.SetBallotNumber(latestPrepareMessage.B)
+		log.Infof("Promised ballot number set to %s", utils.BallotNumberString(s.state.GetBallotNumber()))
+		log.Infof("Leader set to %s", s.state.GetLeader())
 
 		for timestamp, prepareMessageEntry := range s.PrepareMessageLog {
 			if prepareMessageEntry.ResponseChannel != nil {
@@ -121,25 +94,23 @@ func (s *PaxosServer) PrepareRoutine() {
 			}
 			delete(s.PrepareMessageLog, timestamp)
 		}
-		s.State.Mutex.Unlock()
 		return
 	}
 
 	// If there is not, initiate an election, set ballot number and release mutex
-	if highestBallotNumber != nil && BallotNumberIsHigher(s.State.PromisedBallotNum, highestBallotNumber) {
-		s.State.PromisedBallotNum = &pb.BallotNumber{N: highestBallotNumber.N + 1, NodeID: s.NodeID}
+	if highestBallotNumber != nil && BallotNumberIsHigher(s.state.GetBallotNumber(), highestBallotNumber) {
+		s.state.SetBallotNumber(&pb.BallotNumber{N: highestBallotNumber.N + 1, NodeID: s.NodeID})
 	} else {
-		s.State.PromisedBallotNum = &pb.BallotNumber{N: s.State.PromisedBallotNum.N + 1, NodeID: s.NodeID}
+		s.state.SetBallotNumber(&pb.BallotNumber{N: s.state.GetBallotNumber().N + 1, NodeID: s.NodeID})
 	}
-	log.Infof("Changed ballot number set to %s", utils.BallotNumberString(s.State.PromisedBallotNum))
+	log.Infof("Changed ballot number set to %s", utils.BallotNumberString(s.state.GetBallotNumber()))
 	newPrepareMessage := &pb.PrepareMessage{
 		B: &pb.BallotNumber{
-			N:      s.State.PromisedBallotNum.N,
+			N:      s.state.GetBallotNumber().N,
 			NodeID: s.NodeID,
 		},
 	}
-	s.State.Mutex.Unlock()
-	s.State.SentPrepareMessages = append(s.State.SentPrepareMessages, newPrepareMessage)
+	s.logger.AddSentPrepareMessage(newPrepareMessage)
 	ok, acceptLogMap, err := s.SendPrepareRequest(newPrepareMessage)
 	if err != nil {
 		log.Warn(err)
@@ -152,67 +123,58 @@ func (s *PaxosServer) PrepareRoutine() {
 
 	// If election won
 	// acquire mutex -> set leader -> synchronize accept log -> send new view request -> release mutex
-	s.State.Mutex.Lock()
-	selfAddress := s.Addr
-	if selfPeer, ok := s.Peers[s.NodeID]; ok && selfPeer != nil && selfPeer.Address != "" {
-		selfAddress = selfPeer.Address
-	}
-	s.State.Leader = &models.Node{
-		ID:      s.NodeID,
-		Address: selfAddress,
-	}
-	log.Infof("Leader for %s is %s", utils.BallotNumberString(newPrepareMessage.B), s.State.Leader.ID)
+	// selfAddress := s.Addr
+	// if selfPeer, ok := s.Peers[s.NodeID]; ok && selfPeer != nil && selfPeer.Address != "" {
+	// 	selfAddress = selfPeer.Address
+	// }
+	// s.State.Leader = &models.Node{
+	// 	ID:      s.NodeID,
+	// 	Address: selfAddress,
+	// }
+	// log.Infof("Leader for %s is %s", utils.BallotNumberString(newPrepareMessage.B), s.State.Leader.ID)
 	log.Infof("Accept log map: %v", acceptLogMap)
 
 	// Find the highest sequence number in the accept log map
+	newAcceptLog := make(map[int64]*pb.AcceptRecord)
 	for _, acceptLog := range acceptLogMap {
 		for _, record := range acceptLog {
 			sequenceNum := record.AcceptedSequenceNum
-			currentRecord, ok := s.State.AcceptLog[sequenceNum]
-			if ok {
-				if BallotNumberIsHigher(currentRecord.AcceptedBallotNum, record.AcceptedBallotNum) {
-					s.State.AcceptLog[sequenceNum].AcceptedBallotNum = record.AcceptedBallotNum
-					s.State.AcceptLog[sequenceNum].AcceptedVal = record.AcceptedVal
-				}
-			} else {
-				s.State.AcceptLog[sequenceNum] = &pb.AcceptRecord{
-					AcceptedBallotNum:   record.AcceptedBallotNum,
-					AcceptedSequenceNum: record.AcceptedSequenceNum,
-					AcceptedVal:         record.AcceptedVal,
-					Committed:           false,
-					Executed:            false,
-					Result:              false,
-				}
+			_, exists := newAcceptLog[sequenceNum]
+			if !exists {
+				newAcceptLog[sequenceNum] = record
+			} else if BallotNumberIsHigher(newAcceptLog[sequenceNum].AcceptedBallotNum, record.AcceptedBallotNum) {
+				newAcceptLog[sequenceNum] = record
 			}
 		}
 	}
-	maxSequenceNum := MaxSequenceNumber(s.State.AcceptLog)
+
+	maxSequenceNum := s.state.StateLog.MaxSequenceNum()
 	for sequenceNum := int64(1); sequenceNum <= maxSequenceNum; sequenceNum++ {
-		_, ok := s.State.AcceptLog[sequenceNum]
-		if ok {
-			s.State.AcceptLog[sequenceNum].AcceptedBallotNum = s.State.PromisedBallotNum
+		record, exists := newAcceptLog[sequenceNum]
+		if exists {
+			s.state.StateLog.CreateRecordIfNotExists(record.AcceptedBallotNum, sequenceNum, record.AcceptedVal)
 		} else {
-			s.State.AcceptLog[sequenceNum] = &pb.AcceptRecord{
-				AcceptedBallotNum:   s.State.PromisedBallotNum,
-				AcceptedSequenceNum: sequenceNum,
-				AcceptedVal:         NoOperation,
-				Committed:           false,
-				Executed:            false,
-				Result:              false,
-			}
+			s.state.StateLog.CreateRecordIfNotExists(s.state.GetBallotNumber(), sequenceNum, NoOperation)
 		}
 	}
-	newAcceptLog := make([]*pb.AcceptRecord, 0)
+
+	newAcceptLog2 := make([]*pb.AcceptRecord, 0)
 	for sequenceNum := int64(1); sequenceNum <= maxSequenceNum; sequenceNum++ {
-		newAcceptLog = append(newAcceptLog, s.State.AcceptLog[sequenceNum])
+		newAcceptLog2 = append(newAcceptLog2, &pb.AcceptRecord{
+			AcceptedBallotNum:   s.state.StateLog.GetBallotNumber(sequenceNum),
+			AcceptedSequenceNum: sequenceNum,
+			AcceptedVal:         s.state.StateLog.GetRequest(sequenceNum),
+			Committed:           s.state.StateLog.IsCommitted(sequenceNum),
+			Executed:            s.state.StateLog.IsExecuted(sequenceNum),
+			Result:              utils.Int64ToBool(s.state.StateLog.GetResult(sequenceNum)),
+		})
 	}
 	newViewMessage := &pb.NewViewMessage{
-		B:         s.State.PromisedBallotNum,
-		AcceptLog: newAcceptLog,
+		B:         s.state.GetBallotNumber(),
+		AcceptLog: newAcceptLog2,
 	}
-	s.State.NewViewLog = append(s.State.NewViewLog, newViewMessage)
+	s.state.AddNewViewMessage(newViewMessage)
 	// Mutex is released here so that new client requests can be processed
-	s.State.Mutex.Unlock()
 	log.Infof("New view accept log: %v", newViewMessage)
 	go s.NewViewRoutine(newViewMessage)
 }
@@ -224,17 +186,16 @@ func (s *PaxosServer) NewViewRoutine(newViewMessage *pb.NewViewMessage) {
 	}
 
 	for sequenceNum, acceptCount := range acceptCountMap {
-		if acceptCount >= s.Quorum {
+		if acceptCount >= s.config.F+1 {
 			log.Infof("Sequence number %d accepted by quorum in new view request", sequenceNum)
 		}
-		s.State.Mutex.Lock()
-		s.State.AcceptLog[sequenceNum].Committed = true
+		s.state.StateLog.SetCommitted(sequenceNum)
 		err := s.SendCommitRequest(&pb.CommitMessage{
 			B:           newViewMessage.B,
 			SequenceNum: sequenceNum,
 			Transaction: newViewMessage.AcceptLog[sequenceNum-1].AcceptedVal,
 		})
-		s.State.SentCommitMessages = append(s.State.SentCommitMessages, &pb.CommitMessage{
+		s.logger.AddSentCommitMessage(&pb.CommitMessage{
 			B:           newViewMessage.B,
 			SequenceNum: sequenceNum,
 			Transaction: newViewMessage.AcceptLog[sequenceNum-1].AcceptedVal,
@@ -246,35 +207,29 @@ func (s *PaxosServer) NewViewRoutine(newViewMessage *pb.NewViewMessage) {
 		if err != nil {
 			log.Infof("Failed to execute request %s", utils.TransactionRequestString(newViewMessage.AcceptLog[sequenceNum-1].AcceptedVal))
 		}
-		s.State.Mutex.Unlock()
 	}
 }
 
 func (s *PaxosServer) CatchupRoutine() {
-	s.State.Mutex.Lock()
-	defer s.State.Mutex.Unlock()
-
-	maxSequenceNum := MaxSequenceNumber(s.State.AcceptLog)
+	maxSequenceNum := s.state.StateLog.MaxSequenceNum()
 	catchupMessage, err := s.SendCatchUpRequest(maxSequenceNum)
 	if err != nil {
 		log.Warn(err)
 		return
 	}
-	s.State.Leader = &models.Node{
-		ID:      catchupMessage.B.NodeID,
-		Address: s.Peers[catchupMessage.B.NodeID].Address,
-	}
-	log.Infof("Leader set to %s", s.State.Leader.ID)
-	log.Infof("Promised ballot number set to %s", utils.BallotNumberString(catchupMessage.B))
-	s.State.PromisedBallotNum = catchupMessage.B
+	// s.State.Leader = &models.Node{
+	// 	ID:      catchupMessage.B.NodeID,
+	// 	Address: s.Peers[catchupMessage.B.NodeID].Address,
+	// }
+	// log.Infof("Leader set to %s", s.State.Leader.ID)
+	// log.Infof("Promised ballot number set to %s", utils.BallotNumberString(catchupMessage.B))
+	// s.State.PromisedBallotNum = catchupMessage.B
+	s.state.SetBallotNumber(catchupMessage.B)
 	for _, record := range catchupMessage.AcceptLog {
-		s.State.AcceptLog[record.AcceptedSequenceNum] = &pb.AcceptRecord{
-			AcceptedBallotNum:   record.AcceptedBallotNum,
-			AcceptedSequenceNum: record.AcceptedSequenceNum,
-			AcceptedVal:         record.AcceptedVal,
-			Committed:           true,
-			Executed:            false,
-		}
+
+		s.state.StateLog.CreateRecordIfNotExists(record.AcceptedBallotNum, record.AcceptedSequenceNum, record.AcceptedVal)
+		s.state.StateLog.SetCommitted(record.AcceptedSequenceNum)
+
 		_, err = s.TryExecute(record.AcceptedSequenceNum)
 		if err != nil {
 			log.Infof("Failed to execute request %s", utils.TransactionRequestString(record.AcceptedVal))
@@ -320,10 +275,8 @@ func (s *PaxosServer) Start(ctx context.Context) {
 
 func CreatePaxosServer(selfNode *models.Node, peerNodes map[string]*models.Node, clients []string, bankDB *database.Database) *PaxosServer {
 
-	lastReply := make(map[string]*pb.TransactionResponse)
-	for _, client := range clients {
-		lastReply[client] = nil
-	}
+	serverConfig := CreateServerConfig(int64(len(peerNodes) + 1))
+	serverState := CreateServerState()
 
 	i, err := strconv.Atoi(selfNode.ID[1:])
 	if err != nil {
@@ -335,23 +288,16 @@ func CreatePaxosServer(selfNode *models.Node, peerNodes map[string]*models.Node,
 		SysInitializedMutex: sync.Mutex{},
 		SysInitialized:      false,
 		Mutex:               sync.RWMutex{},
-		IsAlive:             true,
+		config:              serverConfig,
 		NodeID:              selfNode.ID,
 		Addr:                selfNode.Address,
-		State: AcceptorState{
-			Mutex:               sync.RWMutex{},
-			Leader:              &models.Node{ID: ""},
-			PromisedBallotNum:   &pb.BallotNumber{N: 0, NodeID: ""},
-			AcceptLog:           make(map[int64]*pb.AcceptRecord),
-			ExecutedSequenceNum: 0,
-		},
-		DB:                bankDB,
-		LastReply:         lastReply,
-		Peers:             peerNodes,
-		Quorum:            len(peerNodes) / 2,
-		PaxosTimer:        paxosTimer,
-		AcceptedMessages:  make([]*pb.AcceptedMessage, 0),
-		PrepareMessageLog: make(map[time.Time]*PrepareRequestRecord),
-		wg:                sync.WaitGroup{},
+		state:               serverState,
+		DB:                  bankDB,
+		Peers:               peerNodes,
+		PaxosTimer:          paxosTimer,
+		AcceptedMessages:    make([]*pb.AcceptedMessage, 0),
+		PrepareMessageLog:   make(map[time.Time]*PrepareRequestRecord),
+		logger:              CreateLogger(),
+		wg:                  sync.WaitGroup{},
 	}
 }

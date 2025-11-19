@@ -5,7 +5,6 @@ import (
 	"errors"
 	"time"
 
-	"github.com/mavleo96/stable-leader-paxos/internal/models"
 	"github.com/mavleo96/stable-leader-paxos/internal/utils"
 	pb "github.com/mavleo96/stable-leader-paxos/pb"
 	log "github.com/sirupsen/logrus"
@@ -20,22 +19,20 @@ import (
 
 // PrepareRequest handles the prepare request rpc on server side
 func (s *PaxosServer) PrepareRequest(ctx context.Context, req *pb.PrepareMessage) (*pb.AckMessage, error) {
-	s.State.Mutex.RLock()
-	if !s.IsAlive {
-		s.State.Mutex.RUnlock()
+	if !s.config.Alive {
 		log.Warnf("Node is dead")
 		return &pb.AckMessage{Ok: false}, status.Errorf(codes.Unavailable, "node is dead")
 	}
 
 	log.Infof("Received prepare request %v", utils.BallotNumberString(req.B))
 
+	s.logger.AddReceivedPrepareMessage(req)
+
 	// Reject immediately if ballot number is lower or equal to promise
-	if !BallotNumberIsHigher(s.State.PromisedBallotNum, req.B) {
-		s.State.Mutex.RUnlock()
+	if !BallotNumberIsHigher(s.state.GetBallotNumber(), req.B) {
 		log.Warnf("Rejected prepare request %s without queueing", utils.BallotNumberString(req.B))
 		return &pb.AckMessage{Ok: false}, nil
 	}
-	s.State.Mutex.RUnlock()
 
 	// Add prepare request record to prepare message log
 	prepareRequestRecord := &PrepareRequestRecord{
@@ -43,18 +40,13 @@ func (s *PaxosServer) PrepareRequest(ctx context.Context, req *pb.PrepareMessage
 		PrepareMessage:  req,
 	}
 	s.PrepareMessageLog[time.Now()] = prepareRequestRecord
-	s.State.ReceivedPrepareMessages = append(s.State.ReceivedPrepareMessages, req)
 
 	if !s.SysInitialized {
 		log.Infof("System not initialized, immediately accepting prepare request %s", utils.BallotNumberString(req.B))
 		s.SysInitialized = true
-		s.State.PromisedBallotNum = req.B
+		s.state.SetBallotNumber(req.B)
 		close(prepareRequestRecord.ResponseChannel)
 		prepareRequestRecord.ResponseChannel = nil
-		s.State.Leader = &models.Node{
-			ID:      s.NodeID,
-			Address: s.Addr,
-		}
 		return &pb.AckMessage{
 			Ok:        true,
 			AcceptNum: req.B,
@@ -69,12 +61,7 @@ func (s *PaxosServer) PrepareRequest(ctx context.Context, req *pb.PrepareMessage
 	}
 
 	// Prepare the log to be sent
-	s.State.Mutex.RLock()
-	defer s.State.Mutex.RUnlock()
-	acceptLog := make([]*pb.AcceptRecord, 0)
-	for _, record := range s.State.AcceptLog {
-		acceptLog = append(acceptLog, record)
-	}
+	acceptLog := s.state.StateLog.GetAcceptedLog()
 
 	log.Infof("Accepted prepare request %s", utils.BallotNumberString(req.B))
 	return &pb.AckMessage{
@@ -86,19 +73,16 @@ func (s *PaxosServer) PrepareRequest(ctx context.Context, req *pb.PrepareMessage
 
 // NewViewRequest handles the new view request rpc on server side
 func (s *PaxosServer) NewViewRequest(req *pb.NewViewMessage, stream pb.PaxosNode_NewViewRequestServer) error {
-	s.State.Mutex.RLock()
-	if !s.IsAlive {
-		s.State.Mutex.RUnlock()
+	if !s.config.Alive {
 		log.Warnf("Node is dead")
 		return status.Errorf(codes.Unavailable, "node is dead")
 	}
-	s.State.Mutex.RUnlock()
 
 	// No need to acquire state mutex since AcceptRequest acquires it
 	log.Infof("Received new view message %v", utils.BallotNumberString(req.B))
-	s.State.Mutex.Lock()
-	s.State.NewViewLog = append(s.State.NewViewLog, req)
-	s.State.Mutex.Unlock()
+	s.state.AddNewViewMessage(req)
+
+	s.logger.AddReceivedNewViewMessage(req)
 
 	for _, record := range req.AcceptLog {
 		acceptedMessage, err := s.AcceptRequest(context.Background(), &pb.AcceptMessage{
@@ -120,19 +104,13 @@ func (s *PaxosServer) NewViewRequest(req *pb.NewViewMessage, stream pb.PaxosNode
 // AcceptRequest handles the accept request rpc on server side
 // This code is part of Acceptor structure
 func (s *PaxosServer) AcceptRequest(ctx context.Context, req *pb.AcceptMessage) (*pb.AcceptedMessage, error) {
-	s.State.Mutex.RLock()
-	if !s.IsAlive {
-		s.State.Mutex.RUnlock()
+	if !s.config.Alive {
 		log.Warnf("Node is dead")
 		return nil, status.Errorf(codes.Unavailable, "node is dead")
 	}
-	s.State.Mutex.RUnlock()
-
-	s.State.Mutex.Lock()
-	defer s.State.Mutex.Unlock()
 
 	// Reject if ballot number is lower than promised ballot number
-	if !BallotNumberIsHigherOrEqual(s.State.PromisedBallotNum, req.B) {
+	if !BallotNumberIsHigherOrEqual(s.state.GetBallotNumber(), req.B) {
 		log.Warnf("Rejected %s", utils.TransactionRequestString(req.Message))
 		return &pb.AcceptedMessage{Ok: false}, nil
 	}
@@ -140,24 +118,23 @@ func (s *PaxosServer) AcceptRequest(ctx context.Context, req *pb.AcceptMessage) 
 	// Update State
 	// Replace if sequence number exists in accept log else append
 	// Update leader since this is a accept request with higher ballot number
-	s.State.Leader = s.Peers[req.B.NodeID]
-	s.State.PromisedBallotNum = req.B // This is wrong according to Prajwal
-	seqNum, ok := GetSequenceNumberIfExistsInAcceptLog(s.State.AcceptLog, req.Message)
-	if ok {
-		s.State.AcceptLog[seqNum].AcceptedBallotNum = req.B
-	} else {
-		s.State.AcceptLog[req.SequenceNum] = &pb.AcceptRecord{
-			AcceptedBallotNum:   req.B,
-			AcceptedSequenceNum: req.SequenceNum,
-			AcceptedVal:         req.Message,
-			Committed:           false,
-			Executed:            false,
-		}
-		// We increment wait count since this is a new request
+	if BallotNumberIsHigher(s.state.GetBallotNumber(), req.B) {
+		s.state.SetBallotNumber(req.B)
+		// s.State.Leader = s.Peers[req.B.NodeID]
+		// s.State.PromisedBallotNum = req.B // This is wrong according to Prajwal
+	}
+
+	created := s.state.StateLog.CreateRecordIfNotExists(req.B, req.SequenceNum, req.Message)
+
+	// Start timer if new request
+	// TODO: handle forwarding
+	if created {
 		s.PaxosTimer.IncrementWaitCountOrStart()
 	}
 
-	s.State.ReceivedAcceptMessages = append(s.State.ReceivedAcceptMessages, req)
+	s.state.StateLog.SetAccepted(req.SequenceNum)
+
+	s.logger.AddReceivedAcceptMessage(req)
 
 	log.Infof("Accepted %s", utils.TransactionRequestString(req.Message))
 	return &pb.AcceptedMessage{
@@ -172,54 +149,34 @@ func (s *PaxosServer) AcceptRequest(ctx context.Context, req *pb.AcceptMessage) 
 // CommitRequest handles the commit request rpc on server side
 // This code is part of Acceptor structure
 func (s *PaxosServer) CommitRequest(ctx context.Context, req *pb.CommitMessage) (*emptypb.Empty, error) {
-	s.State.Mutex.RLock()
-	if !s.IsAlive {
-		s.State.Mutex.RUnlock()
+	if !s.config.Alive {
 		log.Warnf("Node is dead")
 		return nil, status.Errorf(codes.Unavailable, "node is dead")
 	}
-	s.State.Mutex.RUnlock()
-
-	s.State.Mutex.Lock()
-	defer s.State.Mutex.Unlock()
 
 	// Reject if ballot number is lower than promised ballot number
-	if !BallotNumberIsHigherOrEqual(s.State.PromisedBallotNum, req.B) {
+	if !BallotNumberIsHigherOrEqual(s.state.GetBallotNumber(), req.B) {
 		log.Warnf("Rejected %s", utils.TransactionRequestString(req.Transaction))
 		return &emptypb.Empty{}, nil
 	}
 
-	s.State.ReceivedCommitMessages = append(s.State.ReceivedCommitMessages, req)
+	// Update State
+	if BallotNumberIsHigher(s.state.GetBallotNumber(), req.B) {
+		s.state.SetBallotNumber(req.B)
+	}
 
-	// If not already in log then increment wait count
-	_, ok := s.State.AcceptLog[req.SequenceNum]
-	if !ok {
+	created := s.state.StateLog.CreateRecordIfNotExists(req.B, req.SequenceNum, req.Transaction)
+	if created {
 		s.PaxosTimer.IncrementWaitCountOrStart()
 	}
 
-	// Update State
-	// Update leader since this is a accept request with higher ballot number
-	s.State.Leader = s.Peers[req.B.NodeID]
-	s.State.PromisedBallotNum = req.B // This is wrong according to Prajwal
-
-	// Replace if sequence number exists in accept log else append
-	seqNum, ok := GetSequenceNumberIfExistsInAcceptLog(s.State.AcceptLog, req.Transaction)
-	if ok {
-		s.State.AcceptLog[seqNum].AcceptedBallotNum = req.B
-		s.State.AcceptLog[seqNum].Committed = true
-	} else {
-		s.State.AcceptLog[req.SequenceNum] = &pb.AcceptRecord{
-			AcceptedBallotNum:   req.B,
-			AcceptedSequenceNum: req.SequenceNum,
-			AcceptedVal:         req.Transaction,
-			Committed:           true,
-			Executed:            false,
-		}
-	}
+	s.state.StateLog.SetCommitted(req.SequenceNum)
 	log.Infof("Commited %s", utils.TransactionRequestString(req.Transaction))
 
+	s.logger.AddReceivedCommitMessage(req)
+
 	// Try to execute the request
-	if s.State.AcceptLog[req.SequenceNum].Executed {
+	if s.state.StateLog.IsExecuted(req.SequenceNum) {
 		log.Infof("Request %s already executed", utils.TransactionRequestString(req.Transaction))
 		return &emptypb.Empty{}, nil
 	}
@@ -239,30 +196,39 @@ func (s *PaxosServer) CatchupRequest(ctx context.Context, req *wrapperspb.Int64V
 	// s.State.Mutex.Lock()
 	// defer s.State.Mutex.Unlock()
 
-	if !s.IsAlive {
+	if !s.config.Alive {
 		log.Warnf("Node is dead")
 		return nil, status.Errorf(codes.Unavailable, "node is dead")
 	}
 
-	if s.State.Leader.ID != s.NodeID {
+	// Only leader will respond to catchup request
+	if s.state.GetLeader() != s.NodeID {
 		return nil, status.Errorf(codes.Aborted, "not leader")
 	}
 
 	log.Infof("Received catch up request logs with sequence number >%d", req.Value)
 	catchupLog := []*pb.AcceptRecord{}
-	maxSequenceNum := MaxSequenceNumber(s.State.AcceptLog)
+	maxSequenceNum := s.state.StateLog.MaxSequenceNum()
 
 	for sequenceNum := req.Value + 1; sequenceNum <= maxSequenceNum; sequenceNum++ {
-		record, ok := s.State.AcceptLog[sequenceNum]
-		if !ok || !record.Committed {
+		// record, ok := s.State.AcceptLog[sequenceNum]
+		// if !ok || !record.Committed {
+		if !s.state.StateLog.IsCommitted(sequenceNum) {
 			continue
 		}
-		catchupLog = append(catchupLog, record)
+		catchupLog = append(catchupLog, &pb.AcceptRecord{
+			AcceptedBallotNum:   s.state.StateLog.GetBallotNumber(sequenceNum),
+			AcceptedSequenceNum: sequenceNum,
+			AcceptedVal:         s.state.StateLog.GetRequest(sequenceNum),
+			Committed:           s.state.StateLog.IsCommitted(sequenceNum),
+			Executed:            s.state.StateLog.IsExecuted(sequenceNum),
+			Result:              utils.Int64ToBool(s.state.StateLog.GetResult(sequenceNum)),
+		})
 	}
 
 	log.Infof("Catchup sent %d records", len(catchupLog))
 	return &pb.CatchupMessage{
-		B:         s.State.PromisedBallotNum,
+		B:         s.state.GetBallotNumber(),
 		AcceptLog: catchupLog,
 	}, nil
 }
@@ -271,28 +237,37 @@ func (s *PaxosServer) CatchupRequest(ctx context.Context, req *wrapperspb.Int64V
 // The state mutex should be acquired before calling this function
 func (s *PaxosServer) TryExecute(sequenceNum int64) (bool, error) {
 	// Execute transactions until the sequence number is executed
-	for s.State.ExecutedSequenceNum < sequenceNum {
-		nextSequenceNum := s.State.ExecutedSequenceNum + 1
-		record, ok := s.State.AcceptLog[nextSequenceNum]
-		if !ok || !record.Committed {
+	for s.state.GetLastExecutedSequenceNum() < sequenceNum {
+		nextSequenceNum := s.state.GetLastExecutedSequenceNum() + 1
+		if !s.state.StateLog.IsCommitted(nextSequenceNum) {
 			return false, errors.New("not executed since log has gaps")
 		}
-		if record.Executed {
+		if s.state.StateLog.IsExecuted(nextSequenceNum) {
 			log.Fatal("Executed sequence number is already executed")
 		}
+		request := s.state.StateLog.GetRequest(nextSequenceNum)
+		if request == nil {
+			return false, errors.New("request is nil")
+		}
+
 		// Update database
-		var success bool = true
-		if record.AcceptedVal != NoOperation {
-			var err error
-			success, err = s.DB.UpdateDB(record.AcceptedVal.Transaction)
+		var result int64
+		var err error
+		if request != NoOperation {
+			var success bool
+			success, err = s.DB.UpdateDB(request.Transaction)
 			if err != nil {
 				log.Warn(err)
 			}
+			result = utils.BoolToInt64(success)
 		}
-		record.Executed = true
-		record.Result = success
-		log.Infof("Executed %s", utils.TransactionRequestString(record.AcceptedVal))
-		s.State.ExecutedSequenceNum++
+
+		// Add to executed log
+		s.state.StateLog.SetExecuted(nextSequenceNum)
+		s.state.StateLog.SetResult(nextSequenceNum, result)
+
+		log.Infof("Executed %s", utils.TransactionRequestString(request))
+		s.state.SetLastExecutedSequenceNum(nextSequenceNum)
 	}
-	return s.State.AcceptLog[sequenceNum].Result, nil
+	return utils.Int64ToBool(s.state.StateLog.GetResult(sequenceNum)), nil
 }

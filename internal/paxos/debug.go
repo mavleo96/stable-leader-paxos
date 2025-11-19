@@ -13,117 +13,163 @@ import (
 
 // PrintLog prints the accept log, last reply timestamp, and accepted messages
 func (s *PaxosServer) PrintLog(ctx context.Context, req *emptypb.Empty) (*emptypb.Empty, error) {
-	s.State.Mutex.RLock()
-	defer s.State.Mutex.RUnlock()
-	fmt.Println("Printing Current Accept Log:")
-	sequenceNum := MaxSequenceNumber(s.State.AcceptLog)
-	for i := int64(0); i <= sequenceNum; i++ {
-		record, ok := s.State.AcceptLog[i]
-		if ok {
-			fmt.Printf("%v\n", utils.PrintLogString(record))
-		}
+	log.Infof("Printing log command received")
+
+	// TODO: Replace with actual test set number
+	fmt.Println("LOGS FOR TEST SET:", 0)
+
+	fmt.Println("Sent Prepare Messages:")
+	for _, message := range s.logger.GetSentPrepareMessages() {
+		fmt.Println(message.String())
 	}
 	fmt.Println("")
-	fmt.Println("Printing Sent Accept Log:")
-	for _, record := range s.State.SentAcceptMessages {
-		fmt.Printf("%v\n", record.String())
+
+	fmt.Println("Received Prepare Messages:")
+	for _, message := range s.logger.GetReceivedPrepareMessages() {
+		fmt.Println(message.String())
 	}
 	fmt.Println("")
-	fmt.Println("Printing Received Accept Log:")
-	for _, record := range s.State.ReceivedAcceptMessages {
-		fmt.Printf("%v\n", record.String())
+
+	fmt.Println("Sent Ack Messages:")
+	for _, message := range s.logger.GetSentAckMessages() {
+		fmt.Println(message.String())
 	}
 	fmt.Println("")
-	fmt.Println("Printing Sent Prepare Log:")
-	for _, record := range s.State.SentPrepareMessages {
-		fmt.Printf("%v\n", record.String())
+
+	fmt.Println("Received Ack Messages:")
+	for _, message := range s.logger.GetReceivedAckMessages() {
+		fmt.Println(message.String())
 	}
 	fmt.Println("")
-	fmt.Println("Printing Received Prepare Log:")
-	for _, record := range s.State.ReceivedPrepareMessages {
-		fmt.Printf("%v\n", record.String())
+
+	fmt.Println("Sent Accept Messages:")
+	for _, message := range s.logger.GetSentAcceptMessages() {
+		fmt.Println(message.String())
 	}
 	fmt.Println("")
-	fmt.Println("Printing Sent Commit Log:")
-	for _, record := range s.State.SentCommitMessages {
-		fmt.Printf("%v\n", record.String())
+
+	fmt.Println("Received Accept Messages:")
+	for _, message := range s.logger.GetReceivedAcceptMessages() {
+		fmt.Println(message.String())
 	}
 	fmt.Println("")
-	fmt.Println("Printing Received Commit Log:")
-	for _, record := range s.State.ReceivedCommitMessages {
-		fmt.Printf("%v\n", record.String())
+
+	fmt.Println("Sent Accepted Messages:")
+	for _, message := range s.logger.GetSentAcceptedMessages() {
+		fmt.Println(message.String())
 	}
 	fmt.Println("")
-	fmt.Println("Printing Sent Accepted Log:")
-	for _, record := range s.State.SentAcceptedMessages {
-		fmt.Printf("%v\n", record.String())
+
+	fmt.Println("Received Accepted Messages:")
+	for _, message := range s.logger.GetReceivedAcceptedMessages() {
+		fmt.Println(message.String())
 	}
 	fmt.Println("")
-	fmt.Println("Printing Received Accepted Log:")
-	for _, record := range s.State.ReceivedAcceptedMessages {
-		fmt.Printf("%v\n", record.String())
+
+	fmt.Println("Sent Commit Messages:")
+	for _, message := range s.logger.GetSentCommitMessages() {
+		fmt.Println(message.String())
 	}
 	fmt.Println("")
+
+	fmt.Println("Received Commit Messages:")
+	for _, message := range s.logger.GetReceivedCommitMessages() {
+		fmt.Println(message.String())
+	}
+	fmt.Println("")
+
+	fmt.Println("Received Transaction Requests:")
+	for _, message := range s.logger.GetReceivedTransactionRequests() {
+		fmt.Println(message.String())
+	}
+	fmt.Println("")
+
+	fmt.Println("Forwarded Transaction Requests:")
+	for _, message := range s.logger.GetForwardedTransactionRequests() {
+		fmt.Println(message.String())
+	}
+	fmt.Println("")
+
+	fmt.Println("Sent Transaction Responses:")
+	for _, message := range s.logger.GetSentTransactionResponses() {
+		fmt.Println(message.String())
+	}
+	fmt.Println("")
+
 	return &emptypb.Empty{}, nil
 }
 
 // PrintDB prints the database
 func (s *PaxosServer) PrintDB(ctx context.Context, req *emptypb.Empty) (*emptypb.Empty, error) {
-	s.State.Mutex.RLock()
-	defer s.State.Mutex.RUnlock()
-	fmt.Println("Printing database:")
-	db_state, err := s.DB.PrintDB()
+	log.Infof("Print database command received")
+
+	fmt.Println("DATABASE FOR TEST SET:", 0)
+	dbState, err := s.DB.GetDBState()
 	if err != nil {
 		log.Fatal(err)
 	}
 
 	// Sort client ids
-	keys := make([]string, 0, len(db_state))
-	for k := range db_state {
-		keys = append(keys, k)
-	}
-	sort.Strings(keys)
+	clientIDs := utils.Keys(dbState)
+	sort.Strings(clientIDs)
 
 	// Print by client id
-	for _, k := range keys {
-		fmt.Printf("Balance: %s: %d\n", k, db_state[k])
+	for _, clientID := range clientIDs {
+		fmt.Printf("Balance: %s: %d\n", clientID, dbState[clientID])
 	}
 	fmt.Println("")
 	return &emptypb.Empty{}, nil
 }
 
 func (s *PaxosServer) PrintStatus(ctx context.Context, req *wrapperspb.Int64Value) (*emptypb.Empty, error) {
-	s.State.Mutex.RLock()
-	defer s.State.Mutex.RUnlock()
-	fmt.Println("Printing status:")
-	record, ok := s.State.AcceptLog[req.Value]
-	if !ok {
-		fmt.Printf("Sequence Number: %d, Status: X\n", req.Value)
-	} else if record.Executed {
-		fmt.Printf("Sequence Number: %d, Status: E, Message: %s\n", req.Value, utils.TransactionRequestString(record.AcceptedVal))
-	} else if record.Committed {
-		fmt.Printf("Sequence Number: %d, Status: C, Message: %s\n", req.Value, utils.TransactionRequestString(record.AcceptedVal))
-	} else {
-		fmt.Printf("Sequence Number: %d, Status: A, Message: %s\n", req.Value, utils.TransactionRequestString(record.AcceptedVal))
+	log.Infof("Print status command received")
+	fmt.Println("STATUS FOR TEST SET:", 0)
+
+	printRange := []int64{req.Value}
+	if req.Value != 0 {
+		printRange = utils.Range(1, s.state.StateLog.MaxSequenceNum()+1)
+	}
+
+	for _, i := range printRange {
+		if !s.state.StateLog.Exists(i) {
+			fmt.Println(s.state.StateLog.GetLogString(i), "nil")
+			continue
+		}
+		fmt.Println(s.state.StateLog.GetLogString(i))
 	}
 	fmt.Println("")
+
 	return &emptypb.Empty{}, nil
+	// record, ok := s.State.AcceptLog[req.Value]
+	// if !ok {
+	// 	fmt.Printf("Sequence Number: %d, Status: X\n", req.Value)
+	// } else if record.Executed {
+	// 	fmt.Printf("Sequence Number: %d, Status: E, Message: %s\n", req.Value, utils.TransactionRequestString(record.AcceptedVal))
+	// } else if record.Committed {
+	// 	fmt.Printf("Sequence Number: %d, Status: C, Message: %s\n", req.Value, utils.TransactionRequestString(record.AcceptedVal))
+	// } else {
+	// 	fmt.Printf("Sequence Number: %d, Status: A, Message: %s\n", req.Value, utils.TransactionRequestString(record.AcceptedVal))
+	// }
+	// fmt.Println("")
+	// return &emptypb.Empty{}, nil
 }
 
 func (s *PaxosServer) PrintView(ctx context.Context, req *emptypb.Empty) (*emptypb.Empty, error) {
-	s.State.Mutex.RLock()
-	defer s.State.Mutex.RUnlock()
-	fmt.Println("Printing view:")
-	for _, record := range s.State.NewViewLog {
-		if record == nil {
-			continue
-		}
-		acceptLogString := ""
-		for _, acceptRecord := range record.AcceptLog {
-			acceptLogString += "\t" + utils.AcceptRecordString(acceptRecord) + "\n"
-		}
-		fmt.Printf("<NEW VIEW, %s, \n%s>\n", utils.BallotNumberString(record.B), acceptLogString)
+	log.Infof("Print view command received")
+
+	fmt.Println("NEW VIEW MESSAGES FOR TEST SET:", 0)
+
+	fmt.Println("Sent new view messages:")
+	for _, message := range s.logger.GetSentNewViewMessages() {
+		fmt.Println(message.String())
 	}
 	fmt.Println("")
+
+	fmt.Println("Received new view messages:")
+	for _, message := range s.logger.GetReceivedNewViewMessages() {
+		fmt.Println(message.String())
+	}
+	fmt.Println("")
+
 	return &emptypb.Empty{}, nil
 }

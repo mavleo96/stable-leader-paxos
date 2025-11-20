@@ -146,6 +146,7 @@ func CreateServer(selfNode *models.Node, peerNodes map[string]*models.Node, clie
 	grpcServer := grpc.NewServer()
 
 	node := paxos.CreatePaxosServer(selfNode, peerNodes, clients, bankDB)
+	log.Infof("[Main] Created paxos server with peer nodes: %v", peerNodes)
 	pb.RegisterPaxosNodeServer(grpcServer, node)
 
 	// Start paxos server (it will stop when ctx is cancelled)

@@ -104,7 +104,7 @@ func (s *PaxosServer) PrintDB(ctx context.Context, req *emptypb.Empty) (*emptypb
 	log.Infof("Print database command received")
 
 	fmt.Println("DATABASE FOR TEST SET:", 0)
-	dbState, err := s.DB.GetDBState()
+	dbState, err := s.executor.db.GetDBState()
 	if err != nil {
 		log.Fatal(err)
 	}

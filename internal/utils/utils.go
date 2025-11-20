@@ -28,32 +28,7 @@ func AcceptedMessageString(x *pb.AcceptedMessage) string {
 		BallotNumberString(x.B),
 		x.SequenceNum,
 		TransactionRequestString(x.Message),
-		x.AcceptorID,
-	)
-}
-
-func PrintLogString(x *pb.AcceptRecord) string {
-	if x == nil {
-		return "<LOG, nil>"
-	}
-	return fmt.Sprintf(
-		"%s, <Committed: %t, Executed: %t, Result: %t>",
-		AcceptRecordString(x),
-		x.Committed,
-		x.Executed,
-		x.Result,
-	)
-}
-
-func AcceptRecordString(x *pb.AcceptRecord) string {
-	if x == nil {
-		return "<ACCEPT, nil>"
-	}
-	return fmt.Sprintf(
-		"<ACCEPT, %s, %d, %s>",
-		BallotNumberString(x.AcceptedBallotNum),
-		x.AcceptedSequenceNum,
-		TransactionRequestString(x.AcceptedVal),
+		x.NodeID,
 	)
 }
 

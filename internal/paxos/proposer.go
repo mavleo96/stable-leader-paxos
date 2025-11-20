@@ -2,256 +2,137 @@ package paxos
 
 import (
 	"context"
-	"io"
+	"errors"
 	"sync"
 
+	"github.com/mavleo96/stable-leader-paxos/internal/models"
+	"github.com/mavleo96/stable-leader-paxos/internal/utils"
 	pb "github.com/mavleo96/stable-leader-paxos/pb"
 	log "github.com/sirupsen/logrus"
-	"google.golang.org/grpc"
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/credentials/insecure"
-	"google.golang.org/grpc/status"
-	"google.golang.org/protobuf/types/known/wrapperspb"
 )
 
-// SendPrepareRequest sends a prepare request to all peers except self and returns the response from each peer to PrepareRoutine
-// This code is part of Proposer structure
-func (s *PaxosServer) SendPrepareRequest(req *pb.PrepareMessage) (bool, map[string][]*pb.AcceptRecord, error) {
-	peerAcceptLog := map[string][]*pb.AcceptRecord{} // mutex not needed here since its a map
-
-	// Multicast prepare request to all peers except self
-	// We wait for only f+1 Goroutines to return
-	responseChan := make(chan bool, len(s.Peers)-1)
-	for _, peer := range s.Peers {
-		id := peer.ID
-		if id == s.NodeID {
-			continue
-		}
-		addr := peer.Address
-
-		log.Infof("Sending prepare request to %s", id)
-		go func(id, addr string) {
-			// Initialize connection to peer
-			conn, err := grpc.NewClient(addr, grpc.WithTransportCredentials(insecure.NewCredentials()))
-			if err != nil {
-				log.Warn(err)
-			}
-			defer conn.Close()
-			client := pb.NewPaxosNodeClient(conn)
-
-			// Send prepare request to peer
-			resp, err := client.PrepareRequest(context.Background(), req)
-			log.Infof("Prepare response from %s: %v", addr, resp.String())
-			if err != nil {
-				log.Warn(err)
-				responseChan <- false
-				return
-			}
-			if !resp.Ok {
-				responseChan <- false
-				return // if not accepted, return without incrementing promiseCount
-			}
-			peerAcceptLog[id] = resp.AcceptLog
-			responseChan <- true
-		}(id, addr)
-	}
-	log.Infof("Waiting for prepare responses")
-
-	// Count promises and rejects
-	promiseCount := int64(1) // 1 is for self
-	rejectedCount := int64(0)
-	for i := 0; i < len(s.Peers)-1; i++ {
-		ok := <-responseChan
-		if ok {
-			promiseCount++
-		} else {
-			rejectedCount++
-		}
-		if rejectedCount >= s.config.F+1 || promiseCount >= s.config.F+1 {
-			break
-		}
-	}
-
-	// Check if promiseCount is less than quorum
-	if promiseCount < s.config.F+1 {
-		return false, nil, nil
-	}
-	return true, peerAcceptLog, nil
+// Proposer structure handles proposer logic for leader node
+type Proposer struct {
+	id                 string
+	state              *ServerState
+	config             *ServerConfig
+	peers              map[string]*models.Node
+	executionTriggerCh chan int64
+	logger             *Logger
 }
 
-// SendNewViewRequest sends a new view request to all peers except self and returns the count of accepted requests for each sequence number
-// This code is part of Proposer structure
-func (s *PaxosServer) SendNewViewRequest(req *pb.NewViewMessage) (map[int64]int64, error) {
-	// Initialize accept count map with 1 for self
-	mu := sync.Mutex{}
-	acceptCountMap := make(map[int64]int64)
-	for _, record := range req.AcceptLog {
-		acceptCountMap[record.AcceptedSequenceNum] = 1
+// HandleTransactionRequest handles the transaction request and returns the sequence number
+func (p *Proposer) HandleTransactionRequest(req *pb.TransactionRequest) int64 {
+	// Assign a sequence number and create a record if it doesn't exist
+	sequenceNum, _ := p.state.StateLog.AssignSequenceNumberAndCreateRecord(p.state.GetBallotNumber(), req)
+	log.Infof("[Proposer] Assigned sequence number %d for request %s", sequenceNum, utils.TransactionRequestString(req))
+
+	// go p.RunProtocol(sequenceNum)
+
+	return sequenceNum
+}
+
+// RunProtocol runs the paxos protocol for a given sequence number
+func (p *Proposer) RunProtocol(sequenceNum int64) error {
+	log.Infof("[Proposer] Running protocol for sequence number %d", sequenceNum)
+	// Run accept phase and set accepted flag
+	p.state.StateLog.SetAccepted(sequenceNum)
+	acceptMessage := &pb.AcceptMessage{
+		B:           p.state.GetBallotNumber(),
+		SequenceNum: sequenceNum,
+		Message:     p.state.StateLog.GetRequest(sequenceNum),
+	}
+	// Logger: Add sent accept message
+	p.logger.AddSentAcceptMessage(acceptMessage)
+	accepted, err := p.RunAcceptPhase(acceptMessage)
+	if err != nil {
+		return err
+	}
+	if !accepted {
+		return errors.New("accept request failed insufficient quorum")
 	}
 
-	// Multicast new view request to all peers except self
+	// If accepted, set committed flag and run commit phase
+	p.state.StateLog.SetCommitted(sequenceNum)
+	commitMessage := &pb.CommitMessage{
+		B:           p.state.GetBallotNumber(),
+		SequenceNum: sequenceNum,
+		Message:     p.state.StateLog.GetRequest(sequenceNum),
+	}
+	// Logger: Add sent commit message
+	p.logger.AddSentCommitMessage(commitMessage)
+	go p.BroadcastCommitRequest(commitMessage)
+
+	// If not executed, trigger execution
+	if !p.state.StateLog.IsExecuted(sequenceNum) {
+		p.executionTriggerCh <- sequenceNum
+	}
+
+	return nil
+}
+
+// RunAcceptPhase sends an accept request to all peers and returns the response from each peer
+func (p *Proposer) RunAcceptPhase(req *pb.AcceptMessage) (bool, error) {
+	// Multicast accept request to all peers
 	wg := sync.WaitGroup{}
-	for _, peer := range s.Peers {
-		id := peer.ID
-		if id == s.NodeID {
-			continue
-		}
-		addr := peer.Address
+	responseCh := make(chan bool, len(p.peers))
+	log.Infof("[Proposer] Running accept phase for request %s", utils.TransactionRequestString(req.Message))
+	for _, peer := range p.peers {
 		wg.Add(1)
-		go func(id, addr string) {
+		go func(peer *models.Node, responseCh chan bool) {
 			defer wg.Done()
-			// Initialize connection to peer
-			conn, err := grpc.NewClient(addr, grpc.WithTransportCredentials(insecure.NewCredentials()))
+			resp, err := (*peer.Client).AcceptRequest(context.Background(), req)
 			if err != nil {
 				log.Warn(err)
+				responseCh <- false
+				return
 			}
-			defer conn.Close()
-			client := pb.NewPaxosNodeClient(conn)
+			// Logger: Add received accepted message
+			p.logger.AddReceivedAcceptedMessage(resp)
+			responseCh <- true
+		}(peer, responseCh)
+	}
+	go func() {
+		wg.Wait()
+		close(responseCh)
+	}()
 
-			// Send new view request to peer
-			stream, err := client.NewViewRequest(context.Background(), req)
+	// Wait for responses and check if quorum of accepts is reached
+	acceptedCount := int64(1)
+	for a := range responseCh {
+		if a {
+			acceptedCount++
+		}
+		if acceptedCount >= p.config.F+1 {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
+// BroadcastCommitRequest sends a commit request to all peers
+func (p *Proposer) BroadcastCommitRequest(req *pb.CommitMessage) error {
+	log.Infof("[Proposer] Broadcasting commit request %s", utils.TransactionRequestString(req.Message))
+	for _, peer := range p.peers {
+		go func(peer *models.Node) {
+			_, err := (*peer.Client).CommitRequest(context.Background(), req)
 			if err != nil {
 				log.Warn(err)
 				return
 			}
-			// Stream accept responses from peer
-			for {
-				resp, err := stream.Recv()
-				if err == io.EOF {
-					break
-				}
-				if err != nil {
-					log.Warn(err)
-					return
-				}
-				// Update accept count map
-				mu.Lock()
-				acceptCountMap[resp.SequenceNum]++
-				mu.Unlock()
-			}
-		}(id, addr)
-	}
-	wg.Wait()
-
-	return acceptCountMap, nil
-}
-
-// SendAcceptRequest handles the accept request rpc on node client side
-// Returns: (accepted, rejected, error)
-// This code is part of Proposer structure
-func (s *PaxosServer) SendAcceptRequest(req *pb.AcceptMessage) (bool, bool, error) {
-
-	mu := sync.Mutex{}
-	acceptCount := int64(1)
-	rejectedCount := int64(0)
-
-	// Multicast accept request to all peers except self
-	wg := sync.WaitGroup{}
-	for _, peer := range s.Peers {
-		id := peer.ID
-		if id == s.NodeID {
-			continue
-		}
-		addr := peer.Address
-		wg.Add(1)
-		go func(id, addr string) {
-			defer wg.Done()
-			// Initialize connection to peer
-			conn, err := grpc.NewClient(addr, grpc.WithTransportCredentials(insecure.NewCredentials()))
-			if err != nil {
-				log.Warn(err)
-			}
-			defer conn.Close()
-			client := pb.NewPaxosNodeClient(conn)
-
-			// Send accept request to peer
-			resp, err := client.AcceptRequest(context.Background(), req)
-			if err != nil {
-				log.Warn(err)
-				return
-			}
-			mu.Lock()
-			defer mu.Unlock()
-			if !resp.Ok {
-				rejectedCount++
-				return // if not accepted, return without incrementing acceptCount
-			}
-			acceptCount++
-		}(id, addr)
-	}
-	wg.Wait()
-
-	if rejectedCount >= s.config.F+1 {
-		return false, true, nil
-	}
-
-	// Check if acceptCount is less than quorum
-	if acceptCount >= s.config.F+1 {
-		return true, false, nil
-	}
-	return false, false, nil
-}
-
-// SendCommitRequest handles the commit request rpc on node client side
-// This code is part of Proposer structure
-func (s *PaxosServer) SendCommitRequest(req *pb.CommitMessage) error {
-	// Multicast commit request to all peers except self
-	for _, peer := range s.Peers { // No need to wait for response from peers
-		id := peer.ID
-		if id == s.NodeID {
-			continue // Skip self here
-		}
-		addr := peer.Address
-		go func(id, addr string) {
-			// Initialize connection to peer
-			conn, err := grpc.NewClient(addr, grpc.WithTransportCredentials(insecure.NewCredentials()))
-			if err != nil {
-				log.Warn(err)
-			}
-			defer conn.Close()
-
-			// Send commit request to peer
-			client := pb.NewPaxosNodeClient(conn)
-			_, err = client.CommitRequest(context.Background(), req)
-			if err != nil {
-				log.Warn(err)
-			}
-		}(id, addr)
+		}(peer)
 	}
 	return nil
 }
 
-func (s *PaxosServer) SendCatchUpRequest(sequenceNum int64) (*pb.CatchupMessage, error) {
-	// Multicast catch up request to all peers except self
-	responseChan := make(chan *pb.CatchupMessage)
-	for _, peer := range s.Peers {
-		id := peer.ID
-		if id == s.NodeID {
-			continue
-		}
-		addr := peer.Address
-		go func(id, addr string) {
-			// Initialize connection to peer
-			conn, err := grpc.NewClient(addr, grpc.WithTransportCredentials(insecure.NewCredentials()))
-			if err != nil {
-				log.Warn(err)
-			}
-			defer conn.Close()
-			client := pb.NewPaxosNodeClient(conn)
-			record, err := client.CatchupRequest(context.Background(), &wrapperspb.Int64Value{Value: sequenceNum})
-			if err != nil {
-				log.Warn(err)
-				responseChan <- nil
-				return
-			}
-			responseChan <- record
-		}(id, addr)
+// CreateProposer creates a new proposer
+func CreateProposer(id string, state *ServerState, config *ServerConfig, peers map[string]*models.Node, executionTriggerCh chan int64, logger *Logger) *Proposer {
+	return &Proposer{
+		id:                 id,
+		state:              state,
+		config:             config,
+		peers:              peers,
+		executionTriggerCh: executionTriggerCh,
+		logger:             logger,
 	}
-	for i := 0; i < len(s.Peers)-1; i++ {
-		catchupMessage := <-responseChan
-		if catchupMessage != nil {
-			return catchupMessage, nil
-		}
-	}
-	return nil, status.Errorf(codes.Unavailable, "failed to get catch up message from leader")
 }

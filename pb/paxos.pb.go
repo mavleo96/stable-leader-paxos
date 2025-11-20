@@ -257,9 +257,8 @@ func (x *PrepareMessage) GetB() *BallotNumber {
 
 type AckMessage struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	Ok            bool                   `protobuf:"varint,1,opt,name=ok,proto3" json:"ok,omitempty"`
-	AcceptNum     *BallotNumber          `protobuf:"bytes,2,opt,name=acceptNum,proto3" json:"acceptNum,omitempty"`
-	AcceptLog     []*AcceptRecord        `protobuf:"bytes,3,rep,name=acceptLog,proto3" json:"acceptLog,omitempty"`
+	B             *BallotNumber          `protobuf:"bytes,1,opt,name=b,proto3" json:"b,omitempty"`
+	AcceptLog     []*AcceptedMessage     `protobuf:"bytes,2,rep,name=acceptLog,proto3" json:"acceptLog,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -294,21 +293,14 @@ func (*AckMessage) Descriptor() ([]byte, []int) {
 	return file_paxos_proto_rawDescGZIP(), []int{4}
 }
 
-func (x *AckMessage) GetOk() bool {
+func (x *AckMessage) GetB() *BallotNumber {
 	if x != nil {
-		return x.Ok
-	}
-	return false
-}
-
-func (x *AckMessage) GetAcceptNum() *BallotNumber {
-	if x != nil {
-		return x.AcceptNum
+		return x.B
 	}
 	return nil
 }
 
-func (x *AckMessage) GetAcceptLog() []*AcceptRecord {
+func (x *AckMessage) GetAcceptLog() []*AcceptedMessage {
 	if x != nil {
 		return x.AcceptLog
 	}
@@ -367,90 +359,6 @@ func (x *BallotNumber) GetNodeID() string {
 	return ""
 }
 
-type AcceptRecord struct {
-	state               protoimpl.MessageState `protogen:"open.v1"`
-	AcceptedBallotNum   *BallotNumber          `protobuf:"bytes,1,opt,name=acceptedBallotNum,proto3" json:"acceptedBallotNum,omitempty"`
-	AcceptedSequenceNum int64                  `protobuf:"varint,2,opt,name=acceptedSequenceNum,proto3" json:"acceptedSequenceNum,omitempty"`
-	AcceptedVal         *TransactionRequest    `protobuf:"bytes,3,opt,name=acceptedVal,proto3" json:"acceptedVal,omitempty"`
-	Committed           bool                   `protobuf:"varint,4,opt,name=Committed,proto3" json:"Committed,omitempty"`
-	Executed            bool                   `protobuf:"varint,5,opt,name=Executed,proto3" json:"Executed,omitempty"`
-	Result              bool                   `protobuf:"varint,6,opt,name=Result,proto3" json:"Result,omitempty"`
-	unknownFields       protoimpl.UnknownFields
-	sizeCache           protoimpl.SizeCache
-}
-
-func (x *AcceptRecord) Reset() {
-	*x = AcceptRecord{}
-	mi := &file_paxos_proto_msgTypes[6]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *AcceptRecord) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*AcceptRecord) ProtoMessage() {}
-
-func (x *AcceptRecord) ProtoReflect() protoreflect.Message {
-	mi := &file_paxos_proto_msgTypes[6]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use AcceptRecord.ProtoReflect.Descriptor instead.
-func (*AcceptRecord) Descriptor() ([]byte, []int) {
-	return file_paxos_proto_rawDescGZIP(), []int{6}
-}
-
-func (x *AcceptRecord) GetAcceptedBallotNum() *BallotNumber {
-	if x != nil {
-		return x.AcceptedBallotNum
-	}
-	return nil
-}
-
-func (x *AcceptRecord) GetAcceptedSequenceNum() int64 {
-	if x != nil {
-		return x.AcceptedSequenceNum
-	}
-	return 0
-}
-
-func (x *AcceptRecord) GetAcceptedVal() *TransactionRequest {
-	if x != nil {
-		return x.AcceptedVal
-	}
-	return nil
-}
-
-func (x *AcceptRecord) GetCommitted() bool {
-	if x != nil {
-		return x.Committed
-	}
-	return false
-}
-
-func (x *AcceptRecord) GetExecuted() bool {
-	if x != nil {
-		return x.Executed
-	}
-	return false
-}
-
-func (x *AcceptRecord) GetResult() bool {
-	if x != nil {
-		return x.Result
-	}
-	return false
-}
-
 type AcceptMessage struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	B             *BallotNumber          `protobuf:"bytes,1,opt,name=b,proto3" json:"b,omitempty"`
@@ -462,7 +370,7 @@ type AcceptMessage struct {
 
 func (x *AcceptMessage) Reset() {
 	*x = AcceptMessage{}
-	mi := &file_paxos_proto_msgTypes[7]
+	mi := &file_paxos_proto_msgTypes[6]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -474,7 +382,7 @@ func (x *AcceptMessage) String() string {
 func (*AcceptMessage) ProtoMessage() {}
 
 func (x *AcceptMessage) ProtoReflect() protoreflect.Message {
-	mi := &file_paxos_proto_msgTypes[7]
+	mi := &file_paxos_proto_msgTypes[6]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -487,7 +395,7 @@ func (x *AcceptMessage) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AcceptMessage.ProtoReflect.Descriptor instead.
 func (*AcceptMessage) Descriptor() ([]byte, []int) {
-	return file_paxos_proto_rawDescGZIP(), []int{7}
+	return file_paxos_proto_rawDescGZIP(), []int{6}
 }
 
 func (x *AcceptMessage) GetB() *BallotNumber {
@@ -513,18 +421,17 @@ func (x *AcceptMessage) GetMessage() *TransactionRequest {
 
 type AcceptedMessage struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	Ok            bool                   `protobuf:"varint,1,opt,name=ok,proto3" json:"ok,omitempty"`
-	B             *BallotNumber          `protobuf:"bytes,2,opt,name=b,proto3" json:"b,omitempty"`
-	SequenceNum   int64                  `protobuf:"varint,3,opt,name=sequenceNum,proto3" json:"sequenceNum,omitempty"`
-	Message       *TransactionRequest    `protobuf:"bytes,4,opt,name=message,proto3" json:"message,omitempty"`
-	AcceptorID    string                 `protobuf:"bytes,5,opt,name=acceptorID,proto3" json:"acceptorID,omitempty"`
+	B             *BallotNumber          `protobuf:"bytes,1,opt,name=b,proto3" json:"b,omitempty"`
+	SequenceNum   int64                  `protobuf:"varint,2,opt,name=sequenceNum,proto3" json:"sequenceNum,omitempty"`
+	Message       *TransactionRequest    `protobuf:"bytes,3,opt,name=message,proto3" json:"message,omitempty"`
+	NodeID        string                 `protobuf:"bytes,4,opt,name=nodeID,proto3" json:"nodeID,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
 func (x *AcceptedMessage) Reset() {
 	*x = AcceptedMessage{}
-	mi := &file_paxos_proto_msgTypes[8]
+	mi := &file_paxos_proto_msgTypes[7]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -536,7 +443,7 @@ func (x *AcceptedMessage) String() string {
 func (*AcceptedMessage) ProtoMessage() {}
 
 func (x *AcceptedMessage) ProtoReflect() protoreflect.Message {
-	mi := &file_paxos_proto_msgTypes[8]
+	mi := &file_paxos_proto_msgTypes[7]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -549,14 +456,7 @@ func (x *AcceptedMessage) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AcceptedMessage.ProtoReflect.Descriptor instead.
 func (*AcceptedMessage) Descriptor() ([]byte, []int) {
-	return file_paxos_proto_rawDescGZIP(), []int{8}
-}
-
-func (x *AcceptedMessage) GetOk() bool {
-	if x != nil {
-		return x.Ok
-	}
-	return false
+	return file_paxos_proto_rawDescGZIP(), []int{7}
 }
 
 func (x *AcceptedMessage) GetB() *BallotNumber {
@@ -580,9 +480,9 @@ func (x *AcceptedMessage) GetMessage() *TransactionRequest {
 	return nil
 }
 
-func (x *AcceptedMessage) GetAcceptorID() string {
+func (x *AcceptedMessage) GetNodeID() string {
 	if x != nil {
-		return x.AcceptorID
+		return x.NodeID
 	}
 	return ""
 }
@@ -591,14 +491,14 @@ type CommitMessage struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	B             *BallotNumber          `protobuf:"bytes,1,opt,name=b,proto3" json:"b,omitempty"`
 	SequenceNum   int64                  `protobuf:"varint,2,opt,name=sequenceNum,proto3" json:"sequenceNum,omitempty"`
-	Transaction   *TransactionRequest    `protobuf:"bytes,3,opt,name=transaction,proto3" json:"transaction,omitempty"`
+	Message       *TransactionRequest    `protobuf:"bytes,3,opt,name=message,proto3" json:"message,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
 func (x *CommitMessage) Reset() {
 	*x = CommitMessage{}
-	mi := &file_paxos_proto_msgTypes[9]
+	mi := &file_paxos_proto_msgTypes[8]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -610,7 +510,7 @@ func (x *CommitMessage) String() string {
 func (*CommitMessage) ProtoMessage() {}
 
 func (x *CommitMessage) ProtoReflect() protoreflect.Message {
-	mi := &file_paxos_proto_msgTypes[9]
+	mi := &file_paxos_proto_msgTypes[8]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -623,7 +523,7 @@ func (x *CommitMessage) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CommitMessage.ProtoReflect.Descriptor instead.
 func (*CommitMessage) Descriptor() ([]byte, []int) {
-	return file_paxos_proto_rawDescGZIP(), []int{9}
+	return file_paxos_proto_rawDescGZIP(), []int{8}
 }
 
 func (x *CommitMessage) GetB() *BallotNumber {
@@ -640,9 +540,9 @@ func (x *CommitMessage) GetSequenceNum() int64 {
 	return 0
 }
 
-func (x *CommitMessage) GetTransaction() *TransactionRequest {
+func (x *CommitMessage) GetMessage() *TransactionRequest {
 	if x != nil {
-		return x.Transaction
+		return x.Message
 	}
 	return nil
 }
@@ -650,14 +550,14 @@ func (x *CommitMessage) GetTransaction() *TransactionRequest {
 type NewViewMessage struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	B             *BallotNumber          `protobuf:"bytes,1,opt,name=b,proto3" json:"b,omitempty"`
-	AcceptLog     []*AcceptRecord        `protobuf:"bytes,2,rep,name=acceptLog,proto3" json:"acceptLog,omitempty"`
+	AcceptLog     []*AcceptMessage       `protobuf:"bytes,2,rep,name=acceptLog,proto3" json:"acceptLog,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
 func (x *NewViewMessage) Reset() {
 	*x = NewViewMessage{}
-	mi := &file_paxos_proto_msgTypes[10]
+	mi := &file_paxos_proto_msgTypes[9]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -669,7 +569,7 @@ func (x *NewViewMessage) String() string {
 func (*NewViewMessage) ProtoMessage() {}
 
 func (x *NewViewMessage) ProtoReflect() protoreflect.Message {
-	mi := &file_paxos_proto_msgTypes[10]
+	mi := &file_paxos_proto_msgTypes[9]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -682,7 +582,7 @@ func (x *NewViewMessage) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use NewViewMessage.ProtoReflect.Descriptor instead.
 func (*NewViewMessage) Descriptor() ([]byte, []int) {
-	return file_paxos_proto_rawDescGZIP(), []int{10}
+	return file_paxos_proto_rawDescGZIP(), []int{9}
 }
 
 func (x *NewViewMessage) GetB() *BallotNumber {
@@ -692,17 +592,69 @@ func (x *NewViewMessage) GetB() *BallotNumber {
 	return nil
 }
 
-func (x *NewViewMessage) GetAcceptLog() []*AcceptRecord {
+func (x *NewViewMessage) GetAcceptLog() []*AcceptMessage {
 	if x != nil {
 		return x.AcceptLog
 	}
 	return nil
 }
 
+type CatchupRequestMessage struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	NodeID        string                 `protobuf:"bytes,1,opt,name=nodeID,proto3" json:"nodeID,omitempty"`
+	SequenceNum   int64                  `protobuf:"varint,2,opt,name=sequenceNum,proto3" json:"sequenceNum,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *CatchupRequestMessage) Reset() {
+	*x = CatchupRequestMessage{}
+	mi := &file_paxos_proto_msgTypes[10]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *CatchupRequestMessage) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*CatchupRequestMessage) ProtoMessage() {}
+
+func (x *CatchupRequestMessage) ProtoReflect() protoreflect.Message {
+	mi := &file_paxos_proto_msgTypes[10]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use CatchupRequestMessage.ProtoReflect.Descriptor instead.
+func (*CatchupRequestMessage) Descriptor() ([]byte, []int) {
+	return file_paxos_proto_rawDescGZIP(), []int{10}
+}
+
+func (x *CatchupRequestMessage) GetNodeID() string {
+	if x != nil {
+		return x.NodeID
+	}
+	return ""
+}
+
+func (x *CatchupRequestMessage) GetSequenceNum() int64 {
+	if x != nil {
+		return x.SequenceNum
+	}
+	return 0
+}
+
 type CatchupMessage struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	B             *BallotNumber          `protobuf:"bytes,1,opt,name=b,proto3" json:"b,omitempty"`
-	AcceptLog     []*AcceptRecord        `protobuf:"bytes,2,rep,name=acceptLog,proto3" json:"acceptLog,omitempty"`
+	CommitLog     []*CommitMessage       `protobuf:"bytes,2,rep,name=commitLog,proto3" json:"commitLog,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -744,9 +696,9 @@ func (x *CatchupMessage) GetB() *BallotNumber {
 	return nil
 }
 
-func (x *CatchupMessage) GetAcceptLog() []*AcceptRecord {
+func (x *CatchupMessage) GetCommitLog() []*CommitMessage {
 	if x != nil {
-		return x.AcceptLog
+		return x.CommitLog
 	}
 	return nil
 }
@@ -770,51 +722,43 @@ const file_paxos_proto_rawDesc = "" +
 	"\breceiver\x18\x02 \x01(\tR\breceiver\x12\x16\n" +
 	"\x06amount\x18\x03 \x01(\x03R\x06amount\"0\n" +
 	"\x0ePrepareMessage\x12\x1e\n" +
-	"\x01b\x18\x01 \x01(\v2\x10.pb.BallotNumberR\x01b\"|\n" +
+	"\x01b\x18\x01 \x01(\v2\x10.pb.BallotNumberR\x01b\"_\n" +
 	"\n" +
-	"AckMessage\x12\x0e\n" +
-	"\x02ok\x18\x01 \x01(\bR\x02ok\x12.\n" +
-	"\tacceptNum\x18\x02 \x01(\v2\x10.pb.BallotNumberR\tacceptNum\x12.\n" +
-	"\tacceptLog\x18\x03 \x03(\v2\x10.pb.AcceptRecordR\tacceptLog\"4\n" +
+	"AckMessage\x12\x1e\n" +
+	"\x01b\x18\x01 \x01(\v2\x10.pb.BallotNumberR\x01b\x121\n" +
+	"\tacceptLog\x18\x02 \x03(\v2\x13.pb.AcceptedMessageR\tacceptLog\"4\n" +
 	"\fBallotNumber\x12\f\n" +
 	"\x01n\x18\x01 \x01(\x03R\x01n\x12\x16\n" +
-	"\x06nodeID\x18\x02 \x01(\tR\x06nodeID\"\x8c\x02\n" +
-	"\fAcceptRecord\x12>\n" +
-	"\x11acceptedBallotNum\x18\x01 \x01(\v2\x10.pb.BallotNumberR\x11acceptedBallotNum\x120\n" +
-	"\x13acceptedSequenceNum\x18\x02 \x01(\x03R\x13acceptedSequenceNum\x128\n" +
-	"\vacceptedVal\x18\x03 \x01(\v2\x16.pb.TransactionRequestR\vacceptedVal\x12\x1c\n" +
-	"\tCommitted\x18\x04 \x01(\bR\tCommitted\x12\x1a\n" +
-	"\bExecuted\x18\x05 \x01(\bR\bExecuted\x12\x16\n" +
-	"\x06Result\x18\x06 \x01(\bR\x06Result\"\x83\x01\n" +
+	"\x06nodeID\x18\x02 \x01(\tR\x06nodeID\"\x83\x01\n" +
 	"\rAcceptMessage\x12\x1e\n" +
 	"\x01b\x18\x01 \x01(\v2\x10.pb.BallotNumberR\x01b\x12 \n" +
 	"\vsequenceNum\x18\x02 \x01(\x03R\vsequenceNum\x120\n" +
-	"\amessage\x18\x03 \x01(\v2\x16.pb.TransactionRequestR\amessage\"\xb5\x01\n" +
-	"\x0fAcceptedMessage\x12\x0e\n" +
-	"\x02ok\x18\x01 \x01(\bR\x02ok\x12\x1e\n" +
-	"\x01b\x18\x02 \x01(\v2\x10.pb.BallotNumberR\x01b\x12 \n" +
-	"\vsequenceNum\x18\x03 \x01(\x03R\vsequenceNum\x120\n" +
-	"\amessage\x18\x04 \x01(\v2\x16.pb.TransactionRequestR\amessage\x12\x1e\n" +
-	"\n" +
-	"acceptorID\x18\x05 \x01(\tR\n" +
-	"acceptorID\"\x8b\x01\n" +
+	"\amessage\x18\x03 \x01(\v2\x16.pb.TransactionRequestR\amessage\"\x9d\x01\n" +
+	"\x0fAcceptedMessage\x12\x1e\n" +
+	"\x01b\x18\x01 \x01(\v2\x10.pb.BallotNumberR\x01b\x12 \n" +
+	"\vsequenceNum\x18\x02 \x01(\x03R\vsequenceNum\x120\n" +
+	"\amessage\x18\x03 \x01(\v2\x16.pb.TransactionRequestR\amessage\x12\x16\n" +
+	"\x06nodeID\x18\x04 \x01(\tR\x06nodeID\"\x83\x01\n" +
 	"\rCommitMessage\x12\x1e\n" +
 	"\x01b\x18\x01 \x01(\v2\x10.pb.BallotNumberR\x01b\x12 \n" +
-	"\vsequenceNum\x18\x02 \x01(\x03R\vsequenceNum\x128\n" +
-	"\vtransaction\x18\x03 \x01(\v2\x16.pb.TransactionRequestR\vtransaction\"`\n" +
+	"\vsequenceNum\x18\x02 \x01(\x03R\vsequenceNum\x120\n" +
+	"\amessage\x18\x03 \x01(\v2\x16.pb.TransactionRequestR\amessage\"a\n" +
 	"\x0eNewViewMessage\x12\x1e\n" +
-	"\x01b\x18\x01 \x01(\v2\x10.pb.BallotNumberR\x01b\x12.\n" +
-	"\tacceptLog\x18\x02 \x03(\v2\x10.pb.AcceptRecordR\tacceptLog\"`\n" +
+	"\x01b\x18\x01 \x01(\v2\x10.pb.BallotNumberR\x01b\x12/\n" +
+	"\tacceptLog\x18\x02 \x03(\v2\x11.pb.AcceptMessageR\tacceptLog\"Q\n" +
+	"\x15CatchupRequestMessage\x12\x16\n" +
+	"\x06nodeID\x18\x01 \x01(\tR\x06nodeID\x12 \n" +
+	"\vsequenceNum\x18\x02 \x01(\x03R\vsequenceNum\"a\n" +
 	"\x0eCatchupMessage\x12\x1e\n" +
-	"\x01b\x18\x01 \x01(\v2\x10.pb.BallotNumberR\x01b\x12.\n" +
-	"\tacceptLog\x18\x02 \x03(\v2\x10.pb.AcceptRecordR\tacceptLog2\xf8\x05\n" +
+	"\x01b\x18\x01 \x01(\v2\x10.pb.BallotNumberR\x01b\x12/\n" +
+	"\tcommitLog\x18\x02 \x03(\v2\x11.pb.CommitMessageR\tcommitLog2\xf6\x05\n" +
 	"\tPaxosNode\x12B\n" +
 	"\x0fTransferRequest\x12\x16.pb.TransactionRequest\x1a\x17.pb.TransactionResponse\x124\n" +
 	"\x0ePrepareRequest\x12\x12.pb.PrepareMessage\x1a\x0e.pb.AckMessage\x127\n" +
 	"\rAcceptRequest\x12\x11.pb.AcceptMessage\x1a\x13.pb.AcceptedMessage\x12:\n" +
 	"\rCommitRequest\x12\x11.pb.CommitMessage\x1a\x16.google.protobuf.Empty\x12;\n" +
-	"\x0eNewViewRequest\x12\x12.pb.NewViewMessage\x1a\x13.pb.AcceptedMessage0\x01\x12A\n" +
-	"\x0eCatchupRequest\x12\x1b.google.protobuf.Int64Value\x1a\x12.pb.CatchupMessage\x12:\n" +
+	"\x0eNewViewRequest\x12\x12.pb.NewViewMessage\x1a\x13.pb.AcceptedMessage0\x01\x12?\n" +
+	"\x0eCatchupRequest\x12\x19.pb.CatchupRequestMessage\x1a\x12.pb.CatchupMessage\x12:\n" +
 	"\bPrintLog\x12\x16.google.protobuf.Empty\x1a\x16.google.protobuf.Empty\x129\n" +
 	"\aPrintDB\x12\x16.google.protobuf.Empty\x1a\x16.google.protobuf.Empty\x12B\n" +
 	"\vPrintStatus\x12\x1b.google.protobuf.Int64Value\x1a\x16.google.protobuf.Empty\x12;\n" +
@@ -843,63 +787,61 @@ var file_paxos_proto_goTypes = []any{
 	(*PrepareMessage)(nil),        // 3: pb.PrepareMessage
 	(*AckMessage)(nil),            // 4: pb.AckMessage
 	(*BallotNumber)(nil),          // 5: pb.BallotNumber
-	(*AcceptRecord)(nil),          // 6: pb.AcceptRecord
-	(*AcceptMessage)(nil),         // 7: pb.AcceptMessage
-	(*AcceptedMessage)(nil),       // 8: pb.AcceptedMessage
-	(*CommitMessage)(nil),         // 9: pb.CommitMessage
-	(*NewViewMessage)(nil),        // 10: pb.NewViewMessage
+	(*AcceptMessage)(nil),         // 6: pb.AcceptMessage
+	(*AcceptedMessage)(nil),       // 7: pb.AcceptedMessage
+	(*CommitMessage)(nil),         // 8: pb.CommitMessage
+	(*NewViewMessage)(nil),        // 9: pb.NewViewMessage
+	(*CatchupRequestMessage)(nil), // 10: pb.CatchupRequestMessage
 	(*CatchupMessage)(nil),        // 11: pb.CatchupMessage
-	(*wrapperspb.Int64Value)(nil), // 12: google.protobuf.Int64Value
-	(*emptypb.Empty)(nil),         // 13: google.protobuf.Empty
+	(*emptypb.Empty)(nil),         // 12: google.protobuf.Empty
+	(*wrapperspb.Int64Value)(nil), // 13: google.protobuf.Int64Value
 	(*wrapperspb.BoolValue)(nil),  // 14: google.protobuf.BoolValue
 }
 var file_paxos_proto_depIdxs = []int32{
 	5,  // 0: pb.TransactionResponse.b:type_name -> pb.BallotNumber
 	2,  // 1: pb.TransactionRequest.transaction:type_name -> pb.Transaction
 	5,  // 2: pb.PrepareMessage.b:type_name -> pb.BallotNumber
-	5,  // 3: pb.AckMessage.acceptNum:type_name -> pb.BallotNumber
-	6,  // 4: pb.AckMessage.acceptLog:type_name -> pb.AcceptRecord
-	5,  // 5: pb.AcceptRecord.acceptedBallotNum:type_name -> pb.BallotNumber
-	1,  // 6: pb.AcceptRecord.acceptedVal:type_name -> pb.TransactionRequest
-	5,  // 7: pb.AcceptMessage.b:type_name -> pb.BallotNumber
-	1,  // 8: pb.AcceptMessage.message:type_name -> pb.TransactionRequest
-	5,  // 9: pb.AcceptedMessage.b:type_name -> pb.BallotNumber
-	1,  // 10: pb.AcceptedMessage.message:type_name -> pb.TransactionRequest
-	5,  // 11: pb.CommitMessage.b:type_name -> pb.BallotNumber
-	1,  // 12: pb.CommitMessage.transaction:type_name -> pb.TransactionRequest
-	5,  // 13: pb.NewViewMessage.b:type_name -> pb.BallotNumber
-	6,  // 14: pb.NewViewMessage.acceptLog:type_name -> pb.AcceptRecord
-	5,  // 15: pb.CatchupMessage.b:type_name -> pb.BallotNumber
-	6,  // 16: pb.CatchupMessage.acceptLog:type_name -> pb.AcceptRecord
-	1,  // 17: pb.PaxosNode.TransferRequest:input_type -> pb.TransactionRequest
-	3,  // 18: pb.PaxosNode.PrepareRequest:input_type -> pb.PrepareMessage
-	7,  // 19: pb.PaxosNode.AcceptRequest:input_type -> pb.AcceptMessage
-	9,  // 20: pb.PaxosNode.CommitRequest:input_type -> pb.CommitMessage
-	10, // 21: pb.PaxosNode.NewViewRequest:input_type -> pb.NewViewMessage
-	12, // 22: pb.PaxosNode.CatchupRequest:input_type -> google.protobuf.Int64Value
-	13, // 23: pb.PaxosNode.PrintLog:input_type -> google.protobuf.Empty
-	13, // 24: pb.PaxosNode.PrintDB:input_type -> google.protobuf.Empty
-	12, // 25: pb.PaxosNode.PrintStatus:input_type -> google.protobuf.Int64Value
-	13, // 26: pb.PaxosNode.PrintView:input_type -> google.protobuf.Empty
-	14, // 27: pb.PaxosNode.ChangeNodeStatus:input_type -> google.protobuf.BoolValue
-	13, // 28: pb.PaxosNode.KillLeader:input_type -> google.protobuf.Empty
-	0,  // 29: pb.PaxosNode.TransferRequest:output_type -> pb.TransactionResponse
-	4,  // 30: pb.PaxosNode.PrepareRequest:output_type -> pb.AckMessage
-	8,  // 31: pb.PaxosNode.AcceptRequest:output_type -> pb.AcceptedMessage
-	13, // 32: pb.PaxosNode.CommitRequest:output_type -> google.protobuf.Empty
-	8,  // 33: pb.PaxosNode.NewViewRequest:output_type -> pb.AcceptedMessage
-	11, // 34: pb.PaxosNode.CatchupRequest:output_type -> pb.CatchupMessage
-	13, // 35: pb.PaxosNode.PrintLog:output_type -> google.protobuf.Empty
-	13, // 36: pb.PaxosNode.PrintDB:output_type -> google.protobuf.Empty
-	13, // 37: pb.PaxosNode.PrintStatus:output_type -> google.protobuf.Empty
-	13, // 38: pb.PaxosNode.PrintView:output_type -> google.protobuf.Empty
-	13, // 39: pb.PaxosNode.ChangeNodeStatus:output_type -> google.protobuf.Empty
-	13, // 40: pb.PaxosNode.KillLeader:output_type -> google.protobuf.Empty
-	29, // [29:41] is the sub-list for method output_type
-	17, // [17:29] is the sub-list for method input_type
-	17, // [17:17] is the sub-list for extension type_name
-	17, // [17:17] is the sub-list for extension extendee
-	0,  // [0:17] is the sub-list for field type_name
+	5,  // 3: pb.AckMessage.b:type_name -> pb.BallotNumber
+	7,  // 4: pb.AckMessage.acceptLog:type_name -> pb.AcceptedMessage
+	5,  // 5: pb.AcceptMessage.b:type_name -> pb.BallotNumber
+	1,  // 6: pb.AcceptMessage.message:type_name -> pb.TransactionRequest
+	5,  // 7: pb.AcceptedMessage.b:type_name -> pb.BallotNumber
+	1,  // 8: pb.AcceptedMessage.message:type_name -> pb.TransactionRequest
+	5,  // 9: pb.CommitMessage.b:type_name -> pb.BallotNumber
+	1,  // 10: pb.CommitMessage.message:type_name -> pb.TransactionRequest
+	5,  // 11: pb.NewViewMessage.b:type_name -> pb.BallotNumber
+	6,  // 12: pb.NewViewMessage.acceptLog:type_name -> pb.AcceptMessage
+	5,  // 13: pb.CatchupMessage.b:type_name -> pb.BallotNumber
+	8,  // 14: pb.CatchupMessage.commitLog:type_name -> pb.CommitMessage
+	1,  // 15: pb.PaxosNode.TransferRequest:input_type -> pb.TransactionRequest
+	3,  // 16: pb.PaxosNode.PrepareRequest:input_type -> pb.PrepareMessage
+	6,  // 17: pb.PaxosNode.AcceptRequest:input_type -> pb.AcceptMessage
+	8,  // 18: pb.PaxosNode.CommitRequest:input_type -> pb.CommitMessage
+	9,  // 19: pb.PaxosNode.NewViewRequest:input_type -> pb.NewViewMessage
+	10, // 20: pb.PaxosNode.CatchupRequest:input_type -> pb.CatchupRequestMessage
+	12, // 21: pb.PaxosNode.PrintLog:input_type -> google.protobuf.Empty
+	12, // 22: pb.PaxosNode.PrintDB:input_type -> google.protobuf.Empty
+	13, // 23: pb.PaxosNode.PrintStatus:input_type -> google.protobuf.Int64Value
+	12, // 24: pb.PaxosNode.PrintView:input_type -> google.protobuf.Empty
+	14, // 25: pb.PaxosNode.ChangeNodeStatus:input_type -> google.protobuf.BoolValue
+	12, // 26: pb.PaxosNode.KillLeader:input_type -> google.protobuf.Empty
+	0,  // 27: pb.PaxosNode.TransferRequest:output_type -> pb.TransactionResponse
+	4,  // 28: pb.PaxosNode.PrepareRequest:output_type -> pb.AckMessage
+	7,  // 29: pb.PaxosNode.AcceptRequest:output_type -> pb.AcceptedMessage
+	12, // 30: pb.PaxosNode.CommitRequest:output_type -> google.protobuf.Empty
+	7,  // 31: pb.PaxosNode.NewViewRequest:output_type -> pb.AcceptedMessage
+	11, // 32: pb.PaxosNode.CatchupRequest:output_type -> pb.CatchupMessage
+	12, // 33: pb.PaxosNode.PrintLog:output_type -> google.protobuf.Empty
+	12, // 34: pb.PaxosNode.PrintDB:output_type -> google.protobuf.Empty
+	12, // 35: pb.PaxosNode.PrintStatus:output_type -> google.protobuf.Empty
+	12, // 36: pb.PaxosNode.PrintView:output_type -> google.protobuf.Empty
+	12, // 37: pb.PaxosNode.ChangeNodeStatus:output_type -> google.protobuf.Empty
+	12, // 38: pb.PaxosNode.KillLeader:output_type -> google.protobuf.Empty
+	27, // [27:39] is the sub-list for method output_type
+	15, // [15:27] is the sub-list for method input_type
+	15, // [15:15] is the sub-list for extension type_name
+	15, // [15:15] is the sub-list for extension extendee
+	0,  // [0:15] is the sub-list for field type_name
 }
 
 func init() { file_paxos_proto_init() }

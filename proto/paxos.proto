@@ -15,7 +15,7 @@ service PaxosNode {
     rpc CommitRequest (CommitMessage) returns (google.protobuf.Empty);
 
     rpc NewViewRequest (NewViewMessage) returns (stream AcceptedMessage);
-    rpc CatchupRequest (google.protobuf.Int64Value) returns (CatchupMessage);
+    rpc CatchupRequest (CatchupRequestMessage) returns (CatchupMessage);
 
     rpc PrintLog (google.protobuf.Empty) returns (google.protobuf.Empty);
     rpc PrintDB (google.protobuf.Empty) returns (google.protobuf.Empty);
@@ -58,9 +58,8 @@ message PrepareMessage {
 }
 
 message AckMessage {
-    bool ok = 1;
-    BallotNumber acceptNum = 2;
-    repeated AcceptRecord acceptLog = 3;
+    BallotNumber b = 1;
+    repeated AcceptedMessage acceptLog = 2;
 }
 
 message BallotNumber {
@@ -70,15 +69,6 @@ message BallotNumber {
 
 // ---------- Accept ----------
 
-message AcceptRecord  {
-    BallotNumber acceptedBallotNum = 1;
-	int64 acceptedSequenceNum = 2;
-    TransactionRequest acceptedVal = 3;
-    bool Committed = 4;
-    bool Executed = 5;
-    bool Result = 6;
-}
-
 message AcceptMessage {
     BallotNumber b = 1;
     int64 sequenceNum = 2;
@@ -86,11 +76,10 @@ message AcceptMessage {
 }
 
 message AcceptedMessage {
-    bool ok = 1;
-    BallotNumber b = 2;
-    int64 sequenceNum = 3;
-    TransactionRequest message = 4;
-    string acceptorID = 5;
+    BallotNumber b = 1;
+    int64 sequenceNum = 2;
+    TransactionRequest message = 3;
+    string nodeID = 4;
 }
 
 // ---------- Commit ----------
@@ -98,19 +87,24 @@ message AcceptedMessage {
 message CommitMessage {
     BallotNumber b = 1;
     int64 sequenceNum = 2;
-    TransactionRequest transaction = 3;
+    TransactionRequest message = 3;
 }
 
 // ---------- NewView ----------
 
 message NewViewMessage {
     BallotNumber b = 1;
-    repeated AcceptRecord acceptLog = 2;
+    repeated AcceptMessage acceptLog = 2;
 }
 
 // ---------- Catchup ----------
 
+message CatchupRequestMessage {
+    string nodeID = 1;
+    int64 sequenceNum = 2;
+}
+
 message CatchupMessage {
     BallotNumber b = 1;
-    repeated AcceptRecord acceptLog = 2;
+    repeated CommitMessage commitLog = 2;
 }

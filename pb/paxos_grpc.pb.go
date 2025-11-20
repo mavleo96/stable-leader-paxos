@@ -44,7 +44,7 @@ type PaxosNodeClient interface {
 	AcceptRequest(ctx context.Context, in *AcceptMessage, opts ...grpc.CallOption) (*AcceptedMessage, error)
 	CommitRequest(ctx context.Context, in *CommitMessage, opts ...grpc.CallOption) (*emptypb.Empty, error)
 	NewViewRequest(ctx context.Context, in *NewViewMessage, opts ...grpc.CallOption) (PaxosNode_NewViewRequestClient, error)
-	CatchupRequest(ctx context.Context, in *wrapperspb.Int64Value, opts ...grpc.CallOption) (*CatchupMessage, error)
+	CatchupRequest(ctx context.Context, in *CatchupRequestMessage, opts ...grpc.CallOption) (*CatchupMessage, error)
 	PrintLog(ctx context.Context, in *emptypb.Empty, opts ...grpc.CallOption) (*emptypb.Empty, error)
 	PrintDB(ctx context.Context, in *emptypb.Empty, opts ...grpc.CallOption) (*emptypb.Empty, error)
 	PrintStatus(ctx context.Context, in *wrapperspb.Int64Value, opts ...grpc.CallOption) (*emptypb.Empty, error)
@@ -129,7 +129,7 @@ func (x *paxosNodeNewViewRequestClient) Recv() (*AcceptedMessage, error) {
 	return m, nil
 }
 
-func (c *paxosNodeClient) CatchupRequest(ctx context.Context, in *wrapperspb.Int64Value, opts ...grpc.CallOption) (*CatchupMessage, error) {
+func (c *paxosNodeClient) CatchupRequest(ctx context.Context, in *CatchupRequestMessage, opts ...grpc.CallOption) (*CatchupMessage, error) {
 	out := new(CatchupMessage)
 	err := c.cc.Invoke(ctx, PaxosNode_CatchupRequest_FullMethodName, in, out, opts...)
 	if err != nil {
@@ -201,7 +201,7 @@ type PaxosNodeServer interface {
 	AcceptRequest(context.Context, *AcceptMessage) (*AcceptedMessage, error)
 	CommitRequest(context.Context, *CommitMessage) (*emptypb.Empty, error)
 	NewViewRequest(*NewViewMessage, PaxosNode_NewViewRequestServer) error
-	CatchupRequest(context.Context, *wrapperspb.Int64Value) (*CatchupMessage, error)
+	CatchupRequest(context.Context, *CatchupRequestMessage) (*CatchupMessage, error)
 	PrintLog(context.Context, *emptypb.Empty) (*emptypb.Empty, error)
 	PrintDB(context.Context, *emptypb.Empty) (*emptypb.Empty, error)
 	PrintStatus(context.Context, *wrapperspb.Int64Value) (*emptypb.Empty, error)
@@ -230,7 +230,7 @@ func (UnimplementedPaxosNodeServer) CommitRequest(context.Context, *CommitMessag
 func (UnimplementedPaxosNodeServer) NewViewRequest(*NewViewMessage, PaxosNode_NewViewRequestServer) error {
 	return status.Errorf(codes.Unimplemented, "method NewViewRequest not implemented")
 }
-func (UnimplementedPaxosNodeServer) CatchupRequest(context.Context, *wrapperspb.Int64Value) (*CatchupMessage, error) {
+func (UnimplementedPaxosNodeServer) CatchupRequest(context.Context, *CatchupRequestMessage) (*CatchupMessage, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method CatchupRequest not implemented")
 }
 func (UnimplementedPaxosNodeServer) PrintLog(context.Context, *emptypb.Empty) (*emptypb.Empty, error) {
@@ -358,7 +358,7 @@ func (x *paxosNodeNewViewRequestServer) Send(m *AcceptedMessage) error {
 }
 
 func _PaxosNode_CatchupRequest_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(wrapperspb.Int64Value)
+	in := new(CatchupRequestMessage)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
@@ -370,7 +370,7 @@ func _PaxosNode_CatchupRequest_Handler(srv interface{}, ctx context.Context, dec
 		FullMethod: PaxosNode_CatchupRequest_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(PaxosNodeServer).CatchupRequest(ctx, req.(*wrapperspb.Int64Value))
+		return srv.(PaxosNodeServer).CatchupRequest(ctx, req.(*CatchupRequestMessage))
 	}
 	return interceptor(ctx, in, info, handler)
 }

@@ -3,6 +3,7 @@ package paxos
 import (
 	"context"
 
+	pb "github.com/mavleo96/stable-leader-paxos/pb"
 	log "github.com/sirupsen/logrus"
 	"google.golang.org/protobuf/types/known/emptypb"
 	"google.golang.org/protobuf/types/known/wrapperspb"
@@ -14,10 +15,10 @@ func (s *PaxosServer) ChangeNodeStatus(ctx context.Context, status *wrapperspb.B
 		return &emptypb.Empty{}, nil
 	}
 	s.config.Alive = status.Value
-	s.PaxosTimer.TimerCleanup()
+	s.PaxosTimer.Cleanup()
 	if s.config.Alive {
-		// s.State.Leader = &models.Node{ID: ""}
-		go s.PaxosTimer.timerRoutine()
+		s.state.SetBallotNumber(&pb.BallotNumber{N: 0, NodeID: ""})
+		go s.PaxosTimer.run()
 		go s.CatchupRoutine()
 	}
 	log.Warnf("Node %s status changed to %v", s.NodeID, s.config.Alive)
@@ -41,7 +42,7 @@ func (s *PaxosServer) KillLeader(ctx context.Context, in *emptypb.Empty) (*empty
 		return &emptypb.Empty{}, nil
 	}
 	s.config.Alive = false
-	s.PaxosTimer.TimerCleanup()
+	s.PaxosTimer.Cleanup()
 	log.Warnf("Node %s status changed to %v", s.NodeID, s.config.Alive)
 	return &emptypb.Empty{}, nil
 }

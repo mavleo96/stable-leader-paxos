@@ -11,6 +11,7 @@ import (
 
 // StateLog is a struct that contains the state of the paxos system
 type StateLog struct {
+	id    string
 	mutex sync.RWMutex
 	log   map[int64]*LogRecord // seq -> record
 }
@@ -220,18 +221,16 @@ func (s *StateLog) SetResult(sequenceNum int64, result int64) {
 }
 
 // GetAcceptedLog returns the accepted log
-func (s *StateLog) GetAcceptedLog() []*pb.AcceptRecord {
+func (s *StateLog) GetAcceptedLog() []*pb.AcceptedMessage {
 	s.mutex.RLock()
 	defer s.mutex.RUnlock()
-	acceptedLog := make([]*pb.AcceptRecord, 0)
+	acceptedLog := make([]*pb.AcceptedMessage, 0)
 	for _, record := range s.log {
-		acceptedLog = append(acceptedLog, &pb.AcceptRecord{
-			AcceptedBallotNum:   record.b,
-			AcceptedSequenceNum: record.sequenceNum,
-			AcceptedVal:         record.request,
-			Committed:           record.committed,
-			Executed:            record.executed,
-			Result:              utils.Int64ToBool(record.result),
+		acceptedLog = append(acceptedLog, &pb.AcceptedMessage{
+			B:           record.b,
+			SequenceNum: record.sequenceNum,
+			Message:     record.request,
+			NodeID:      s.id,
 		})
 	}
 	return acceptedLog
@@ -274,8 +273,9 @@ func statusString(record *LogRecord) string {
 }
 
 // CreateStateLog creates a new state log
-func CreateStateLog() *StateLog {
+func CreateStateLog(id string) *StateLog {
 	return &StateLog{
+		id:    id,
 		mutex: sync.RWMutex{},
 		log:   make(map[int64]*LogRecord),
 	}

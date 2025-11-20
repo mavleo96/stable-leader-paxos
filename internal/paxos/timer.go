@@ -78,6 +78,7 @@ func (t *SafeTimer) run() {
 		t.TimeoutCh <- true
 		log.Infof("[Timer] Timeout channel signaled at %d", time.Now().UnixMilli())
 	}
+	log.Infof("[Timer] Timer goroutine ended at %d", time.Now().UnixMilli())
 }
 
 // GetContext returns the timer's context for cancellation signaling.

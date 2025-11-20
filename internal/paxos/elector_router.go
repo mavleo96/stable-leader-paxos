@@ -12,9 +12,9 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
-// HandleQueuedPrepareMessagesAndDeleteExpired handles the queued prepare messages and returns the highest ballot number
+// PrepareQueueHandler handles the queued prepare messages and returns the highest ballot number
 // and if there was a valid prepare message
-func (l *LeaderElector) HandleQueuedPrepareMessagesAndDeleteExpired(expiryTimeStamp time.Time) (*pb.BallotNumber, bool) {
+func (l *LeaderElector) PrepareQueueHandler(expiryTimeStamp time.Time) (*pb.BallotNumber, bool) {
 	// Get timestamp keys of prepare messages
 	timestampKeys := l.prepareMessageLog.GetLogKeys()
 
@@ -28,15 +28,12 @@ func (l *LeaderElector) HandleQueuedPrepareMessagesAndDeleteExpired(expiryTimeSt
 		// or if current highest ballot number is higher than the prepare message ballot number
 		if expiryTimeStamp.Sub(timestamp) > prepareTimeout ||
 			!BallotNumberIsHigher(currentHighestBallotNumber, l.prepareMessageLog.msgLog[timestamp].B) {
-			delta := expiryTimeStamp.Sub(timestamp)
-			cond1 := delta > prepareTimeout
-			cond2 := !BallotNumberIsHigher(currentHighestBallotNumber, l.prepareMessageLog.msgLog[timestamp].B)
-			log.Infof("[ElectionRoutine] Prepare message %s is expired by %s; request timeout is %s; cond1: %t; cond2: %t, current ballot number is %s; log ballot number is %s", utils.BallotNumberString(l.prepareMessageLog.msgLog[timestamp].B), delta, prepareTimeout, cond1, cond2, utils.BallotNumberString(currentHighestBallotNumber), utils.BallotNumberString(l.prepareMessageLog.msgLog[timestamp].B))
+			log.Infof("[PrepareQueueHandler] Prepare message %s is expired or not highest", utils.BallotNumberString(l.prepareMessageLog.msgLog[timestamp].B))
 			l.prepareMessageLog.GetChannel(timestamp) <- false
 			l.prepareMessageLog.DeletePrepareMessage(timestamp)
 			continue
 		}
-		log.Infof("[ElectionRoutine] Prepare message %s is valid", utils.BallotNumberString(l.prepareMessageLog.msgLog[timestamp].B))
+		log.Infof("[PrepareQueueHandler] Prepare message %s is valid and highest", utils.BallotNumberString(l.prepareMessageLog.msgLog[timestamp].B))
 
 		// Update current valid timestamp and highest ballot number; close previous valid timestamp
 		if currentValidTimestamp != (time.Time{}) {
@@ -51,12 +48,12 @@ func (l *LeaderElector) HandleQueuedPrepareMessagesAndDeleteExpired(expiryTimeSt
 	if currentValidTimestamp != (time.Time{}) {
 		l.prepareMessageLog.GetChannel(currentValidTimestamp) <- true
 		l.prepareMessageLog.DeletePrepareMessage(currentValidTimestamp)
-		log.Infof("[ElectionRoutine] Promising highest ballot number %s", utils.BallotNumberString(currentHighestBallotNumber))
+		log.Infof("[PrepareQueueHandler] Promising highest ballot number %s", utils.BallotNumberString(currentHighestBallotNumber))
 		return currentHighestBallotNumber, true
 	}
 
 	// If there is no valid timestamp, return false
-	log.Infof("[ElectionRoutine] No valid prepare message found, highest ballot number is %s", utils.BallotNumberString(currentHighestBallotNumber))
+	log.Infof("[PrepareQueueHandler] No valid prepare message found, highest ballot number is %s", utils.BallotNumberString(currentHighestBallotNumber))
 	return currentHighestBallotNumber, false
 }
 
@@ -77,7 +74,7 @@ func (l *LeaderElector) PrepareRequestHandler(prepareMessage *pb.PrepareMessage)
 	// Update state
 	l.state.ResetForwardedRequestsLog()
 	l.state.SetBallotNumber(prepareMessage.B)
-	l.state.SetPreparePhase(false)
+	l.state.SetLeader(prepareMessage.B.NodeID)
 	log.Infof("[PrepareRequestHandler] Promised ballot number %s", utils.BallotNumberString(l.state.GetBallotNumber()))
 
 	// Return ack message with accepted log
@@ -88,9 +85,12 @@ func (l *LeaderElector) PrepareRequestHandler(prepareMessage *pb.PrepareMessage)
 	}, nil
 }
 
-func (l *LeaderElector) RunPreparePhase(prepareMessage *pb.PrepareMessage) bool {
+func (l *LeaderElector) RunPreparePhase(prepareMessage *pb.PrepareMessage) (bool, []*pb.AckMessage) {
+	// Logger: Add sent prepare message
+	l.logger.AddSentPrepareMessage(prepareMessage)
+
 	// Multicast prepare message to all peers
-	responseCh := make(chan bool, len(l.peers))
+	responseCh := make(chan *pb.AckMessage, len(l.peers))
 	wg := sync.WaitGroup{}
 	for _, peer := range l.peers {
 		wg.Add(1)
@@ -102,7 +102,7 @@ func (l *LeaderElector) RunPreparePhase(prepareMessage *pb.PrepareMessage) bool 
 				return
 			}
 			log.Infof("Ack message from %s: %s", peer.ID, ackMessage.String())
-			responseCh <- true
+			responseCh <- ackMessage
 		}(peer)
 	}
 	go func() {
@@ -112,43 +112,49 @@ func (l *LeaderElector) RunPreparePhase(prepareMessage *pb.PrepareMessage) bool 
 
 	// Wait for response and return true if all responses are true
 	accepted := int64(1)
-	for a := range responseCh {
-		if a {
-			accepted++
-		}
+	ackMessages := make([]*pb.AckMessage, 0)
+	for ackMessage := range responseCh {
+		ackMessages = append(ackMessages, ackMessage)
+		accepted++
 		if accepted >= l.config.F+1 {
-			return true
+			return true, ackMessages
 		}
 	}
-	return false
+	return false, nil
 }
 
 // ElectionRoutine is the main routine for the leader election
 func (l *LeaderElector) ElectionRoutine() {
+electionLoop:
 	for {
 		<-l.timer.TimeoutCh
-		l.state.SetPreparePhase(true)
+		// l.state.SetPreparePhase(true)
 		log.Infof("[ElectionRoutine] Prepare phase started")
+		l.state.SetLeader("")
 
-		highestBallotNumber, ok := l.HandleQueuedPrepareMessagesAndDeleteExpired(time.Now())
+		highestBallotNumber, ok := l.PrepareQueueHandler(time.Now())
 		if ok {
-			continue
+			continue electionLoop
 		}
 
 		newBallotNumber := &pb.BallotNumber{
 			N:      highestBallotNumber.N + 1,
 			NodeID: l.id,
 		}
+		// Update state
+		l.state.SetBallotNumber(newBallotNumber)
+
 		prepareMessage := &pb.PrepareMessage{
 			B: newBallotNumber,
 		}
-		accepted := l.RunPreparePhase(prepareMessage)
-		if accepted {
-			// Update state
-			l.state.SetBallotNumber(newBallotNumber)
-			l.state.SetPreparePhase(false)
-			log.Infof("[ElectionRoutine] Promised ballot number %s", utils.BallotNumberString(l.state.GetBallotNumber()))
-			continue
+		elected, ackMessages := l.RunPreparePhase(prepareMessage)
+		if !elected {
+			continue electionLoop
 		}
+
+		l.state.SetLeader(l.id)
+		log.Infof("[ElectionRoutine] New leader with promised ballot number %s", utils.BallotNumberString(l.state.GetBallotNumber()))
+
+		l.proposer.RunNewViewPhase(ackMessages)
 	}
 }

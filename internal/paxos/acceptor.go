@@ -32,7 +32,7 @@ func (a *Acceptor) AcceptRequestHandler(acceptMessage *pb.AcceptMessage) (*pb.Ac
 
 	// Create record if not exists
 	created := a.state.StateLog.CreateRecordIfNotExists(acceptMessage.B, acceptMessage.SequenceNum, acceptMessage.Message)
-	if created && !a.state.InForwardedRequestsLog(acceptMessage.Message) {
+	if created && !a.state.InForwardedRequestsLog(acceptMessage.Message) && !a.state.StateLog.IsExecuted(acceptMessage.SequenceNum) {
 		a.timer.IncrementWaitCountOrStart()
 	}
 
@@ -58,7 +58,7 @@ func (a *Acceptor) CommitRequestHandler(commitMessage *pb.CommitMessage) (*empty
 
 	// Create record if not exists
 	created := a.state.StateLog.CreateRecordIfNotExists(commitMessage.B, commitMessage.SequenceNum, commitMessage.Message)
-	if created && !a.state.InForwardedRequestsLog(commitMessage.Message) {
+	if created && !a.state.InForwardedRequestsLog(commitMessage.Message) && !a.state.StateLog.IsExecuted(commitMessage.SequenceNum) {
 		a.timer.IncrementWaitCountOrStart()
 	}
 

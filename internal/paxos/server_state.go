@@ -12,7 +12,7 @@ type ServerState struct {
 	mutex                   sync.RWMutex
 	id                      string
 	b                       *pb.BallotNumber
-	preparePhase            bool
+	leader                  string
 	lastExecutedSequenceNum int64
 
 	newViewLog           []*pb.NewViewMessage
@@ -27,7 +27,14 @@ type ServerState struct {
 func (s *ServerState) GetLeader() string {
 	s.mutex.RLock()
 	defer s.mutex.RUnlock()
-	return s.b.NodeID
+	return s.leader
+}
+
+// SetLeader sets the leader of the paxos server
+func (s *ServerState) SetLeader(leader string) {
+	s.mutex.Lock()
+	defer s.mutex.Unlock()
+	s.leader = leader
 }
 
 // GetBallotNumber returns the current ballot number
@@ -42,20 +49,6 @@ func (s *ServerState) SetBallotNumber(b *pb.BallotNumber) {
 	s.mutex.Lock()
 	defer s.mutex.Unlock()
 	s.b = b
-}
-
-// InPreparePhase checks if the server is in the prepare phase
-func (s *ServerState) InPreparePhase() bool {
-	s.mutex.RLock()
-	defer s.mutex.RUnlock()
-	return s.preparePhase
-}
-
-// SetPreparePhase sets the prepare phase
-func (s *ServerState) SetPreparePhase(preparePhase bool) {
-	s.mutex.Lock()
-	defer s.mutex.Unlock()
-	s.preparePhase = preparePhase
 }
 
 // GetLastExecutedSequenceNum returns the last executed sequence number
@@ -130,6 +123,7 @@ func CreateServerState(id string) *ServerState {
 		mutex:                   sync.RWMutex{},
 		id:                      id,
 		b:                       &pb.BallotNumber{N: 1, NodeID: "n1"},
+		leader:                  "n1",
 		lastExecutedSequenceNum: 0,
 		newViewLog:              make([]*pb.NewViewMessage, 0),
 		forwardedRequestsLog:    make([]*pb.TransactionRequest, 0),

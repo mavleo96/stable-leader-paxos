@@ -15,7 +15,7 @@ import (
 func (s *PaxosServer) PrepareRequest(ctx context.Context, req *pb.PrepareMessage) (*pb.AckMessage, error) {
 	// Ignore if not alive
 	if !s.config.Alive {
-		log.Warnf("[PrepareRequest] Node %s is not alive", s.NodeID)
+		log.Warnf("[PrepareRequest] Node %s is not alive", s.ID)
 		return nil, status.Errorf(codes.Unavailable, "node not alive")
 	}
 
@@ -45,7 +45,7 @@ func (s *PaxosServer) PrepareRequest(ctx context.Context, req *pb.PrepareMessage
 func (s *PaxosServer) AcceptRequest(ctx context.Context, req *pb.AcceptMessage) (*pb.AcceptedMessage, error) {
 	// Ignore if not alive
 	if !s.config.Alive {
-		log.Warnf("[AcceptRequest] Node %s is not alive", s.NodeID)
+		log.Warnf("[AcceptRequest] Node %s is not alive", s.ID)
 		return nil, status.Errorf(codes.Unavailable, "node not alive")
 	}
 
@@ -75,7 +75,7 @@ func (s *PaxosServer) AcceptRequest(ctx context.Context, req *pb.AcceptMessage) 
 func (s *PaxosServer) CommitRequest(ctx context.Context, req *pb.CommitMessage) (*emptypb.Empty, error) {
 	// Ignore if not alive
 	if !s.config.Alive {
-		log.Warnf("[CommitRequest] Node %s is not alive", s.NodeID)
+		log.Warnf("[CommitRequest] Node %s is not alive", s.ID)
 		return nil, status.Errorf(codes.Unavailable, "node not alive")
 	}
 
@@ -93,17 +93,50 @@ func (s *PaxosServer) CommitRequest(ctx context.Context, req *pb.CommitMessage) 
 	return s.acceptor.CommitRequestHandler(req)
 }
 
+// NewViewRequest handles the new view request rpc on server side
+func (s *PaxosServer) NewViewRequest(req *pb.NewViewMessage, stream pb.PaxosNode_NewViewRequestServer) error {
+	if !s.config.Alive {
+		log.Warnf("[NewViewRequest] Node %s is not alive", s.ID)
+		return status.Errorf(codes.Unavailable, "node not alive")
+	}
+
+	// No need to acquire state mutex since AcceptRequest acquires it
+	log.Infof("[NewViewRequest] Received new view message %v", utils.BallotNumberString(req.B))
+	s.state.AddNewViewMessage(req)
+
+	// Logger: Add received new view message
+	s.logger.AddReceivedNewViewMessage(req)
+
+	// Handle accept messages
+	for _, acceptMessage := range req.AcceptLog {
+		acceptedMessage, err := s.acceptor.AcceptRequestHandler(acceptMessage)
+		if err != nil {
+			log.Fatal(err)
+			return err
+		}
+
+		// Logger: Add sent accepted message
+		s.logger.AddSentAcceptedMessage(acceptedMessage)
+
+		if err := stream.Send(acceptedMessage); err != nil {
+			log.Fatal(err)
+		}
+	}
+	log.Infof("[NewViewRequest] Finished streaming accepts for %s", utils.BallotNumberString(req.B))
+	return nil
+}
+
 // CatchupRequest handles the catchup request and returns the committed records
 func (s *PaxosServer) CatchupRequest(ctx context.Context, req *pb.CatchupRequestMessage) (*pb.CatchupMessage, error) {
 	// Ignore if not alive
 	if !s.config.Alive {
-		log.Warnf("[CatchupRequest] Node %s is not alive", s.NodeID)
+		log.Warnf("[CatchupRequest] Node %s is not alive", s.ID)
 		return nil, status.Errorf(codes.Unavailable, "node not alive")
 	}
 
 	// Only leader will respond to catchup request
-	if s.state.GetLeader() != s.NodeID {
-		log.Warnf("[CatchupRequest] Node %s is not leader", s.NodeID)
+	if s.state.GetLeader() != s.ID {
+		log.Warnf("[CatchupRequest] Node %s is not leader", s.ID)
 		return nil, status.Errorf(codes.Unavailable, "not leader")
 	}
 

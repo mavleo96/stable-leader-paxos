@@ -13,7 +13,7 @@ import (
 // TransferRequest is the main function that rpc server calls to handle the transaction request
 func (s *PaxosServer) TransferRequest(ctx context.Context, req *pb.TransactionRequest) (*pb.TransactionResponse, error) {
 	if !s.config.Alive {
-		log.Warnf("Node %s is not alive", s.NodeID)
+		log.Warnf("Node %s is not alive", s.ID)
 		return nil, status.Errorf(codes.Unavailable, "node not alive")
 	}
 
@@ -22,13 +22,8 @@ func (s *PaxosServer) TransferRequest(ctx context.Context, req *pb.TransactionRe
 	// 	s.InitializeSystem()
 	// }
 
-	// Ignore requests if in prepare phase
-	if s.state.InPreparePhase() {
-		return UnsuccessfulTransactionResponse, status.Errorf(codes.Aborted, "prepare phase in progress")
-	}
-
 	// Forward request if not leader
-	if s.state.GetLeader() != s.NodeID {
+	if s.state.GetLeader() != s.ID {
 		go s.ForwardToLeader(req)
 		return UnsuccessfulTransactionResponse, status.Errorf(codes.Aborted, "not leader")
 	}
@@ -73,9 +68,14 @@ func (s *PaxosServer) TransferRequest(ctx context.Context, req *pb.TransactionRe
 func (s *PaxosServer) ForwardToLeader(req *pb.TransactionRequest) {
 	// Add request to forwarded requests log and start timer
 	s.state.AddForwardedRequest(req)
-	s.PaxosTimer.IncrementWaitCountOrStart()
+	s.acceptor.timer.IncrementWaitCountOrStart()
+
+	if s.state.GetLeader() == "" {
+		log.Warnf("[ForwardToLeader] Leader is not set, ignoring request")
+		return
+	}
 
 	// Forward request to leader
 	log.Infof("[ForwardToLeader] Forwarding request to leader %s", s.state.GetLeader())
-	(*s.Peers[s.state.GetLeader()].Client).TransferRequest(context.Background(), req)
+	(*s.peers[s.state.GetLeader()].Client).TransferRequest(context.Background(), req)
 }

@@ -24,7 +24,6 @@ type LogRecord struct {
 	accepted    bool
 	committed   bool
 	executed    bool
-	result      int64
 }
 
 // GetSequenceNumber returns the sequence number for a given request
@@ -210,28 +209,6 @@ func (s *StateLog) SetExecuted(sequenceNum int64) {
 	record.executed = true
 }
 
-// GetResult returns the result for a transaction
-func (s *StateLog) GetResult(sequenceNum int64) int64 {
-	s.mutex.RLock()
-	defer s.mutex.RUnlock()
-	record, exists := s.log[sequenceNum]
-	if !exists {
-		return 0
-	}
-	return record.result
-}
-
-// SetResult sets the result for a transaction
-func (s *StateLog) SetResult(sequenceNum int64, result int64) {
-	s.mutex.Lock()
-	defer s.mutex.Unlock()
-	record, exists := s.log[sequenceNum]
-	if !exists {
-		return
-	}
-	record.result = result
-}
-
 // GetAcceptedLog returns the accepted log
 func (s *StateLog) GetAcceptedLog() []*pb.AcceptedMessage {
 	s.mutex.RLock()
@@ -257,7 +234,7 @@ func (s *StateLog) GetLogString(sequenceNum int64) string {
 		return fmt.Sprintf("s: %d, status: X", sequenceNum)
 	}
 	status := statusString(record)
-	return fmt.Sprintf("s: %d, status: %s, ballot number: %s, result: %d, request: %s", sequenceNum, status, utils.BallotNumberString(record.b), record.result, utils.TransactionRequestString(record.request))
+	return fmt.Sprintf("s: %d, status: %s, ballot number: %s, request: %s", sequenceNum, status, utils.BallotNumberString(record.b), utils.TransactionRequestString(record.request))
 }
 
 // Reset resets the state log
@@ -302,43 +279,46 @@ func createLogRecord(ballotNumber *pb.BallotNumber, sequenceNumber int64, reques
 		accepted:    false,
 		committed:   false,
 		executed:    false,
-		result:      -1,
 	}
 }
 
 // ---------------------------------------------------------- //
 
-// LastReply represents a map of sender to last sent reply with a mutex
-type LastReply struct {
-	mutex    sync.RWMutex
-	replyMap map[string]*pb.TransactionResponse
+// DedupTable represents a table of sender to timestamp and result with a mutex
+type DedupTable struct {
+	mutex        sync.RWMutex
+	timestampMap map[string]int64
+	resultMap    map[string]int64
 }
 
-// Get returns the last reply sent to a sender
-func (l *LastReply) Get(sender string) *pb.TransactionResponse {
-	l.mutex.RLock()
-	defer l.mutex.RUnlock()
-	return l.replyMap[sender]
+// GetLastResult returns the last result for a sender
+func (d *DedupTable) GetLastResult(sender string) (int64, int64) {
+	d.mutex.RLock()
+	defer d.mutex.RUnlock()
+	return d.timestampMap[sender], d.resultMap[sender]
 }
 
-// Update updates the last reply sent to a sender
-func (l *LastReply) Update(sender string, reply *pb.TransactionResponse) {
-	l.mutex.Lock()
-	defer l.mutex.Unlock()
-	l.replyMap[sender] = reply
+// UpdateLastResult updates the last result for a sender
+func (d *DedupTable) UpdateLastResult(sender string, timestamp int64, result int64) {
+	d.mutex.Lock()
+	defer d.mutex.Unlock()
+	d.timestampMap[sender] = timestamp
+	d.resultMap[sender] = result
 }
 
-// Reset resets the last reply
-func (l *LastReply) Reset() {
-	l.mutex.Lock()
-	defer l.mutex.Unlock()
-	l.replyMap = make(map[string]*pb.TransactionResponse)
+// Reset resets the dedup table
+func (d *DedupTable) Reset() {
+	d.mutex.Lock()
+	defer d.mutex.Unlock()
+	d.timestampMap = make(map[string]int64, 10)
+	d.resultMap = make(map[string]int64, 10)
 }
 
-// CreateLastReply creates a new last reply
-func CreateLastReply() *LastReply {
-	return &LastReply{
-		mutex:    sync.RWMutex{},
-		replyMap: make(map[string]*pb.TransactionResponse, 10),
+// CreateDedupTable creates a new dedup table
+func CreateDedupTable() *DedupTable {
+	return &DedupTable{
+		mutex:        sync.RWMutex{},
+		timestampMap: make(map[string]int64, 10),
+		resultMap:    make(map[string]int64, 10),
 	}
 }

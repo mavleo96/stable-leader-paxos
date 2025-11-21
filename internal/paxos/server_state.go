@@ -17,8 +17,8 @@ type ServerState struct {
 	forwardedRequestsLog    []*pb.TransactionRequest
 
 	// Self-managed components
-	StateLog  *StateLog
-	LastReply *LastReply
+	StateLog   *StateLog
+	DedupTable *DedupTable
 }
 
 // Leader is the leader of the paxos server
@@ -104,7 +104,7 @@ func (s *ServerState) Reset() {
 	s.lastExecutedSequenceNum = 0
 	s.forwardedRequestsLog = make([]*pb.TransactionRequest, 10)
 	s.StateLog.Reset()
-	s.LastReply.Reset()
+	s.DedupTable.Reset()
 }
 
 // CreateServerState creates a new server state
@@ -117,6 +117,6 @@ func CreateServerState(id string) *ServerState {
 		lastExecutedSequenceNum: 0,
 		forwardedRequestsLog:    make([]*pb.TransactionRequest, 10),
 		StateLog:                CreateStateLog(id),
-		LastReply:               CreateLastReply(),
+		DedupTable:              CreateDedupTable(),
 	}
 }

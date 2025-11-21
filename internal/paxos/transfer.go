@@ -45,37 +45,43 @@ func (s *PaxosServer) TransferRequest(ctx context.Context, req *pb.TransactionRe
 	s.logger.AddReceivedTransactionRequest(req)
 
 	// Duplicate requests with same timestamp are not ignored since the reply could have been lost
-	lastReply := s.state.LastReply.Get(req.Sender)
-	if lastReply != nil && req.Timestamp == lastReply.Timestamp {
-		return s.state.LastReply.Get(req.Sender), nil
+	timestamp, result := s.state.DedupTable.GetLastResult(req.Sender)
+	if timestamp != 0 && req.Timestamp == timestamp {
+		response := &pb.TransactionResponse{
+			B:         s.state.GetBallotNumber(),
+			Timestamp: req.Timestamp,
+			Sender:    req.Sender,
+			Result:    utils.Int64ToBool(result),
+		}
+		// Logger: Add sent transaction response
+		s.logger.AddSentTransactionResponse(response)
+		return response, nil
 	}
+
 	// Older timestamp requests are ignored
-	if lastReply != nil && req.Timestamp < lastReply.Timestamp {
-		log.Warnf("Ignored %s; Last reply timestamp %d", utils.TransactionRequestString(req), s.state.LastReply.Get(req.Sender).Timestamp)
+	if timestamp != 0 && req.Timestamp < timestamp {
+		log.Warnf("[TransferRequest] Ignored %s; Last reply timestamp %d", utils.TransactionRequestString(req), timestamp)
 		return UnsuccessfulTransactionResponse, status.Errorf(codes.AlreadyExists, "old timestamp")
 	}
 
 	// Handle transaction request
-	s.proposer.HandleTransactionRequest(req)
-
-	// Add response channel for sequence number and wait for response
-	sequenceNum := s.state.StateLog.GetSequenceNumber(req)
-	responseCh := make(chan int64, 1)
-	s.executor.AddResponseChannel(sequenceNum, responseCh)
-
-	result := <-responseCh
-	if result == -1 {
-		return UnsuccessfulTransactionResponse, status.Errorf(codes.Aborted, "execute request failed try again")
+	err := s.proposer.HandleTransactionRequest(req)
+	if err != nil {
+		return UnsuccessfulTransactionResponse, status.Error(codes.Aborted, err.Error())
 	}
 
-	// Create transaction response and update last reply
+	// Create transaction response from dedup table
+	timestamp, result = s.state.DedupTable.GetLastResult(req.Sender)
 	response := &pb.TransactionResponse{
 		B:         s.state.GetBallotNumber(),
-		Timestamp: req.Timestamp,
+		Timestamp: timestamp,
 		Sender:    req.Sender,
 		Result:    utils.Int64ToBool(result),
 	}
-	s.state.LastReply.Update(req.Sender, response)
+
+	// Logger: Add sent transaction response
+	s.logger.AddSentTransactionResponse(response)
+
 	return response, nil
 }
 

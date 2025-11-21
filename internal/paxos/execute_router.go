@@ -14,18 +14,24 @@ executeLoop:
 		select {
 		case <-ctx.Done():
 			return
-		case s := <-e.executionTriggerCh:
-			log.Infof("[Executor] Received execute signal for sequence number %d", s)
-			sequenceNum := e.state.GetLastExecutedSequenceNum()
-			maxSequenceNum := e.state.StateLog.MaxSequenceNum()
-			if sequenceNum == maxSequenceNum {
+		case executeRequest := <-e.executionTriggerCh:
+			log.Infof("[Executor] Received execute signal for sequence number %d", executeRequest.SequenceNum)
+
+			// If request is already executed, send signal to requestor
+			if e.state.StateLog.IsExecuted(executeRequest.SequenceNum) {
+				executeRequest.SignalCh <- true
+				close(executeRequest.SignalCh)
 				continue executeLoop
 			}
 
+			// Try to execute the transaction
+			lastExecutedSequenceNum := e.state.GetLastExecutedSequenceNum()
 		tryLoop:
-			for i := sequenceNum + 1; i <= maxSequenceNum; i++ {
+			for i := lastExecutedSequenceNum + 1; i <= executeRequest.SequenceNum; i++ {
 				if !e.state.StateLog.IsCommitted(i) {
-					break tryLoop
+					// Requeue execution request
+					e.executionTriggerCh <- executeRequest
+					continue executeLoop
 				}
 				if e.state.StateLog.IsExecuted(i) {
 					log.Fatalf("[Executor] Sequence number %d was executed but state maxexecuted sequence number is %d", i, e.state.GetLastExecutedSequenceNum())
@@ -47,42 +53,26 @@ executeLoop:
 
 				// Add to executed log
 				e.state.StateLog.SetExecuted(i)
-				e.state.StateLog.SetResult(i, result)
+				e.state.DedupTable.UpdateLastResult(request.Sender, request.Timestamp, result)
 				e.timer.DecrementWaitCountAndResetOrStopIfZero()
 				log.Infof("[Executor] Executed %s", utils.TransactionRequestString(request))
 
 				e.state.SetLastExecutedSequenceNum(i)
 
-				// Publish result to publish channel
-				if e.state.IsLeader() {
-					e.publishTriggerCh <- i
-				}
-			}
-		}
-	}
-}
+				// // Create checkpoint and save to checkpoint manager
+				// if i%e.config.K == 0 {
+				// 	dbState, err := e.db.GetDBState()
+				// 	if err != nil {
+				// 		log.Warn(err)
+				// 	}
+				// 	log.Infof("[Executor] Creating checkpoint for sequence number %d", i)
+				// 	e.checkpointer.AddCheckpoint(i, dbState)
+				// }
 
-// ResultRouter is the main routine for the result publisher
-func (e *Executor) ResultRouter(ctx context.Context) {
-publishLoop:
-	for {
-		select {
-		case <-ctx.Done():
-			return
-		case s := <-e.publishTriggerCh:
-			log.Infof("[ResultRouter] Received publish signal for sequence number %d", s)
-			if !e.state.StateLog.IsExecuted(s) {
-				log.Warnf("[ResultRouter] Cannot publish result for sequence number %d because it was not executed", s)
-				continue publishLoop
 			}
-			responseCh := e.GetResponseChannel(s)
-			if responseCh == nil {
-				log.Warnf("[ResultRouter] Cannot publish result for sequence number %d because response channel does not exist", s)
-				continue publishLoop
-			}
-			responseCh <- e.state.StateLog.GetResult(s)
-			e.CloseAndRemoveResponseChannel(s)
-			log.Infof("[ResultRouter] Published result for sequence number %d", s)
+
+			executeRequest.SignalCh <- true
+			close(executeRequest.SignalCh)
 		}
 	}
 }

@@ -52,7 +52,6 @@ func (s *PaxosServer) InitializeSystem() {
 func (s *PaxosServer) Start(ctx context.Context) {
 	s.wg.Go(func() { s.executor.ExecuteRouter(ctx) })
 	s.wg.Go(func() { s.elector.ElectionRouter(ctx) })
-	s.wg.Go(func() { s.executor.ResultRouter(ctx) })
 
 	s.wg.Wait()
 }
@@ -63,7 +62,7 @@ func CreatePaxosServer(selfNode *models.Node, peerNodes map[string]*models.Node,
 	serverConfig := CreateServerConfig(int64(len(peerNodes) + 1))
 	serverState := CreateServerState(selfNode.ID)
 
-	executionTriggerCh := make(chan int64, 100)
+	executionTriggerCh := make(chan ExecuteRequest, 100)
 
 	i, err := strconv.Atoi(selfNode.ID[1:])
 	if err != nil {

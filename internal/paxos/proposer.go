@@ -2,6 +2,7 @@ package paxos
 
 import (
 	"context"
+	"errors"
 	"io"
 	"sync"
 
@@ -17,14 +18,14 @@ type Proposer struct {
 	state              *ServerState
 	config             *ServerConfig
 	peers              map[string]*models.Node
-	executionTriggerCh chan int64
+	executionTriggerCh chan ExecuteRequest
 	logger             *Logger
 	ctx                context.Context
 	cancel             context.CancelFunc
 }
 
 // HandleTransactionRequest handles the transaction request and returns the sequence number
-func (p *Proposer) HandleTransactionRequest(req *pb.TransactionRequest) {
+func (p *Proposer) HandleTransactionRequest(req *pb.TransactionRequest) error {
 	// Assign a sequence number and create a record if it doesn't exist
 	sequenceNum, _ := p.state.StateLog.AssignSequenceNumberAndCreateRecord(p.state.GetBallotNumber(), req)
 	log.Infof("[Proposer] Assigned sequence number %d for request %s", sequenceNum, utils.TransactionRequestString(req))
@@ -34,15 +35,16 @@ func (p *Proposer) HandleTransactionRequest(req *pb.TransactionRequest) {
 		accepted, err := p.RunAcceptPhase(sequenceNum, p.state.StateLog.GetRequest(sequenceNum))
 		if err != nil {
 			log.Warnf("[Proposer] Accept phase failed for request %s: %v", utils.TransactionRequestString(req), err)
-			return
+			return err
 		}
 		if !accepted {
 			log.Warnf("[Proposer] Accept phase failed for request %s: insufficient quorum", utils.TransactionRequestString(req))
-			return
+			return errors.New("insufficient quorum")
 		}
 	}
 
-	p.RunCommitPhase(sequenceNum, p.state.StateLog.GetRequest(sequenceNum))
+	// Run commit phase and set committed flag
+	return p.RunCommitPhase(sequenceNum, p.state.StateLog.GetRequest(sequenceNum))
 }
 
 // RunAcceptPhase sends an accept request to all peers and returns the response from each peer
@@ -115,7 +117,12 @@ func (p *Proposer) RunCommitPhase(sequenceNum int64, req *pb.TransactionRequest)
 
 	// If not executed, trigger execution
 	if !p.state.StateLog.IsExecuted(sequenceNum) {
-		p.executionTriggerCh <- sequenceNum
+		signalCh := make(chan bool, 1)
+		p.executionTriggerCh <- ExecuteRequest{
+			SequenceNum: sequenceNum,
+			SignalCh:    signalCh,
+		}
+		<-signalCh
 	}
 
 	return nil
@@ -208,7 +215,7 @@ func (p *Proposer) RunNewViewPhase(ackMessages []*pb.AckMessage) {
 }
 
 // CreateProposer creates a new proposer
-func CreateProposer(id string, state *ServerState, config *ServerConfig, peers map[string]*models.Node, executionTriggerCh chan int64, logger *Logger) *Proposer {
+func CreateProposer(id string, state *ServerState, config *ServerConfig, peers map[string]*models.Node, executionTriggerCh chan ExecuteRequest, logger *Logger) *Proposer {
 	ctx, cancel := context.WithCancel(context.Background())
 	return &Proposer{
 		id:                 id,

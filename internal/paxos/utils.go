@@ -8,6 +8,14 @@ import (
 	pb "github.com/mavleo96/stable-leader-paxos/pb"
 )
 
+// Response Utilities
+
+// UnsuccessfulTransactionResponse is the response returned when a transaction is unsuccessful
+var UnsuccessfulTransactionResponse = &pb.TransactionResponse{}
+
+// NoOperation is the request returned when no operation is needed
+var NoOperation = &pb.TransactionRequest{}
+
 // BallotNumber Utilities
 
 // BallotNumberIsHigherOrEqual checks if current >= new

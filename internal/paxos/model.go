@@ -32,10 +32,7 @@ type PaxosServer struct {
 	pb.UnimplementedPaxosNodeServer
 }
 
-var UnsuccessfulTransactionResponse = &pb.TransactionResponse{}
-
-var NoOperation = &pb.TransactionRequest{}
-
+// InitializeSystem initializes the system by leader election
 func (s *PaxosServer) InitializeSystem() {
 	s.SysInitializedMutex.Lock()
 	defer s.SysInitializedMutex.Unlock()
@@ -49,36 +46,16 @@ func (s *PaxosServer) InitializeSystem() {
 	log.Infof("System already initialized")
 }
 
-func (s *PaxosServer) CatchupRoutine() {
-	maxSequenceNum := s.state.StateLog.MaxSequenceNum()
-	catchupMessage, err := s.SendCatchUpRequest(maxSequenceNum)
-	if err != nil {
-		log.Warn(err)
-		return
-	}
-
-	s.state.SetBallotNumber(catchupMessage.B)
-	for _, record := range catchupMessage.CommitLog {
-		s.acceptor.CommitRequestHandler(record)
-	}
-}
-
+// Start starts the paxos server
 func (s *PaxosServer) Start(ctx context.Context) {
-	s.wg.Add(1)
-	go func() {
-		defer s.wg.Done()
-		s.executor.ExecuteRouter(ctx)
-	}()
-
-	s.wg.Add(1)
-	go func() {
-		defer s.wg.Done()
-		s.elector.ElectionRoutine()
-	}()
+	s.wg.Go(func() { s.executor.ExecuteRouter(ctx) })
+	s.wg.Go(func() { s.elector.ElectionRoutine(ctx) })
+	s.wg.Go(func() { s.executor.PublishResults(ctx) })
 
 	s.wg.Wait()
 }
 
+// CreatePaxosServer creates a new PaxosServer instance
 func CreatePaxosServer(selfNode *models.Node, peerNodes map[string]*models.Node, clients []string, bankDB *database.Database) *PaxosServer {
 
 	serverConfig := CreateServerConfig(int64(len(peerNodes) + 1))

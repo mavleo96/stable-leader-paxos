@@ -86,7 +86,12 @@ func (l *LeaderElector) PrepareRequestHandler(prepareMessage *pb.PrepareMessage)
 	}, nil
 }
 
-func (l *LeaderElector) RunPreparePhase(prepareMessage *pb.PrepareMessage) (bool, []*pb.AckMessage) {
+func (l *LeaderElector) RunPreparePhase(ballotNumber *pb.BallotNumber) (bool, []*pb.AckMessage) {
+	// Create prepare message
+	prepareMessage := &pb.PrepareMessage{
+		B: ballotNumber,
+	}
+
 	// Logger: Add sent prepare message
 	l.logger.AddSentPrepareMessage(prepareMessage)
 
@@ -99,10 +104,14 @@ func (l *LeaderElector) RunPreparePhase(prepareMessage *pb.PrepareMessage) (bool
 			defer wg.Done()
 			ackMessage, err := (*peer.Client).PrepareRequest(context.Background(), prepareMessage)
 			if err != nil || ackMessage == nil {
-				log.Warnf("Failed to send prepare request to %s: %s", peer.ID, err)
+				log.Warnf("[RunPreparePhase] Failed to send prepare request %s to %s: %s", utils.BallotNumberString(prepareMessage.B), peer.ID, err)
 				return
 			}
-			log.Infof("Ack message from %s: %s", peer.ID, ackMessage.String())
+
+			// Logger: Add received ack message
+			l.logger.AddReceivedAckMessage(ackMessage)
+
+			log.Infof("[RunPreparePhase] Ack message from %s: %s", peer.ID, ackMessage.String())
 			responseCh <- ackMessage
 		}(peer)
 	}
@@ -114,48 +123,67 @@ func (l *LeaderElector) RunPreparePhase(prepareMessage *pb.PrepareMessage) (bool
 	// Wait for response and return true if all responses are true
 	accepted := int64(1)
 	ackMessages := make([]*pb.AckMessage, 0)
-	for ackMessage := range responseCh {
-		ackMessages = append(ackMessages, ackMessage)
-		accepted++
-		if accepted >= l.config.F+1 {
-			return true, ackMessages
+	for {
+		select {
+		// case <-time.After(prepareTimeout):
+		// 	log.Warnf("[RunPreparePhase] Context done for ballot number %s", utils.BallotNumberString(ballotNumber))
+		// 	return false, nil
+		case <-l.timer.ctx.Done():
+			log.Warnf("[RunPreparePhase] Timer context done for ballot number %s at %d", utils.BallotNumberString(ballotNumber), time.Now().UnixMilli())
+			return false, nil
+		case ackMessage, ok := <-responseCh:
+			if !ok {
+				log.Warnf("[RunPreparePhase] Response channel closed for ballot number %s", utils.BallotNumberString(ballotNumber))
+				return false, nil
+			}
+			ackMessages = append(ackMessages, ackMessage)
+			accepted++
+			if accepted >= l.config.F+1 {
+				log.Infof("[RunPreparePhase] Accepted quorum for ballot number %s", utils.BallotNumberString(ballotNumber))
+				return true, ackMessages
+			}
 		}
 	}
-	return false, nil
 }
 
 // ElectionRoutine is the main routine for the leader election
-func (l *LeaderElector) ElectionRoutine() {
+func (l *LeaderElector) ElectionRoutine(ctx context.Context) {
 electionLoop:
 	for {
-		<-l.timer.TimeoutCh
-		// l.state.SetPreparePhase(true)
-		log.Infof("[ElectionRoutine] Prepare phase started")
-		l.state.SetLeader("")
+		select {
+		case <-ctx.Done():
+			log.Warnf("[ElectionRoutine] Context done")
+			return
+		case <-l.timer.TimeoutCh:
+			log.Infof("[ElectionRoutine] Timer timeout for ballot number %s at %d", utils.BallotNumberString(l.state.GetBallotNumber()), time.Now().UnixMilli())
+		}
 
+		// Reset leader and forwarded requests log
+		l.state.SetLeader("")
+		l.state.ResetForwardedRequestsLog()
+
+		// Handle prepare messages in queue
 		highestBallotNumber, ok := l.PrepareQueueHandler(time.Now())
 		if ok {
+			// If there is a valid prepare message then continue election loop
 			continue electionLoop
 		}
 
+		// Initiate Election: Update state and run prepare phase
 		newBallotNumber := &pb.BallotNumber{
 			N:      highestBallotNumber.N + 1,
 			NodeID: l.id,
 		}
-		// Update state
 		l.state.SetBallotNumber(newBallotNumber)
-
-		prepareMessage := &pb.PrepareMessage{
-			B: newBallotNumber,
-		}
-		elected, ackMessages := l.RunPreparePhase(prepareMessage)
+		elected, ackMessages := l.RunPreparePhase(newBallotNumber)
 		if !elected {
+			// If election is not successful then continue election loop
 			continue electionLoop
 		}
 
+		// Election successful: Set leader and run new view phase
 		l.state.SetLeader(l.id)
 		log.Infof("[ElectionRoutine] New leader with promised ballot number %s", utils.BallotNumberString(l.state.GetBallotNumber()))
-
-		l.proposer.RunNewViewPhase(ackMessages)
+		go l.proposer.RunNewViewPhase(ackMessages)
 	}
 }

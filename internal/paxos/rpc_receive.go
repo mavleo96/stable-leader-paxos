@@ -100,12 +100,12 @@ func (s *PaxosServer) NewViewRequest(req *pb.NewViewMessage, stream pb.PaxosNode
 		return status.Errorf(codes.Unavailable, "node not alive")
 	}
 
-	// No need to acquire state mutex since AcceptRequest acquires it
-	log.Infof("[NewViewRequest] Received new view message %v", utils.BallotNumberString(req.B))
-	s.state.AddNewViewMessage(req)
-
 	// Logger: Add received new view message
 	s.logger.AddReceivedNewViewMessage(req)
+
+	// Reset timer
+	log.Infof("[NewViewRequest] Received new view message %v", utils.BallotNumberString(req.B))
+	s.acceptor.timer.Cleanup()
 
 	// Handle accept messages
 	for _, acceptMessage := range req.AcceptLog {

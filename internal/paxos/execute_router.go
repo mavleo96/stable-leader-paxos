@@ -52,13 +52,35 @@ executeLoop:
 
 				e.state.SetLastExecutedSequenceNum(i)
 
-				// Send response to response channel if it exists
-				if responseCh, ok := e.responseCh[i]; ok {
-					log.Infof("[Executor] Sending response %d for sequence number %d", result, i)
-					responseCh <- result
-					e.CloseAndRemoveResponseChannel(i)
+				// Publish result to publish channel
+				if e.state.GetLeader() == e.state.id {
+					e.publishTriggerCh <- i
 				}
 			}
+		}
+	}
+}
+
+func (e *Executor) PublishResults(ctx context.Context) {
+publishLoop:
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case s := <-e.publishTriggerCh:
+			log.Infof("[PublishResults] Received publish signal for sequence number %d", s)
+			if !e.state.StateLog.IsExecuted(s) {
+				log.Warnf("[PublishResults] Cannot publish result for sequence number %d because it was not executed", s)
+				continue publishLoop
+			}
+			responseCh := e.GetResponseChannel(s)
+			if responseCh == nil {
+				log.Warnf("[PublishResults] Cannot publish result for sequence number %d because response channel does not exist", s)
+				continue publishLoop
+			}
+			responseCh <- e.state.StateLog.GetResult(s)
+			e.CloseAndRemoveResponseChannel(s)
+			log.Infof("[PublishResults] Published result for sequence number %d", s)
 		}
 	}
 }

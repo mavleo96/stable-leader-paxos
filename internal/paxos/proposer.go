@@ -20,6 +20,8 @@ type Proposer struct {
 	peers              map[string]*models.Node
 	executionTriggerCh chan int64
 	logger             *Logger
+	ctx                context.Context
+	cancel             context.CancelFunc
 }
 
 // HandleTransactionRequest handles the transaction request and returns the sequence number
@@ -28,8 +30,7 @@ func (p *Proposer) HandleTransactionRequest(req *pb.TransactionRequest) int64 {
 	sequenceNum, _ := p.state.StateLog.AssignSequenceNumberAndCreateRecord(p.state.GetBallotNumber(), req)
 	log.Infof("[Proposer] Assigned sequence number %d for request %s", sequenceNum, utils.TransactionRequestString(req))
 
-	// go p.RunProtocol(sequenceNum)
-
+	go p.RunProtocol(sequenceNum)
 	return sequenceNum
 }
 
@@ -200,6 +201,7 @@ func (p *Proposer) RunNewViewPhase(ackMessages []*pb.AckMessage) {
 
 // CreateProposer creates a new proposer
 func CreateProposer(id string, state *ServerState, config *ServerConfig, peers map[string]*models.Node, executionTriggerCh chan int64, logger *Logger) *Proposer {
+	ctx, cancel := context.WithCancel(context.Background())
 	return &Proposer{
 		id:                 id,
 		state:              state,
@@ -207,6 +209,8 @@ func CreateProposer(id string, state *ServerState, config *ServerConfig, peers m
 		peers:              peers,
 		executionTriggerCh: executionTriggerCh,
 		logger:             logger,
+		ctx:                ctx,
+		cancel:             cancel,
 	}
 }
 

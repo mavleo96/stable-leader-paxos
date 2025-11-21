@@ -27,6 +27,18 @@ type LogRecord struct {
 	result      int64
 }
 
+// GetSequenceNumber returns the sequence number for a given request
+func (s *StateLog) GetSequenceNumber(request *pb.TransactionRequest) int64 {
+	s.mutex.RLock()
+	defer s.mutex.RUnlock()
+	for _, record := range s.log {
+		if record != nil && proto.Equal(record.request, request) {
+			return record.sequenceNum
+		}
+	}
+	return 0
+}
+
 // AssignSequenceNumberAndCreateRecord assigns a sequence number to a log record for a given digest and creates a new log record if not found
 func (s *StateLog) AssignSequenceNumberAndCreateRecord(ballotNumber *pb.BallotNumber, request *pb.TransactionRequest) (int64, bool) {
 	s.mutex.Lock()
@@ -252,7 +264,7 @@ func (s *StateLog) GetLogString(sequenceNum int64) string {
 func (s *StateLog) Reset() {
 	s.mutex.Lock()
 	defer s.mutex.Unlock()
-	s.log = make(map[int64]*LogRecord)
+	s.log = make(map[int64]*LogRecord, 100)
 }
 
 // statusString returns the status string for a given log record
@@ -277,7 +289,7 @@ func CreateStateLog(id string) *StateLog {
 	return &StateLog{
 		id:    id,
 		mutex: sync.RWMutex{},
-		log:   make(map[int64]*LogRecord),
+		log:   make(map[int64]*LogRecord, 100),
 	}
 }
 
@@ -327,6 +339,6 @@ func (l *LastReply) Reset() {
 func CreateLastReply() *LastReply {
 	return &LastReply{
 		mutex:    sync.RWMutex{},
-		replyMap: make(map[string]*pb.TransactionResponse),
+		replyMap: make(map[string]*pb.TransactionResponse, 10),
 	}
 }

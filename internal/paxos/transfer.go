@@ -54,21 +54,20 @@ func (s *PaxosServer) TransferRequest(ctx context.Context, req *pb.TransactionRe
 		return UnsuccessfulTransactionResponse, status.Errorf(codes.AlreadyExists, "old timestamp")
 	}
 
-	sequenceNum := s.proposer.HandleTransactionRequest(req)
+	// Handle transaction request
+	s.proposer.HandleTransactionRequest(req)
 
-	// Add response channel for sequence number
-	responseCh := make(chan int64)
+	// Add response channel for sequence number and wait for response
+	sequenceNum := s.state.StateLog.GetSequenceNumber(req)
+	responseCh := make(chan int64, 1)
 	s.executor.AddResponseChannel(sequenceNum, responseCh)
 
-	// Run protocol
-	go s.proposer.RunProtocol(sequenceNum)
-
-	// Wait for response from executor
 	result := <-responseCh
 	if result == -1 {
 		return UnsuccessfulTransactionResponse, status.Errorf(codes.Aborted, "execute request failed try again")
 	}
 
+	// Create transaction response and update last reply
 	response := &pb.TransactionResponse{
 		B:         s.state.GetBallotNumber(),
 		Timestamp: req.Timestamp,

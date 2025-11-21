@@ -15,7 +15,6 @@ type ServerState struct {
 	leader                  string
 	lastExecutedSequenceNum int64
 
-	newViewLog           []*pb.NewViewMessage
 	forwardedRequestsLog []*pb.TransactionRequest
 
 	// Self-managed components
@@ -65,20 +64,6 @@ func (s *ServerState) SetLastExecutedSequenceNum(sequenceNum int64) {
 	s.lastExecutedSequenceNum = sequenceNum
 }
 
-// AddNewViewMessage adds a new view message to the new view log
-func (s *ServerState) AddNewViewMessage(newViewMessage *pb.NewViewMessage) {
-	s.mutex.Lock()
-	defer s.mutex.Unlock()
-	s.newViewLog = append(s.newViewLog, newViewMessage)
-}
-
-// GetNewViewMessages returns the new view messages
-func (s *ServerState) GetNewViewMessages() []*pb.NewViewMessage {
-	s.mutex.RLock()
-	defer s.mutex.RUnlock()
-	return s.newViewLog
-}
-
 // AddForwardedRequest adds a forwarded request to the forwarded requests log
 func (s *ServerState) AddForwardedRequest(request *pb.TransactionRequest) {
 	s.mutex.Lock()
@@ -111,7 +96,6 @@ func (s *ServerState) Reset() {
 	defer s.mutex.Unlock()
 	s.b = &pb.BallotNumber{N: 0, NodeID: ""}
 	s.lastExecutedSequenceNum = 0
-	s.newViewLog = make([]*pb.NewViewMessage, 0)
 	s.forwardedRequestsLog = make([]*pb.TransactionRequest, 0)
 	s.StateLog.Reset()
 	s.LastReply.Reset()
@@ -125,7 +109,6 @@ func CreateServerState(id string) *ServerState {
 		b:                       &pb.BallotNumber{N: 1, NodeID: "n1"},
 		leader:                  "n1",
 		lastExecutedSequenceNum: 0,
-		newViewLog:              make([]*pb.NewViewMessage, 0),
 		forwardedRequestsLog:    make([]*pb.TransactionRequest, 0),
 		StateLog:                CreateStateLog(id),
 		LastReply:               CreateLastReply(),

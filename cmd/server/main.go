@@ -33,7 +33,7 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	nodeMap := models.GetNodeMap(cfg.Nodes)
+	nodeMap, err := models.GetNodeMap(cfg.Nodes)
 	if err != nil {
 		log.Fatal(err)
 	}

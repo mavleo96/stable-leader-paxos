@@ -8,8 +8,8 @@ import (
 	"google.golang.org/protobuf/types/known/wrapperspb"
 )
 
-// ChangeNodeStatus sets the node status to active or inactive
-func (s *PaxosServer) ChangeNodeStatus(ctx context.Context, status *wrapperspb.BoolValue) (*emptypb.Empty, error) {
+// ReconfigureNode reconfigures the node to active or inactive
+func (s *PaxosServer) ReconfigureNode(ctx context.Context, status *wrapperspb.BoolValue) (*emptypb.Empty, error) {
 	// If node status is already the same, return
 	if s.config.Alive == status.Value {
 		return &emptypb.Empty{}, nil
@@ -37,5 +37,15 @@ func (s *PaxosServer) KillLeader(ctx context.Context, in *emptypb.Empty) (*empty
 	s.config.Alive = false
 	s.state.SetLeader("")
 	log.Warnf("Node %s status changed to %v", s.ID, s.config.Alive)
+	return &emptypb.Empty{}, nil
+}
+
+// ResetNode resets the server state and database
+func (s *PaxosServer) ResetNode(ctx context.Context, req *emptypb.Empty) (*emptypb.Empty, error) {
+	// Reset server state
+	s.state.Reset()
+	s.executor.db.ResetDB(10)
+	s.logger.Reset()
+
 	return &emptypb.Empty{}, nil
 }

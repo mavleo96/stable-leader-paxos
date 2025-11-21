@@ -1,10 +1,11 @@
-package client
+package clientapp
 
 import (
 	"context"
 	"sync"
 	"time"
 
+	"github.com/mavleo96/stable-leader-paxos/internal/models"
 	"github.com/mavleo96/stable-leader-paxos/internal/utils"
 	pb "github.com/mavleo96/stable-leader-paxos/pb"
 	log "github.com/sirupsen/logrus"
@@ -22,12 +23,12 @@ type result struct {
 	Err      error
 }
 
-func QueueRoutine(ctx context.Context, queueChan chan SetNumber, clientChannels map[string]chan SetNumber, nodeClients map[string]pb.PaxosNodeClient) {
+func QueueRoutine(ctx context.Context, queueChan chan SetNumber, clientChannels map[string]chan SetNumber, nodeMap map[string]*models.Node) {
 	for {
 		select {
 		case setNum := <-queueChan:
 			if setNum.N2 > 1 {
-				KillLeader(nodeClients)
+				KillLeader(nodeMap)
 			}
 			wg := sync.WaitGroup{}
 			for _, clientChan := range clientChannels {
@@ -48,7 +49,7 @@ func QueueRoutine(ctx context.Context, queueChan chan SetNumber, clientChannels 
 }
 
 // ClientRoutine is a persistent routine that processes transactions for a client
-func ClientRoutine(ctx context.Context, clientID string, signalCh chan SetNumber, txnQueue ClientTxnQueue, nodeClients map[string]pb.PaxosNodeClient) {
+func ClientRoutine(ctx context.Context, clientID string, signalCh chan SetNumber, txnQueue ClientTxnQueue, nodeMap map[string]*models.Node) {
 	leaderNode := "n1" // leader initialized to n1 by default
 	for {
 		select {
@@ -56,7 +57,7 @@ func ClientRoutine(ctx context.Context, clientID string, signalCh chan SetNumber
 		case setNum := <-signalCh:
 			// Process transactions for the set
 			for _, t := range txnQueue[setNum] {
-				processTransaction(clientID, t, nodeClients, &leaderNode)
+				processTransaction(clientID, t, nodeMap, &leaderNode)
 			}
 			// Signal main routine that the set is done
 			signalCh <- SetNumber{}
@@ -70,7 +71,7 @@ func ClientRoutine(ctx context.Context, clientID string, signalCh chan SetNumber
 }
 
 // processTransaction processes a transaction with retries and updates the leader node if leader changes
-func processTransaction(clientID string, t *pb.Transaction, nodeClients map[string]pb.PaxosNodeClient, leaderNode *string) {
+func processTransaction(clientID string, t *pb.Transaction, nodeMap map[string]*models.Node, leaderNode *string) {
 	// Create a TransactionRequest with timestamp (uid) and sender
 	timestamp := time.Now().UnixMilli()
 	request := &pb.TransactionRequest{
@@ -87,7 +88,7 @@ retryLoop:
 		// Context for each attempt with timeout
 		ctx, cancel := context.WithTimeout(context.Background(), clientTimeout)
 		if attempt == 1 { // First attempt to leader
-			response, err = nodeClients[*leaderNode].TransferRequest(ctx, request)
+			response, err = (*nodeMap[*leaderNode].Client).TransferRequest(ctx, request)
 			if err == nil {
 				log.Infof(
 					"%s <- %s: %s, %s",
@@ -114,16 +115,16 @@ retryLoop:
 		} else { // Multi-cast to all nodes if 1st attempt fails
 			// Responses channel to collect responses from goroutines of requests to all nodes
 			// (By recreating this channel in each attempt we don't have to drain it)
-			responsesCh := make(chan result, len(nodeClients))
+			responsesCh := make(chan result, len(nodeMap))
 			// Multi-cast to all nodes and collect responses
-			for nodeID, nodeClient := range nodeClients {
-				go func(nodeID string, nodeClient pb.PaxosNodeClient) {
-					resp, err := nodeClient.TransferRequest(ctx, request)
+			for _, node := range nodeMap {
+				go func(node *models.Node) {
+					resp, err := (*node.Client).TransferRequest(ctx, request)
 					if err == nil {
 						log.Infof(
 							"%s <- %s: %s, %s",
 							clientID,
-							nodeID,
+							node.ID,
 							utils.TransactionString(request.Transaction),
 							utils.TransactionResponseString(resp),
 						)
@@ -131,15 +132,15 @@ retryLoop:
 						log.Warnf(
 							"%s <- %s: %s, %v",
 							clientID,
-							nodeID,
+							node.ID,
 							utils.TransactionString(request.Transaction),
 							status.Convert(err).Message(),
 						)
 					}
 					responsesCh <- result{Response: resp, Err: err}
-				}(nodeID, nodeClient)
+				}(node)
 			}
-			for i := 0; i < len(nodeClients); i++ { // Collect responses from goroutines
+			for i := 0; i < len(nodeMap); i++ { // Collect responses from goroutines
 				res := <-responsesCh
 				if res.Err == nil {
 					// Update leader node if response is successful

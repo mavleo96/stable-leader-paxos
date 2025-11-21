@@ -10,6 +10,14 @@ func LastElement[T any](slice []T) *T {
 	return &slice[len(slice)-1]
 }
 
+// Pop returns the last element of a slice and the slice without the last element
+func Pop[T any](slice []T) (T, []T) {
+	if len(slice) == 0 {
+		return *new(T), slice
+	}
+	return slice[len(slice)-1], slice[:len(slice)-1]
+}
+
 // Max returns the maximum value of a slice
 func Max[T cmp.Ordered](slice []T) T {
 	if len(slice) == 0 {

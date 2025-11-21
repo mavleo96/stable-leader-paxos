@@ -6,9 +6,9 @@ import (
 )
 
 const (
-	minBackupTimeout = time.Duration(300 * time.Millisecond)
-	maxBackupTimeout = time.Duration(400 * time.Millisecond)
-	prepareTimeout   = time.Duration(150 * time.Millisecond)
+	minBackupTimeout = time.Duration(250 * time.Millisecond)
+	maxBackupTimeout = time.Duration(350 * time.Millisecond)
+	prepareTimeout   = time.Duration(200 * time.Millisecond)
 )
 
 // ServerConfig is the configuration for the server

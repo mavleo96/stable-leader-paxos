@@ -9,14 +9,10 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/mavleo96/stable-leader-paxos/internal/client"
+	"github.com/mavleo96/stable-leader-paxos/internal/clientapp"
 	"github.com/mavleo96/stable-leader-paxos/internal/config"
-	pb "github.com/mavleo96/stable-leader-paxos/pb"
+	"github.com/mavleo96/stable-leader-paxos/internal/models"
 	log "github.com/sirupsen/logrus"
-	"google.golang.org/grpc"
-	"google.golang.org/grpc/credentials/insecure"
-	"google.golang.org/protobuf/types/known/emptypb"
-	"google.golang.org/protobuf/types/known/wrapperspb"
 )
 
 func main() {
@@ -30,33 +26,22 @@ func main() {
 		log.Fatal(err)
 	}
 
-	// Create gRPC clients for each node
-	nodeClients := make(map[string]pb.PaxosNodeClient)
-	for _, node := range cfg.Nodes {
-		var conn *grpc.ClientConn
-		var err error
-		for {
-			conn, err = grpc.NewClient(node.Address, grpc.WithTransportCredentials(insecure.NewCredentials()))
-			if err != nil {
-				log.Warn(err)
-				continue
-			}
-			break
-		}
-		txnClient := pb.NewPaxosNodeClient(conn)
-		nodeClients[node.ID] = txnClient
-		defer conn.Close()
+	// Create map of node structs
+	// Note: this object is shared by clients
+	nodeMap, err := models.GetNodeMap(cfg.Nodes)
+	if err != nil {
+		log.Fatal(err)
 	}
 
 	// Parse Transactions
 	// The entire csv file is loaded into memory and transactions are queued by
 	// client and set number like preserving the order for each client.
-	records, err := client.ReadCSV(*filePath)
+	records, err := clientapp.ReadCSV(*filePath)
 	if err != nil {
 		log.Fatal(err)
 	}
 	// masterQueue is a nested map of client id to set number to list of transactions.
-	masterQueue, setNumList, aliveNodesMap, err := client.ParseRecords(records, cfg.Clients)
+	masterQueue, setNumList, aliveNodesMap, err := clientapp.ParseRecords(records, cfg.Clients)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -66,9 +51,9 @@ func main() {
 	// - main routine sends set number to client routine
 	// - client routine sends {nil, nil} to main routine when set is done
 	wg := sync.WaitGroup{}
-	clientChannels := make(map[string]chan client.SetNumber)
+	clientChannels := make(map[string]chan clientapp.SetNumber)
 	for _, clientID := range cfg.Clients {
-		clientChannels[clientID] = make(chan client.SetNumber)
+		clientChannels[clientID] = make(chan clientapp.SetNumber)
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -76,58 +61,70 @@ func main() {
 		wg.Add(1)
 		go func(ctx context.Context, id string) {
 			defer wg.Done()
-			client.ClientRoutine(ctx, id, clientChannels[id], masterQueue[id], nodeClients)
+			clientapp.ClientRoutine(ctx, id, clientChannels[id], masterQueue[id], nodeMap)
 		}(ctx, clientID)
 
 	}
-	queueChan := make(chan client.SetNumber, 5)
+	queueChan := make(chan clientapp.SetNumber, 5)
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		client.QueueRoutine(ctx, queueChan, clientChannels, nodeClients)
+		clientapp.QueueRoutine(ctx, queueChan, clientChannels, nodeMap)
 	}()
 
+	// Main interaction loop
+	// This loop is used to interact with the user and execute commands
+	// to control the execution of the test sets and log the results.
+	log.Info("Main interaction loop started")
 	scanner := bufio.NewScanner(os.Stdin)
 
 interactionLoop:
 	for {
+		// Read command from stdin
 		if !scanner.Scan() {
 			if err := scanner.Err(); err != nil {
 				log.Panic(err)
 			}
 		}
 		cmd := strings.TrimSpace(scanner.Text())
+
+		// If command contains "print status", then parse the argument
 		var arg int
 		if strings.HasPrefix(cmd, "print status") {
 			var err error
 			n := strings.TrimPrefix(cmd, "print status")
 			n = strings.TrimSpace(n)
-			arg, err = strconv.Atoi(n)
+			if n == "all" {
+				arg = 0
+			} else {
+				arg, err = strconv.Atoi(n)
+			}
 			if err != nil {
 				log.Warn(err)
 				continue interactionLoop
 			}
 			cmd = "print status"
-			if arg <= 0 {
+			if arg < 0 {
 				log.Warn("Invalid argument for print status")
 				continue interactionLoop
 			}
 		}
-		// If command contains "print status", then
+
+		// Execute command
 		switch cmd {
 		case "next":
 			// send set number to queue routine
-			var setNum client.SetNumber
+			var setNum clientapp.SetNumber
 			for {
 				if len(setNumList) == 0 {
 					break interactionLoop
 				} else if len(setNumList) > 1 {
 					setNum, setNumList = setNumList[0], setNumList[1:]
 				} else {
-					setNum, setNumList = setNumList[0], make([]client.SetNumber, 0)
+					setNum, setNumList = setNumList[0], make([]clientapp.SetNumber, 0)
 				}
 				if setNum.N2 == 1 {
-					client.ReconfigureNodes(aliveNodesMap[setNum], nodeClients)
+					clientapp.ReconfigureNodes(nodeMap, aliveNodesMap[setNum])
 				}
 				queueChan <- setNum
 				if len(setNumList) > 0 && setNumList[0].N2 > 1 {
@@ -136,45 +133,17 @@ interactionLoop:
 				break
 			}
 		case "print log":
-			log.Info("Print log command received")
-			for _, nodeClient := range nodeClients {
-				_, err = nodeClient.PrintLog(context.Background(), &emptypb.Empty{})
-				if err != nil {
-					log.Warn(err)
-				}
-			}
+			clientapp.SendPrintLogCommand(nodeMap, int64(0))
 		case "print db":
-			log.Info("Print db command received")
-			for _, nodeClient := range nodeClients {
-				_, err = nodeClient.PrintDB(context.Background(), &emptypb.Empty{})
-				if err != nil {
-					log.Warn(err)
-				}
-			}
+			clientapp.SendPrintDBCommand(nodeMap, int64(0))
 		case "print status":
-			log.Infof("Print status command received for %d", arg)
-			for _, nodeClient := range nodeClients {
-				_, err = nodeClient.PrintStatus(context.Background(), &wrapperspb.Int64Value{Value: int64(arg)})
-				if err != nil {
-					log.Warn(err)
-				}
-			}
+			clientapp.SendPrintStatusCommand(nodeMap, int64(0), int64(arg))
 		case "print view":
-			log.Info("Print view command received")
-			for _, nodeClient := range nodeClients {
-				_, err = nodeClient.PrintView(context.Background(), &emptypb.Empty{})
-				if err != nil {
-					log.Warn(err)
-				}
-			}
+			clientapp.SendPrintViewCommand(nodeMap, int64(0))
 		case "kill leader":
-			log.Info("lf command received")
-			for _, nodeClient := range nodeClients {
-				_, err = nodeClient.KillLeader(context.Background(), &emptypb.Empty{})
-				if err != nil {
-					log.Warn(err)
-				}
-			}
+			clientapp.KillLeader(nodeMap)
+		case "reset nodes":
+			clientapp.SendResetCommand(nodeMap)
 		case "exit":
 			break interactionLoop
 		default:

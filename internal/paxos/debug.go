@@ -6,17 +6,18 @@ import (
 	"sort"
 
 	"github.com/mavleo96/stable-leader-paxos/internal/utils"
+	pb "github.com/mavleo96/stable-leader-paxos/pb"
 	log "github.com/sirupsen/logrus"
 	"google.golang.org/protobuf/types/known/emptypb"
 	"google.golang.org/protobuf/types/known/wrapperspb"
 )
 
 // PrintLog prints the accept log, last reply timestamp, and accepted messages
-func (s *PaxosServer) PrintLog(ctx context.Context, req *emptypb.Empty) (*emptypb.Empty, error) {
+func (s *PaxosServer) PrintLog(ctx context.Context, req *wrapperspb.Int64Value) (*emptypb.Empty, error) {
 	log.Infof("Printing log command received")
 
 	// TODO: Replace with actual test set number
-	fmt.Println("LOGS FOR TEST SET:", 0)
+	fmt.Println("LOGS FOR TEST SET:", req.Value)
 
 	fmt.Println("Sent Prepare Messages:")
 	for _, message := range s.logger.GetSentPrepareMessages() {
@@ -100,10 +101,10 @@ func (s *PaxosServer) PrintLog(ctx context.Context, req *emptypb.Empty) (*emptyp
 }
 
 // PrintDB prints the database
-func (s *PaxosServer) PrintDB(ctx context.Context, req *emptypb.Empty) (*emptypb.Empty, error) {
+func (s *PaxosServer) PrintDB(ctx context.Context, req *wrapperspb.Int64Value) (*emptypb.Empty, error) {
 	log.Infof("Print database command received")
 
-	fmt.Println("DATABASE FOR TEST SET:", 0)
+	fmt.Println("DATABASE FOR TEST SET:", req.Value)
 	dbState, err := s.executor.db.GetDBState()
 	if err != nil {
 		log.Fatal(err)
@@ -121,12 +122,12 @@ func (s *PaxosServer) PrintDB(ctx context.Context, req *emptypb.Empty) (*emptypb
 	return &emptypb.Empty{}, nil
 }
 
-func (s *PaxosServer) PrintStatus(ctx context.Context, req *wrapperspb.Int64Value) (*emptypb.Empty, error) {
+func (s *PaxosServer) PrintStatus(ctx context.Context, req *pb.StatusRequest) (*emptypb.Empty, error) {
 	log.Infof("Print status command received")
-	fmt.Println("STATUS FOR TEST SET:", 0)
+	fmt.Println("STATUS FOR TEST SET:", req.TestSet)
 
-	printRange := []int64{req.Value}
-	if req.Value != 0 {
+	printRange := []int64{req.SequenceNum}
+	if req.SequenceNum == 0 {
 		printRange = utils.Range(1, s.state.StateLog.MaxSequenceNum()+1)
 	}
 
@@ -140,24 +141,12 @@ func (s *PaxosServer) PrintStatus(ctx context.Context, req *wrapperspb.Int64Valu
 	fmt.Println("")
 
 	return &emptypb.Empty{}, nil
-	// record, ok := s.State.AcceptLog[req.Value]
-	// if !ok {
-	// 	fmt.Printf("Sequence Number: %d, Status: X\n", req.Value)
-	// } else if record.Executed {
-	// 	fmt.Printf("Sequence Number: %d, Status: E, Message: %s\n", req.Value, utils.TransactionRequestString(record.AcceptedVal))
-	// } else if record.Committed {
-	// 	fmt.Printf("Sequence Number: %d, Status: C, Message: %s\n", req.Value, utils.TransactionRequestString(record.AcceptedVal))
-	// } else {
-	// 	fmt.Printf("Sequence Number: %d, Status: A, Message: %s\n", req.Value, utils.TransactionRequestString(record.AcceptedVal))
-	// }
-	// fmt.Println("")
-	// return &emptypb.Empty{}, nil
 }
 
-func (s *PaxosServer) PrintView(ctx context.Context, req *emptypb.Empty) (*emptypb.Empty, error) {
+func (s *PaxosServer) PrintView(ctx context.Context, req *wrapperspb.Int64Value) (*emptypb.Empty, error) {
 	log.Infof("Print view command received")
 
-	fmt.Println("NEW VIEW MESSAGES FOR TEST SET:", 0)
+	fmt.Println("NEW VIEW MESSAGES FOR TEST SET:", req.Value)
 
 	fmt.Println("Sent new view messages:")
 	for _, message := range s.logger.GetSentNewViewMessages() {

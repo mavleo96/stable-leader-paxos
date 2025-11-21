@@ -40,6 +40,19 @@ func (d *Database) InitDB(dbPath string, accountIds []string, initBalance int64)
 	})
 }
 
+// ResetDB resets the database by setting the initial balance for all accounts to the given value.
+func (d *Database) ResetDB(initBalance int64) (err error) {
+	return d.db.Update(func(tx *bbolt.Tx) error {
+		b := tx.Bucket([]byte("balances"))
+		if b == nil {
+			return errors.New("balances bucket not found")
+		}
+		return b.ForEach(func(k, _ []byte) error {
+			return b.Put([]byte(string(k)), []byte(strconv.FormatInt(initBalance, 10)))
+		})
+	})
+}
+
 // UpdateDB processes a transaction by updating the balances of the sender and receiver.
 // It returns true if the transaction was successful, or false if the sender had insufficient funds.
 func (d *Database) UpdateDB(t *pb.Transaction) (bool, error) {

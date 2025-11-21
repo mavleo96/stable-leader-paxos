@@ -19,13 +19,19 @@ service PaxosNode {
     rpc NewViewRequest (NewViewMessage) returns (stream AcceptedMessage);
     rpc CatchupRequest (CatchupRequestMessage) returns (CatchupMessage);
 
-    rpc PrintLog (google.protobuf.Empty) returns (google.protobuf.Empty);
-    rpc PrintDB (google.protobuf.Empty) returns (google.protobuf.Empty);
-    rpc PrintStatus (google.protobuf.Int64Value) returns (google.protobuf.Empty);
-    rpc PrintView (google.protobuf.Empty) returns (google.protobuf.Empty);
+    rpc PrintLog (google.protobuf.Int64Value) returns (google.protobuf.Empty);
+    rpc PrintDB (google.protobuf.Int64Value) returns (google.protobuf.Empty);
+    rpc PrintStatus (StatusRequest) returns (google.protobuf.Empty);
+    rpc PrintView (google.protobuf.Int64Value) returns (google.protobuf.Empty);
 
-    rpc ChangeNodeStatus (google.protobuf.BoolValue) returns (google.protobuf.Empty);
+    rpc ReconfigureNode (google.protobuf.BoolValue) returns (google.protobuf.Empty);
     rpc KillLeader (google.protobuf.Empty) returns (google.protobuf.Empty);
+    rpc ResetNode (google.protobuf.Empty) returns (google.protobuf.Empty);
+}
+
+message StatusRequest {
+    int64 testSet = 1;
+    int64 sequenceNum = 2;
 }
 
 // ---------- TransactionResponse ----------

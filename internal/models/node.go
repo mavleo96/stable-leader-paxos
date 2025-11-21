@@ -1,8 +1,6 @@
 package models
 
 import (
-	"log"
-
 	"github.com/mavleo96/stable-leader-paxos/internal/config"
 	"github.com/mavleo96/stable-leader-paxos/internal/utils"
 	"github.com/mavleo96/stable-leader-paxos/pb"
@@ -17,14 +15,14 @@ type Node struct {
 }
 
 // GetNodeMap creates a map of nodes from a map of node configurations
-func GetNodeMap(nodeConfig map[string]*config.NodeEntry) map[string]*Node {
+func GetNodeMap(nodeConfig map[string]*config.NodeEntry) (map[string]*Node, error) {
 	nodeMap := make(map[string]*Node)
 	for id, nodeConfig := range nodeConfig {
 
 		// Connect to node
 		conn, err := utils.Connect(nodeConfig.Address)
 		if err != nil {
-			log.Fatalf("Failed to connect to node %s: %v", id, err)
+			return nil, err
 		}
 		nodeClient := pb.NewPaxosNodeClient(conn)
 
@@ -36,5 +34,5 @@ func GetNodeMap(nodeConfig map[string]*config.NodeEntry) map[string]*Node {
 			Close:   func() error { return conn.Close() },
 		}
 	}
-	return nodeMap
+	return nodeMap, nil
 }

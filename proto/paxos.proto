@@ -10,6 +10,8 @@ option go_package = "github.com/mavleo96/stable-leader-paxos/pb";
 service PaxosNode {
     rpc TransferRequest (TransactionRequest) returns (TransactionResponse);
 
+    rpc ForwardRequest (TransactionRequest) returns (google.protobuf.Empty);
+
     rpc PrepareRequest (PrepareMessage) returns (AckMessage);
     rpc AcceptRequest (AcceptMessage) returns (AcceptedMessage);
     rpc CommitRequest (CommitMessage) returns (google.protobuf.Empty);

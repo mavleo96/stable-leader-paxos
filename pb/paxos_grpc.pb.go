@@ -22,6 +22,7 @@ const _ = grpc.SupportPackageIsVersion7
 
 const (
 	PaxosNode_TransferRequest_FullMethodName  = "/pb.PaxosNode/TransferRequest"
+	PaxosNode_ForwardRequest_FullMethodName   = "/pb.PaxosNode/ForwardRequest"
 	PaxosNode_PrepareRequest_FullMethodName   = "/pb.PaxosNode/PrepareRequest"
 	PaxosNode_AcceptRequest_FullMethodName    = "/pb.PaxosNode/AcceptRequest"
 	PaxosNode_CommitRequest_FullMethodName    = "/pb.PaxosNode/CommitRequest"
@@ -40,6 +41,7 @@ const (
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type PaxosNodeClient interface {
 	TransferRequest(ctx context.Context, in *TransactionRequest, opts ...grpc.CallOption) (*TransactionResponse, error)
+	ForwardRequest(ctx context.Context, in *TransactionRequest, opts ...grpc.CallOption) (*emptypb.Empty, error)
 	PrepareRequest(ctx context.Context, in *PrepareMessage, opts ...grpc.CallOption) (*AckMessage, error)
 	AcceptRequest(ctx context.Context, in *AcceptMessage, opts ...grpc.CallOption) (*AcceptedMessage, error)
 	CommitRequest(ctx context.Context, in *CommitMessage, opts ...grpc.CallOption) (*emptypb.Empty, error)
@@ -64,6 +66,15 @@ func NewPaxosNodeClient(cc grpc.ClientConnInterface) PaxosNodeClient {
 func (c *paxosNodeClient) TransferRequest(ctx context.Context, in *TransactionRequest, opts ...grpc.CallOption) (*TransactionResponse, error) {
 	out := new(TransactionResponse)
 	err := c.cc.Invoke(ctx, PaxosNode_TransferRequest_FullMethodName, in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *paxosNodeClient) ForwardRequest(ctx context.Context, in *TransactionRequest, opts ...grpc.CallOption) (*emptypb.Empty, error) {
+	out := new(emptypb.Empty)
+	err := c.cc.Invoke(ctx, PaxosNode_ForwardRequest_FullMethodName, in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -197,6 +208,7 @@ func (c *paxosNodeClient) KillLeader(ctx context.Context, in *emptypb.Empty, opt
 // for forward compatibility
 type PaxosNodeServer interface {
 	TransferRequest(context.Context, *TransactionRequest) (*TransactionResponse, error)
+	ForwardRequest(context.Context, *TransactionRequest) (*emptypb.Empty, error)
 	PrepareRequest(context.Context, *PrepareMessage) (*AckMessage, error)
 	AcceptRequest(context.Context, *AcceptMessage) (*AcceptedMessage, error)
 	CommitRequest(context.Context, *CommitMessage) (*emptypb.Empty, error)
@@ -217,6 +229,9 @@ type UnimplementedPaxosNodeServer struct {
 
 func (UnimplementedPaxosNodeServer) TransferRequest(context.Context, *TransactionRequest) (*TransactionResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method TransferRequest not implemented")
+}
+func (UnimplementedPaxosNodeServer) ForwardRequest(context.Context, *TransactionRequest) (*emptypb.Empty, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ForwardRequest not implemented")
 }
 func (UnimplementedPaxosNodeServer) PrepareRequest(context.Context, *PrepareMessage) (*AckMessage, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method PrepareRequest not implemented")
@@ -278,6 +293,24 @@ func _PaxosNode_TransferRequest_Handler(srv interface{}, ctx context.Context, de
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(PaxosNodeServer).TransferRequest(ctx, req.(*TransactionRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _PaxosNode_ForwardRequest_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(TransactionRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PaxosNodeServer).ForwardRequest(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PaxosNode_ForwardRequest_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PaxosNodeServer).ForwardRequest(ctx, req.(*TransactionRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -493,6 +526,10 @@ var PaxosNode_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "TransferRequest",
 			Handler:    _PaxosNode_TransferRequest_Handler,
+		},
+		{
+			MethodName: "ForwardRequest",
+			Handler:    _PaxosNode_ForwardRequest_Handler,
 		},
 		{
 			MethodName: "PrepareRequest",

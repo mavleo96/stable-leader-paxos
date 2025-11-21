@@ -126,6 +126,27 @@ func (s *PaxosServer) NewViewRequest(req *pb.NewViewMessage, stream pb.PaxosNode
 	return nil
 }
 
+// ForwardRequest handles the forward request and forwards it to the leader
+func (s *PaxosServer) ForwardRequest(ctx context.Context, req *pb.TransactionRequest) (*emptypb.Empty, error) {
+	if !s.config.Alive {
+		log.Warnf("[ForwardRequest] Node %s is not alive", s.ID)
+		return nil, status.Errorf(codes.Unavailable, "node not alive")
+	}
+
+	// Ignore if not leader
+	if s.state.GetLeader() != s.ID {
+		log.Warnf("[ForwardRequest] Node %s is not leader", s.ID)
+		return nil, status.Errorf(codes.Unavailable, "not leader")
+	}
+
+	// Handle transaction request if not already handled
+	if sequenceNum := s.state.StateLog.GetSequenceNumber(req); sequenceNum == 0 {
+		s.proposer.HandleTransactionRequest(req)
+	}
+
+	return &emptypb.Empty{}, nil
+}
+
 // CatchupRequest handles the catchup request and returns the committed records
 func (s *PaxosServer) CatchupRequest(ctx context.Context, req *pb.CatchupRequestMessage) (*pb.CatchupMessage, error) {
 	// Ignore if not alive

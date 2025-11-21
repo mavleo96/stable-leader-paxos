@@ -751,9 +751,10 @@ const file_paxos_proto_rawDesc = "" +
 	"\vsequenceNum\x18\x02 \x01(\x03R\vsequenceNum\"a\n" +
 	"\x0eCatchupMessage\x12\x1e\n" +
 	"\x01b\x18\x01 \x01(\v2\x10.pb.BallotNumberR\x01b\x12/\n" +
-	"\tcommitLog\x18\x02 \x03(\v2\x11.pb.CommitMessageR\tcommitLog2\xf6\x05\n" +
+	"\tcommitLog\x18\x02 \x03(\v2\x11.pb.CommitMessageR\tcommitLog2\xb8\x06\n" +
 	"\tPaxosNode\x12B\n" +
-	"\x0fTransferRequest\x12\x16.pb.TransactionRequest\x1a\x17.pb.TransactionResponse\x124\n" +
+	"\x0fTransferRequest\x12\x16.pb.TransactionRequest\x1a\x17.pb.TransactionResponse\x12@\n" +
+	"\x0eForwardRequest\x12\x16.pb.TransactionRequest\x1a\x16.google.protobuf.Empty\x124\n" +
 	"\x0ePrepareRequest\x12\x12.pb.PrepareMessage\x1a\x0e.pb.AckMessage\x127\n" +
 	"\rAcceptRequest\x12\x11.pb.AcceptMessage\x1a\x13.pb.AcceptedMessage\x12:\n" +
 	"\rCommitRequest\x12\x11.pb.CommitMessage\x1a\x16.google.protobuf.Empty\x12;\n" +
@@ -814,31 +815,33 @@ var file_paxos_proto_depIdxs = []int32{
 	5,  // 13: pb.CatchupMessage.b:type_name -> pb.BallotNumber
 	8,  // 14: pb.CatchupMessage.commitLog:type_name -> pb.CommitMessage
 	1,  // 15: pb.PaxosNode.TransferRequest:input_type -> pb.TransactionRequest
-	3,  // 16: pb.PaxosNode.PrepareRequest:input_type -> pb.PrepareMessage
-	6,  // 17: pb.PaxosNode.AcceptRequest:input_type -> pb.AcceptMessage
-	8,  // 18: pb.PaxosNode.CommitRequest:input_type -> pb.CommitMessage
-	9,  // 19: pb.PaxosNode.NewViewRequest:input_type -> pb.NewViewMessage
-	10, // 20: pb.PaxosNode.CatchupRequest:input_type -> pb.CatchupRequestMessage
-	12, // 21: pb.PaxosNode.PrintLog:input_type -> google.protobuf.Empty
-	12, // 22: pb.PaxosNode.PrintDB:input_type -> google.protobuf.Empty
-	13, // 23: pb.PaxosNode.PrintStatus:input_type -> google.protobuf.Int64Value
-	12, // 24: pb.PaxosNode.PrintView:input_type -> google.protobuf.Empty
-	14, // 25: pb.PaxosNode.ChangeNodeStatus:input_type -> google.protobuf.BoolValue
-	12, // 26: pb.PaxosNode.KillLeader:input_type -> google.protobuf.Empty
-	0,  // 27: pb.PaxosNode.TransferRequest:output_type -> pb.TransactionResponse
-	4,  // 28: pb.PaxosNode.PrepareRequest:output_type -> pb.AckMessage
-	7,  // 29: pb.PaxosNode.AcceptRequest:output_type -> pb.AcceptedMessage
-	12, // 30: pb.PaxosNode.CommitRequest:output_type -> google.protobuf.Empty
-	7,  // 31: pb.PaxosNode.NewViewRequest:output_type -> pb.AcceptedMessage
-	11, // 32: pb.PaxosNode.CatchupRequest:output_type -> pb.CatchupMessage
-	12, // 33: pb.PaxosNode.PrintLog:output_type -> google.protobuf.Empty
-	12, // 34: pb.PaxosNode.PrintDB:output_type -> google.protobuf.Empty
-	12, // 35: pb.PaxosNode.PrintStatus:output_type -> google.protobuf.Empty
-	12, // 36: pb.PaxosNode.PrintView:output_type -> google.protobuf.Empty
-	12, // 37: pb.PaxosNode.ChangeNodeStatus:output_type -> google.protobuf.Empty
-	12, // 38: pb.PaxosNode.KillLeader:output_type -> google.protobuf.Empty
-	27, // [27:39] is the sub-list for method output_type
-	15, // [15:27] is the sub-list for method input_type
+	1,  // 16: pb.PaxosNode.ForwardRequest:input_type -> pb.TransactionRequest
+	3,  // 17: pb.PaxosNode.PrepareRequest:input_type -> pb.PrepareMessage
+	6,  // 18: pb.PaxosNode.AcceptRequest:input_type -> pb.AcceptMessage
+	8,  // 19: pb.PaxosNode.CommitRequest:input_type -> pb.CommitMessage
+	9,  // 20: pb.PaxosNode.NewViewRequest:input_type -> pb.NewViewMessage
+	10, // 21: pb.PaxosNode.CatchupRequest:input_type -> pb.CatchupRequestMessage
+	12, // 22: pb.PaxosNode.PrintLog:input_type -> google.protobuf.Empty
+	12, // 23: pb.PaxosNode.PrintDB:input_type -> google.protobuf.Empty
+	13, // 24: pb.PaxosNode.PrintStatus:input_type -> google.protobuf.Int64Value
+	12, // 25: pb.PaxosNode.PrintView:input_type -> google.protobuf.Empty
+	14, // 26: pb.PaxosNode.ChangeNodeStatus:input_type -> google.protobuf.BoolValue
+	12, // 27: pb.PaxosNode.KillLeader:input_type -> google.protobuf.Empty
+	0,  // 28: pb.PaxosNode.TransferRequest:output_type -> pb.TransactionResponse
+	12, // 29: pb.PaxosNode.ForwardRequest:output_type -> google.protobuf.Empty
+	4,  // 30: pb.PaxosNode.PrepareRequest:output_type -> pb.AckMessage
+	7,  // 31: pb.PaxosNode.AcceptRequest:output_type -> pb.AcceptedMessage
+	12, // 32: pb.PaxosNode.CommitRequest:output_type -> google.protobuf.Empty
+	7,  // 33: pb.PaxosNode.NewViewRequest:output_type -> pb.AcceptedMessage
+	11, // 34: pb.PaxosNode.CatchupRequest:output_type -> pb.CatchupMessage
+	12, // 35: pb.PaxosNode.PrintLog:output_type -> google.protobuf.Empty
+	12, // 36: pb.PaxosNode.PrintDB:output_type -> google.protobuf.Empty
+	12, // 37: pb.PaxosNode.PrintStatus:output_type -> google.protobuf.Empty
+	12, // 38: pb.PaxosNode.PrintView:output_type -> google.protobuf.Empty
+	12, // 39: pb.PaxosNode.ChangeNodeStatus:output_type -> google.protobuf.Empty
+	12, // 40: pb.PaxosNode.KillLeader:output_type -> google.protobuf.Empty
+	28, // [28:41] is the sub-list for method output_type
+	15, // [15:28] is the sub-list for method input_type
 	15, // [15:15] is the sub-list for extension type_name
 	15, // [15:15] is the sub-list for extension extendee
 	0,  // [0:15] is the sub-list for field type_name

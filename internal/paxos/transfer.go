@@ -8,6 +8,7 @@ import (
 	log "github.com/sirupsen/logrus"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
+	"google.golang.org/protobuf/proto"
 )
 
 // TransferRequest is the main function that rpc server calls to handle the transaction request
@@ -17,18 +18,32 @@ func (s *PaxosServer) TransferRequest(ctx context.Context, req *pb.TransactionRe
 		return nil, status.Errorf(codes.Unavailable, "node not alive")
 	}
 
-	// // System is not initialized yet
-	// if !s.SysInitialized {
-	// 	s.InitializeSystem()
-	// }
-
 	// Forward request if not leader
 	if s.state.GetLeader() != s.ID {
-		go s.ForwardToLeader(req)
+		if s.state.InForwardedRequestsLog(req) {
+			log.Warnf("[TransferRequest] Request %s already forwarded", utils.TransactionRequestString(req))
+			return UnsuccessfulTransactionResponse, status.Errorf(codes.Aborted, "not leader")
+		}
+		sequenceNum := s.state.StateLog.GetSequenceNumber(req)
+		if s.state.StateLog.IsAccepted(sequenceNum) && proto.Equal(s.state.StateLog.GetBallotNumber(sequenceNum), s.state.GetBallotNumber()) {
+			log.Warnf("[TransferRequest] Request %s already accepted", utils.TransactionRequestString(req))
+			return UnsuccessfulTransactionResponse, status.Errorf(codes.Aborted, "already accepted")
+		}
+		// Logger: Add received transaction request
+		s.logger.AddReceivedTransactionRequest(req)
+
+		s.acceptor.timer.IncrementWaitCountOrStart()
+		if s.state.GetLeader() != "" {
+			go s.ForwardToLeader(req)
+		}
+		s.state.AddForwardedRequest(req)
 		return UnsuccessfulTransactionResponse, status.Errorf(codes.Aborted, "not leader")
 	}
 
-	// Duplicate requests with same timestamp are not ignored since the reply could have been lost or sent to backup node
+	// Logger: Add received transaction request
+	s.logger.AddReceivedTransactionRequest(req)
+
+	// Duplicate requests with same timestamp are not ignored since the reply could have been lost
 	lastReply := s.state.LastReply.Get(req.Sender)
 	if lastReply != nil && req.Timestamp == lastReply.Timestamp {
 		return s.state.LastReply.Get(req.Sender), nil
@@ -66,16 +81,10 @@ func (s *PaxosServer) TransferRequest(ctx context.Context, req *pb.TransactionRe
 
 // ForwardToLeader forwards the request to the leader
 func (s *PaxosServer) ForwardToLeader(req *pb.TransactionRequest) {
-	// Add request to forwarded requests log and start timer
-	s.state.AddForwardedRequest(req)
-	s.acceptor.timer.IncrementWaitCountOrStart()
-
-	if s.state.GetLeader() == "" {
-		log.Warnf("[ForwardToLeader] Leader is not set, ignoring request")
-		return
-	}
+	// Logger: Add forwarded transaction request
+	s.logger.AddForwardedTransactionRequest(req)
 
 	// Forward request to leader
-	log.Infof("[ForwardToLeader] Forwarding request to leader %s", s.state.GetLeader())
-	(*s.peers[s.state.GetLeader()].Client).TransferRequest(context.Background(), req)
+	log.Infof("[ForwardToLeader] Forwarding request %s to leader %s", utils.TransactionRequestString(req), s.state.GetLeader())
+	(*s.peers[s.state.GetLeader()].Client).ForwardRequest(context.Background(), req)
 }

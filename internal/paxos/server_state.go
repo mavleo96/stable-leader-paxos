@@ -102,7 +102,7 @@ func (s *ServerState) Reset() {
 	defer s.mutex.Unlock()
 	s.b = &pb.BallotNumber{N: 0, NodeID: ""}
 	s.lastExecutedSequenceNum = 0
-	s.forwardedRequestsLog = make([]*pb.TransactionRequest, 0)
+	s.forwardedRequestsLog = make([]*pb.TransactionRequest, 10)
 	s.StateLog.Reset()
 	s.LastReply.Reset()
 }
@@ -115,7 +115,7 @@ func CreateServerState(id string) *ServerState {
 		b:                       &pb.BallotNumber{N: 1, NodeID: "n1"},
 		leader:                  "n1",
 		lastExecutedSequenceNum: 0,
-		forwardedRequestsLog:    make([]*pb.TransactionRequest, 0),
+		forwardedRequestsLog:    make([]*pb.TransactionRequest, 10),
 		StateLog:                CreateStateLog(id),
 		LastReply:               CreateLastReply(),
 	}

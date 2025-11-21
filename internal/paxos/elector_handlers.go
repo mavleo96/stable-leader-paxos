@@ -27,7 +27,7 @@ func (l *LeaderElector) PrepareQueueHandler(expiryTimeStamp time.Time) (*pb.Ball
 		// If prepare message is expired, delete it and send false to response channel
 		// or if current highest ballot number is higher than the prepare message ballot number
 		if expiryTimeStamp.Sub(timestamp) > prepareTimeout ||
-			!BallotNumberIsHigher(currentHighestBallotNumber, l.prepareMessageLog.msgLog[timestamp].B) {
+			!ballotNumberIsHigher(currentHighestBallotNumber, l.prepareMessageLog.msgLog[timestamp].B) {
 			log.Infof("[PrepareQueueHandler] Prepare message %s is expired or not highest", utils.BallotNumberString(l.prepareMessageLog.msgLog[timestamp].B))
 			l.prepareMessageLog.GetChannel(timestamp) <- false
 			l.prepareMessageLog.DeletePrepareMessage(timestamp)

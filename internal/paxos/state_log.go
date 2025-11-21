@@ -51,7 +51,7 @@ func (s *StateLog) AssignSequenceNumberAndCreateRecord(ballotNumber *pb.BallotNu
 			continue
 		}
 		if record != nil && proto.Equal(record.request, request) {
-			if BallotNumberIsHigher(record.b, ballotNumber) {
+			if ballotNumberIsHigher(record.b, ballotNumber) {
 				record.b = ballotNumber
 				return record.sequenceNum, true
 			}
@@ -77,7 +77,7 @@ func (s *StateLog) CreateRecordIfNotExists(ballotNumber *pb.BallotNumber, sequen
 		s.log[sequenceNum] = createLogRecord(ballotNumber, sequenceNum, request)
 		return true
 	}
-	if BallotNumberIsHigher(s.log[sequenceNum].b, ballotNumber) {
+	if ballotNumberIsHigher(s.log[sequenceNum].b, ballotNumber) {
 		s.log[sequenceNum].b = ballotNumber
 		s.log[sequenceNum].request = request
 		return true

@@ -26,7 +26,7 @@ type Acceptor struct {
 func (a *Acceptor) AcceptRequestHandler(acceptMessage *pb.AcceptMessage) (*pb.AcceptedMessage, error) {
 
 	// Update state if higher ballot number
-	if BallotNumberIsHigher(a.state.GetBallotNumber(), acceptMessage.B) {
+	if ballotNumberIsHigher(a.state.GetBallotNumber(), acceptMessage.B) {
 		a.state.SetBallotNumber(acceptMessage.B)
 	}
 
@@ -52,7 +52,7 @@ func (a *Acceptor) AcceptRequestHandler(acceptMessage *pb.AcceptMessage) (*pb.Ac
 func (a *Acceptor) CommitRequestHandler(commitMessage *pb.CommitMessage) (*emptypb.Empty, error) {
 
 	// Update state if higher ballot number
-	if BallotNumberIsHigher(a.state.GetBallotNumber(), commitMessage.B) {
+	if ballotNumberIsHigher(a.state.GetBallotNumber(), commitMessage.B) {
 		a.state.SetBallotNumber(commitMessage.B)
 	}
 

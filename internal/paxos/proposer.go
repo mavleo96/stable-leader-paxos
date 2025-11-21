@@ -233,7 +233,7 @@ func aggregateAckMessages(newBallotNumber *pb.BallotNumber, ackMessages []*pb.Ac
 			if sequenceNum > maxSequenceNum {
 				maxSequenceNum = sequenceNum
 			}
-			if msg, exists := acceptedMessagesMap[sequenceNum]; !exists || BallotNumberIsHigher(msg.B, acceptedMessage.B) {
+			if msg, exists := acceptedMessagesMap[sequenceNum]; !exists || ballotNumberIsHigher(msg.B, acceptedMessage.B) {
 				acceptedMessagesMap[sequenceNum] = acceptedMessage
 			}
 		}

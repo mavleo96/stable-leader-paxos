@@ -24,7 +24,7 @@ func (s *PaxosServer) PrepareRequest(ctx context.Context, req *pb.PrepareMessage
 
 	// TODO: should this be part of handler?
 	// Reject if ballot number is lower than promised ballot number
-	if !BallotNumberIsHigherOrEqual(s.state.GetBallotNumber(), req.B) {
+	if !ballotNumberIsHigherOrEqual(s.state.GetBallotNumber(), req.B) {
 		log.Warnf("[PrepareRequest] Rejected %s since ballot number is lower than promised ballot number", utils.BallotNumberString(req.B))
 		return nil, status.Errorf(codes.Aborted, "ballot number is lower than promised ballot number")
 	}
@@ -54,7 +54,7 @@ func (s *PaxosServer) AcceptRequest(ctx context.Context, req *pb.AcceptMessage) 
 
 	// TODO: should this be part of handler?
 	// Reject if ballot number is lower than promised ballot number
-	if !BallotNumberIsHigherOrEqual(s.state.GetBallotNumber(), req.B) {
+	if !ballotNumberIsHigherOrEqual(s.state.GetBallotNumber(), req.B) {
 		log.Warnf("[AcceptRequest] Rejected %s since ballot number is lower than promised ballot number", utils.TransactionRequestString(req.Message))
 		return nil, status.Errorf(codes.Aborted, "ballot number is lower than promised ballot number")
 	}
@@ -84,7 +84,7 @@ func (s *PaxosServer) CommitRequest(ctx context.Context, req *pb.CommitMessage) 
 
 	// TODO: should this be part of handler?
 	// Reject if ballot number is lower than promised ballot number
-	if !BallotNumberIsHigherOrEqual(s.state.GetBallotNumber(), req.B) {
+	if !ballotNumberIsHigherOrEqual(s.state.GetBallotNumber(), req.B) {
 		log.Warnf("[CommitRequest] Rejected %s since ballot number is lower than promised ballot number", utils.TransactionRequestString(req.Message))
 		return nil, status.Errorf(codes.Aborted, "ballot number is lower than promised ballot number")
 	}

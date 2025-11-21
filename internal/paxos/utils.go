@@ -18,16 +18,16 @@ var NoOperation = &pb.TransactionRequest{}
 
 // BallotNumber Utilities
 
-// BallotNumberIsHigherOrEqual checks if current >= new
-func BallotNumberIsHigherOrEqual(current *pb.BallotNumber, new *pb.BallotNumber) bool {
+// ballotNumberIsHigherOrEqual checks if current >= new
+func ballotNumberIsHigherOrEqual(current *pb.BallotNumber, new *pb.BallotNumber) bool {
 	if new.N == current.N {
 		return new.NodeID >= current.NodeID
 	}
 	return new.N >= current.N
 }
 
-// BallotNumberIsHigher checks if current > new
-func BallotNumberIsHigher(current *pb.BallotNumber, new *pb.BallotNumber) bool {
+// ballotNumberIsHigher checks if current > new
+func ballotNumberIsHigher(current *pb.BallotNumber, new *pb.BallotNumber) bool {
 	if new.N == current.N {
 		return new.NodeID > current.NodeID
 	}

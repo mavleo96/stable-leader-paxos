@@ -7,6 +7,7 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
+// ExecuteRouter is the main routine for the executor
 func (e *Executor) ExecuteRouter(ctx context.Context) {
 executeLoop:
 	for {
@@ -53,7 +54,7 @@ executeLoop:
 				e.state.SetLastExecutedSequenceNum(i)
 
 				// Publish result to publish channel
-				if e.state.GetLeader() == e.state.id {
+				if e.state.IsLeader() {
 					e.publishTriggerCh <- i
 				}
 			}
@@ -61,26 +62,27 @@ executeLoop:
 	}
 }
 
-func (e *Executor) PublishResults(ctx context.Context) {
+// ResultRouter is the main routine for the result publisher
+func (e *Executor) ResultRouter(ctx context.Context) {
 publishLoop:
 	for {
 		select {
 		case <-ctx.Done():
 			return
 		case s := <-e.publishTriggerCh:
-			log.Infof("[PublishResults] Received publish signal for sequence number %d", s)
+			log.Infof("[ResultRouter] Received publish signal for sequence number %d", s)
 			if !e.state.StateLog.IsExecuted(s) {
-				log.Warnf("[PublishResults] Cannot publish result for sequence number %d because it was not executed", s)
+				log.Warnf("[ResultRouter] Cannot publish result for sequence number %d because it was not executed", s)
 				continue publishLoop
 			}
 			responseCh := e.GetResponseChannel(s)
 			if responseCh == nil {
-				log.Warnf("[PublishResults] Cannot publish result for sequence number %d because response channel does not exist", s)
+				log.Warnf("[ResultRouter] Cannot publish result for sequence number %d because response channel does not exist", s)
 				continue publishLoop
 			}
 			responseCh <- e.state.StateLog.GetResult(s)
 			e.CloseAndRemoveResponseChannel(s)
-			log.Infof("[PublishResults] Published result for sequence number %d", s)
+			log.Infof("[ResultRouter] Published result for sequence number %d", s)
 		}
 	}
 }

@@ -6,15 +6,16 @@ import (
 	"github.com/mavleo96/stable-leader-paxos/internal/database"
 )
 
+// Executor represents the executor for the Paxos server
 type Executor struct {
 	mutex              sync.Mutex
 	state              *ServerState
 	config             *ServerConfig
 	db                 *database.Database
 	timer              *SafeTimer
+	responseCh         map[int64]chan int64
 	executionTriggerCh chan int64
 	publishTriggerCh   chan int64
-	responseCh         map[int64]chan int64
 }
 
 // GetExecutionTriggerChannel is used to get the execution trigger channel
@@ -51,6 +52,13 @@ func (e *Executor) CloseAndRemoveResponseChannel(sequenceNum int64) {
 	delete(e.responseCh, sequenceNum)
 }
 
+// Reset resets the executor
+func (e *Executor) Reset() {
+	e.mutex.Lock()
+	defer e.mutex.Unlock()
+	e.responseCh = make(map[int64]chan int64, 10)
+}
+
 // CreateExecutor is used to create a new executor
 func CreateExecutor(state *ServerState, config *ServerConfig, db *database.Database, timer *SafeTimer, executionTriggerCh chan int64) *Executor {
 	return &Executor{
@@ -59,8 +67,8 @@ func CreateExecutor(state *ServerState, config *ServerConfig, db *database.Datab
 		config:             config,
 		db:                 db,
 		timer:              timer,
+		responseCh:         make(map[int64]chan int64, 10),
 		executionTriggerCh: executionTriggerCh,
 		publishTriggerCh:   make(chan int64, 100),
-		responseCh:         make(map[int64]chan int64, 10),
 	}
 }

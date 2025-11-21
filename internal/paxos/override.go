@@ -22,7 +22,6 @@ func (s *PaxosServer) ReconfigureNode(ctx context.Context, status *wrapperspb.Bo
 	// If node is alive, set leader to empty string and start timer and catchup routine
 	if s.config.Alive {
 		s.state.SetLeader("")
-		// go s.acceptor.timer.run()
 		go s.CatchupRoutine()
 	}
 	log.Warnf("Node %s status changed to %v", s.ID, s.config.Alive)
@@ -31,7 +30,7 @@ func (s *PaxosServer) ReconfigureNode(ctx context.Context, status *wrapperspb.Bo
 
 // KillLeader kills the leader of the cluster
 func (s *PaxosServer) KillLeader(ctx context.Context, in *emptypb.Empty) (*emptypb.Empty, error) {
-	if s.state.GetLeader() != s.ID {
+	if !s.state.IsLeader() {
 		return &emptypb.Empty{}, nil
 	}
 	s.config.Alive = false
@@ -45,6 +44,8 @@ func (s *PaxosServer) ResetNode(ctx context.Context, req *emptypb.Empty) (*empty
 	// Reset server state
 	s.state.Reset()
 	s.executor.db.ResetDB(10)
+	s.executor.Reset()
+	s.elector.Reset()
 	s.logger.Reset()
 
 	return &emptypb.Empty{}, nil

@@ -21,6 +21,11 @@ type LeaderElector struct {
 	logger            *Logger
 }
 
+// Reset resets the leader elector
+func (e *LeaderElector) Reset() {
+	e.prepareMessageLog = CreatePrepareMessageLog(len(e.peers) + 1)
+}
+
 // CreateLeaderElector creates a new leader elector
 func CreateLeaderElector(id string, state *ServerState, config *ServerConfig, peers map[string]*models.Node, timer *SafeTimer, proposer *Proposer, logger *Logger) *LeaderElector {
 	prepareMessageLog := CreatePrepareMessageLog(len(peers) + 1)

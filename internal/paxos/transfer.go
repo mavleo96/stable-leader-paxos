@@ -19,7 +19,7 @@ func (s *PaxosServer) TransferRequest(ctx context.Context, req *pb.TransactionRe
 	}
 
 	// Forward request if not leader
-	if s.state.GetLeader() != s.ID {
+	if !s.state.IsLeader() {
 		if s.state.InForwardedRequestsLog(req) {
 			log.Warnf("[TransferRequest] Request %s already forwarded", utils.TransactionRequestString(req))
 			return UnsuccessfulTransactionResponse, status.Errorf(codes.Aborted, "not leader")
@@ -33,8 +33,9 @@ func (s *PaxosServer) TransferRequest(ctx context.Context, req *pb.TransactionRe
 		s.logger.AddReceivedTransactionRequest(req)
 
 		s.acceptor.timer.IncrementWaitCountOrStart()
-		if s.state.GetLeader() != "" {
-			go s.ForwardToLeader(req)
+		leader := s.state.GetLeader()
+		if leader != "" {
+			go s.ForwardToLeader(leader, req)
 		}
 		s.state.AddForwardedRequest(req)
 		return UnsuccessfulTransactionResponse, status.Errorf(codes.Aborted, "not leader")
@@ -79,11 +80,11 @@ func (s *PaxosServer) TransferRequest(ctx context.Context, req *pb.TransactionRe
 }
 
 // ForwardToLeader forwards the request to the leader
-func (s *PaxosServer) ForwardToLeader(req *pb.TransactionRequest) {
+func (s *PaxosServer) ForwardToLeader(leader string, req *pb.TransactionRequest) {
 	// Logger: Add forwarded transaction request
 	s.logger.AddForwardedTransactionRequest(req)
 
 	// Forward request to leader
-	log.Infof("[ForwardToLeader] Forwarding request %s to leader %s", utils.TransactionRequestString(req), s.state.GetLeader())
-	(*s.peers[s.state.GetLeader()].Client).ForwardRequest(context.Background(), req)
+	log.Infof("[ForwardToLeader] Forwarding request %s to leader %s", utils.TransactionRequestString(req), leader)
+	(*s.peers[leader].Client).ForwardRequest(context.Background(), req)
 }

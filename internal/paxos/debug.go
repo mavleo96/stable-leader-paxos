@@ -122,6 +122,7 @@ func (s *PaxosServer) PrintDB(ctx context.Context, req *wrapperspb.Int64Value) (
 	return &emptypb.Empty{}, nil
 }
 
+// PrintStatus prints the status of the server
 func (s *PaxosServer) PrintStatus(ctx context.Context, req *pb.StatusRequest) (*emptypb.Empty, error) {
 	log.Infof("Print status command received")
 	fmt.Println("STATUS FOR TEST SET:", req.TestSet)
@@ -143,6 +144,7 @@ func (s *PaxosServer) PrintStatus(ctx context.Context, req *pb.StatusRequest) (*
 	return &emptypb.Empty{}, nil
 }
 
+// PrintView prints the view of the server
 func (s *PaxosServer) PrintView(ctx context.Context, req *wrapperspb.Int64Value) (*emptypb.Empty, error) {
 	log.Infof("Print view command received")
 

@@ -2,7 +2,6 @@ package paxos
 
 import (
 	"context"
-	"errors"
 	"io"
 	"sync"
 
@@ -25,29 +24,25 @@ type Proposer struct {
 }
 
 // HandleTransactionRequest handles the transaction request and returns the sequence number
-func (p *Proposer) HandleTransactionRequest(req *pb.TransactionRequest) int64 {
+func (p *Proposer) HandleTransactionRequest(req *pb.TransactionRequest) {
 	// Assign a sequence number and create a record if it doesn't exist
 	sequenceNum, _ := p.state.StateLog.AssignSequenceNumberAndCreateRecord(p.state.GetBallotNumber(), req)
 	log.Infof("[Proposer] Assigned sequence number %d for request %s", sequenceNum, utils.TransactionRequestString(req))
 
-	go p.RunProtocol(sequenceNum)
-	return sequenceNum
-}
-
-// RunProtocol runs the paxos protocol for a given sequence number
-func (p *Proposer) RunProtocol(sequenceNum int64) error {
-	log.Infof("[Proposer] Running protocol for sequence number %d", sequenceNum)
 	// Run accept phase and set accepted flag
-	accepted, err := p.RunAcceptPhase(sequenceNum, p.state.StateLog.GetRequest(sequenceNum))
-	if err != nil {
-		return err
-	}
-	if !accepted {
-		return errors.New("accept request failed insufficient quorum")
+	if !p.state.StateLog.IsCommitted(sequenceNum) {
+		accepted, err := p.RunAcceptPhase(sequenceNum, p.state.StateLog.GetRequest(sequenceNum))
+		if err != nil {
+			log.Warnf("[Proposer] Accept phase failed for request %s: %v", utils.TransactionRequestString(req), err)
+			return
+		}
+		if !accepted {
+			log.Warnf("[Proposer] Accept phase failed for request %s: insufficient quorum", utils.TransactionRequestString(req))
+			return
+		}
 	}
 
-	// If accepted, run commit phase
-	return p.RunCommitPhase(sequenceNum, p.state.StateLog.GetRequest(sequenceNum))
+	p.RunCommitPhase(sequenceNum, p.state.StateLog.GetRequest(sequenceNum))
 }
 
 // RunAcceptPhase sends an accept request to all peers and returns the response from each peer
@@ -59,6 +54,9 @@ func (p *Proposer) RunAcceptPhase(sequenceNum int64, req *pb.TransactionRequest)
 		SequenceNum: sequenceNum,
 		Message:     req,
 	}
+
+	// Logger: Add sent accept message
+	p.logger.AddSentAcceptMessage(acceptMessage)
 
 	// Multicast accept request to all peers
 	wg := sync.WaitGroup{}
@@ -74,8 +72,10 @@ func (p *Proposer) RunAcceptPhase(sequenceNum int64, req *pb.TransactionRequest)
 				responseCh <- false
 				return
 			}
+
 			// Logger: Add received accepted message
 			p.logger.AddReceivedAcceptedMessage(resp)
+
 			responseCh <- true
 		}(peer, responseCh)
 	}
@@ -107,6 +107,10 @@ func (p *Proposer) RunCommitPhase(sequenceNum int64, req *pb.TransactionRequest)
 		Message:     req,
 	}
 
+	// Logger: Add sent commit message
+	p.logger.AddSentCommitMessage(commitMessage)
+
+	// Broadcast commit request to all peers
 	go p.BroadcastCommitRequest(commitMessage)
 
 	// If not executed, trigger execution
@@ -132,6 +136,7 @@ func (p *Proposer) BroadcastCommitRequest(commitMessage *pb.CommitMessage) error
 	return nil
 }
 
+// RunNewViewPhase runs the new view phase
 func (p *Proposer) RunNewViewPhase(ackMessages []*pb.AckMessage) {
 	currentBallotNumber := p.state.GetBallotNumber()
 	acceptMessages := aggregateAckMessages(currentBallotNumber, ackMessages)
@@ -147,6 +152,9 @@ func (p *Proposer) RunNewViewPhase(ackMessages []*pb.AckMessage) {
 		B:         currentBallotNumber,
 		AcceptLog: acceptMessages,
 	}
+
+	// Logger: Add sent new view message
+	p.logger.AddSentNewViewMessage(newViewMessage)
 
 	// Multicast new view request to all peers
 	wg := sync.WaitGroup{}

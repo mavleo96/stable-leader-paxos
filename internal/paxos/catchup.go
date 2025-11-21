@@ -11,6 +11,7 @@ import (
 	"google.golang.org/grpc/status"
 )
 
+// SendCatchUpRequest sends a catch up request to the leader
 func (s *PaxosServer) SendCatchUpRequest(sequenceNum int64) (*pb.CatchupMessage, error) {
 
 	catchupRequest := &pb.CatchupRequestMessage{NodeID: s.ID, SequenceNum: sequenceNum}
@@ -42,6 +43,7 @@ func (s *PaxosServer) SendCatchUpRequest(sequenceNum int64) (*pb.CatchupMessage,
 	return catchupMessage, nil
 }
 
+// CatchupRoutine is the main routine for the catch up
 func (s *PaxosServer) CatchupRoutine() {
 	maxSequenceNum := s.state.StateLog.MaxSequenceNum()
 	catchupMessage, err := s.SendCatchUpRequest(maxSequenceNum)

@@ -11,14 +11,14 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
-// TODO: Need to decompose this into Proposer and Acceptor structures
+// PaxosServer represents the Paxos server node
 type PaxosServer struct {
+	*models.Node
+	config              *ServerConfig
+	state               *ServerState
+	peers               map[string]*models.Node
 	SysInitializedMutex sync.Mutex
 	SysInitialized      bool
-	*models.Node
-	config *ServerConfig
-	state  *ServerState
-	peers  map[string]*models.Node
 
 	// Component Managers
 	proposer *Proposer
@@ -27,8 +27,10 @@ type PaxosServer struct {
 	elector  *LeaderElector
 	logger   *Logger
 
+	// Wait group for the server
 	wg sync.WaitGroup
 
+	// UnimplementedPaxosNodeServer is the server interface for the PaxosNode service
 	pb.UnimplementedPaxosNodeServer
 }
 
@@ -49,8 +51,8 @@ func (s *PaxosServer) InitializeSystem() {
 // Start starts the paxos server
 func (s *PaxosServer) Start(ctx context.Context) {
 	s.wg.Go(func() { s.executor.ExecuteRouter(ctx) })
-	s.wg.Go(func() { s.elector.ElectionRoutine(ctx) })
-	s.wg.Go(func() { s.executor.PublishResults(ctx) })
+	s.wg.Go(func() { s.elector.ElectionRouter(ctx) })
+	s.wg.Go(func() { s.executor.ResultRouter(ctx) })
 
 	s.wg.Wait()
 }
@@ -77,16 +79,16 @@ func CreatePaxosServer(selfNode *models.Node, peerNodes map[string]*models.Node,
 
 	return &PaxosServer{
 		Node:                selfNode,
-		SysInitializedMutex: sync.Mutex{},
-		SysInitialized:      true,
 		config:              serverConfig,
 		state:               serverState,
 		peers:               peerNodes,
-		logger:              logger,
-		wg:                  sync.WaitGroup{},
+		SysInitializedMutex: sync.Mutex{},
+		SysInitialized:      true,
 		proposer:            proposer,
 		acceptor:            acceptor,
 		executor:            executor,
 		elector:             elector,
+		logger:              logger,
+		wg:                  sync.WaitGroup{},
 	}
 }

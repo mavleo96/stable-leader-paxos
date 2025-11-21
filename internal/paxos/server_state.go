@@ -14,8 +14,7 @@ type ServerState struct {
 	b                       *pb.BallotNumber
 	leader                  string
 	lastExecutedSequenceNum int64
-
-	forwardedRequestsLog []*pb.TransactionRequest
+	forwardedRequestsLog    []*pb.TransactionRequest
 
 	// Self-managed components
 	StateLog  *StateLog
@@ -34,6 +33,13 @@ func (s *ServerState) SetLeader(leader string) {
 	s.mutex.Lock()
 	defer s.mutex.Unlock()
 	s.leader = leader
+}
+
+// IsLeader checks if the server is the leader
+func (s *ServerState) IsLeader() bool {
+	s.mutex.RLock()
+	defer s.mutex.RUnlock()
+	return s.leader == s.id
 }
 
 // GetBallotNumber returns the current ballot number

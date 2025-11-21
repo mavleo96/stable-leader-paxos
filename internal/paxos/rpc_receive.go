@@ -134,7 +134,7 @@ func (s *PaxosServer) ForwardRequest(ctx context.Context, req *pb.TransactionReq
 	}
 
 	// Ignore if not leader
-	if s.state.GetLeader() != s.ID {
+	if !s.state.IsLeader() {
 		log.Warnf("[ForwardRequest] Node %s is not leader", s.ID)
 		return nil, status.Errorf(codes.Unavailable, "not leader")
 	}
@@ -156,7 +156,7 @@ func (s *PaxosServer) CatchupRequest(ctx context.Context, req *pb.CatchupRequest
 	}
 
 	// Only leader will respond to catchup request
-	if s.state.GetLeader() != s.ID {
+	if !s.state.IsLeader() {
 		log.Warnf("[CatchupRequest] Node %s is not leader", s.ID)
 		return nil, status.Errorf(codes.Unavailable, "not leader")
 	}

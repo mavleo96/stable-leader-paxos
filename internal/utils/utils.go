@@ -19,6 +19,30 @@ func TransactionResponseString(x *pb.TransactionResponse) string {
 	)
 }
 
+func AcceptMessageString(x *pb.AcceptMessage) string {
+	if x == nil {
+		return "<ACCEPT, nil>"
+	}
+	return fmt.Sprintf(
+		"<ACCEPT, %s, %d, %s>",
+		BallotNumberString(x.B),
+		x.SequenceNum,
+		TransactionRequestString(x.Message),
+	)
+}
+
+func CommitMessageString(x *pb.CommitMessage) string {
+	if x == nil {
+		return "<COMMIT, nil>"
+	}
+	return fmt.Sprintf(
+		"<COMMIT, %s, %d, %s>",
+		BallotNumberString(x.B),
+		x.SequenceNum,
+		TransactionRequestString(x.Message),
+	)
+}
+
 func AcceptedMessageString(x *pb.AcceptedMessage) string {
 	if x == nil {
 		return "<ACCEPTED, nil>"

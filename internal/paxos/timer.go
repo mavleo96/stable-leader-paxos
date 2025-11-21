@@ -31,7 +31,7 @@ func (t *SafeTimer) IncrementWaitCountOrStart() {
 		t.running = true
 	}
 	t.waitCount++
-	log.Infof("[Timer] Incremented wait count: %d, running: %v", t.waitCount, t.running)
+	log.Infof("[Timer] Incremented wait count: %d, running: %v at %d", t.waitCount, t.running, time.Now().UnixMilli())
 }
 
 // DecrementWaitCountAndResetOrStopIfZero is used to decrement the wait count and reset the timer if it is not zero
@@ -52,7 +52,7 @@ func (t *SafeTimer) DecrementWaitCountAndResetOrStopIfZero() {
 	} else {
 		t.timer.Reset(t.timeout)
 	}
-	log.Infof("[Timer] Decremented wait count: %d, running: %v", t.waitCount, t.running)
+	log.Infof("[Timer] Decremented wait count: %d, running: %v at %d", t.waitCount, t.running, time.Now().UnixMilli())
 }
 
 // Cleanup resets the timer and clears the wait count

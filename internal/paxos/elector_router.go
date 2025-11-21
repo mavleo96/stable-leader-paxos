@@ -65,6 +65,7 @@ func (l *LeaderElector) PrepareRequestHandler(prepareMessage *pb.PrepareMessage)
 	l.prepareMessageLog.AddPrepareMessage(prepareMessage, responseCh)
 
 	// Wait for response and return error if rejected
+	log.Infof("[PrepareRequestHandler] Waiting for response for ballot number %s", utils.BallotNumberString(prepareMessage.B))
 	ok := <-responseCh
 	if !ok {
 		log.Warnf("[PrepareRequestHandler] Prepare request rejected for ballot number %s", utils.BallotNumberString(prepareMessage.B))
@@ -72,7 +73,7 @@ func (l *LeaderElector) PrepareRequestHandler(prepareMessage *pb.PrepareMessage)
 	}
 
 	// Update state
-	l.state.ResetForwardedRequestsLog()
+	// l.state.ResetForwardedRequestsLog()
 	l.state.SetBallotNumber(prepareMessage.B)
 	l.state.SetLeader(prepareMessage.B.NodeID)
 	log.Infof("[PrepareRequestHandler] Promised ballot number %s", utils.BallotNumberString(l.state.GetBallotNumber()))

@@ -38,7 +38,7 @@ func (a *Acceptor) AcceptRequestHandler(acceptMessage *pb.AcceptMessage) (*pb.Ac
 
 	// Update record state
 	a.state.StateLog.SetAccepted(acceptMessage.SequenceNum)
-	log.Infof("[Acceptor] Accepted %s", utils.TransactionRequestString(acceptMessage.Message))
+	log.Infof("[Acceptor] Accepted %s", utils.AcceptMessageString(acceptMessage))
 
 	return &pb.AcceptedMessage{
 		B:           acceptMessage.B,
@@ -64,7 +64,7 @@ func (a *Acceptor) CommitRequestHandler(commitMessage *pb.CommitMessage) (*empty
 
 	// Update record state
 	a.state.StateLog.SetCommitted(commitMessage.SequenceNum)
-	log.Infof("[Acceptor] Committed %s", utils.TransactionRequestString(commitMessage.Message))
+	log.Infof("[Acceptor] Committed %s", utils.CommitMessageString(commitMessage))
 
 	// Trigger execution if not executed
 	if !a.state.StateLog.IsExecuted(commitMessage.SequenceNum) {

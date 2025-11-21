@@ -24,7 +24,7 @@ func (s *PaxosServer) SendCatchUpRequest(sequenceNum int64) (*pb.CatchupMessage,
 			defer wg.Done()
 			catchupMessage, err := (*peer.Client).CatchupRequest(context.Background(), catchupRequest)
 			if err != nil || catchupMessage == nil {
-				log.Warn(err)
+				log.Warnf("[SendCatchUpRequest] Failed to get catch up message from leader %s: %v", peer.ID, err)
 				return
 			}
 			responseChan <- catchupMessage
@@ -40,4 +40,20 @@ func (s *PaxosServer) SendCatchUpRequest(sequenceNum int64) (*pb.CatchupMessage,
 		return nil, status.Errorf(codes.Unavailable, "failed to get catch up message from leader")
 	}
 	return catchupMessage, nil
+}
+
+func (s *PaxosServer) CatchupRoutine() {
+	maxSequenceNum := s.state.StateLog.MaxSequenceNum()
+	catchupMessage, err := s.SendCatchUpRequest(maxSequenceNum)
+	if err != nil {
+		log.Warn(err)
+		return
+	}
+
+	log.Infof("[CatchupRoutine] Received catch up message from leader %s: %v", catchupMessage.B.NodeID, catchupMessage.B)
+	s.state.SetLeader(catchupMessage.B.NodeID)
+	s.state.SetBallotNumber(catchupMessage.B)
+	for _, record := range catchupMessage.CommitLog {
+		s.acceptor.CommitRequestHandler(record)
+	}
 }

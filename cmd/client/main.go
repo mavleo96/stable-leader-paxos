@@ -17,7 +17,7 @@ import (
 
 func main() {
 	// log.SetLevel(log.FatalLevel)
-	filePath := flag.String("file", "", "Path to CSV file")
+	filePath := flag.String("file", "testdata/test.csv", "Path to CSV file")
 	flag.Parse()
 
 	// Parse Config

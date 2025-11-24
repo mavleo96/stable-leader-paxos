@@ -262,10 +262,11 @@ func (p *Proposer) RunNewViewPhase(ballotNumber *pb.BallotNumber, checkpointedSe
 			for {
 				acceptedMessage, err := stream.Recv()
 				if err == io.EOF {
-					break
+					log.Infof("[RunNewViewPhase] EOF received for peer %s", peer.ID)
+					return
 				}
 				if err != nil {
-					log.Warn(err)
+					log.Warnf("[RunNewViewPhase] Error receiving accepted message from peer %s: %v", peer.ID, err)
 					return
 				}
 
@@ -292,7 +293,7 @@ func (p *Proposer) RunNewViewPhase(ballotNumber *pb.BallotNumber, checkpointedSe
 		case acceptedMessage, ok := <-responseCh:
 			if !ok {
 				log.Infof("[RunNewViewPhase] New view phase completed for ballot number %s", utils.LoggingString(ballotNumber))
-				break
+				return
 			}
 			sequenceNum := acceptedMessage.SequenceNum
 			acceptedCountMap[sequenceNum]++

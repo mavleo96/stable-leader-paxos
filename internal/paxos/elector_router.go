@@ -46,7 +46,7 @@ electionLoop:
 
 		// Election successful: give control to proposer
 		highestCheckpointedSequenceNum, acceptMessages := aggregateAckMessages(newBallotNumber, ackMessages)
-		go l.proposer.RunNewViewPhase(highestCheckpointedSequenceNum, acceptMessages)
-		log.Infof("[ElectionRouter] New leader with promised ballot number %s at %d", utils.BallotNumberString(l.state.GetBallotNumber()), time.Now().UnixMilli())
+		go l.proposer.RunNewViewPhase(newBallotNumber, highestCheckpointedSequenceNum, acceptMessages)
+		log.Infof("[ElectionRouter] New leader with promised ballot number %s at %d", utils.BallotNumberString(newBallotNumber), time.Now().UnixMilli())
 	}
 }

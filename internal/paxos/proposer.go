@@ -32,25 +32,45 @@ type Proposer struct {
 
 // HandleTransactionRequest handles the transaction request and returns the sequence number
 func (p *Proposer) HandleTransactionRequest(req *pb.TransactionRequest) error {
+	// Get current ballot number
+	currentBallotNumber := p.state.GetBallotNumber()
+
+	// Check if leader
+	if !p.state.IsLeader() {
+		return errors.New("not leader")
+	}
+
 	// Assign a sequence number and create a record if it doesn't exist
-	sequenceNum, _ := p.state.AssignSequenceNumberAndCreateRecord(p.state.GetBallotNumber(), req)
+	sequenceNum, _ := p.state.AssignSequenceNumberAndCreateRecord(currentBallotNumber, req)
 	log.Infof("[Proposer] Assigned sequence number %d for request %s", sequenceNum, utils.TransactionRequestString(req))
 
 	// Run accept phase and set accepted flag
 	if !p.state.StateLog.IsCommitted(sequenceNum) {
-		accepted, err := p.RunAcceptPhase(sequenceNum, p.state.StateLog.GetRequest(sequenceNum))
-		if err != nil {
-			log.Warnf("[Proposer] Accept phase failed for request %s: %v", utils.TransactionRequestString(req), err)
-			return err
-		}
-		if !accepted {
-			log.Warnf("[Proposer] Accept phase failed for request %s: insufficient quorum", utils.TransactionRequestString(req))
-			return errors.New("insufficient quorum")
+		acceptedCh := make(chan error, 1)
+		go func() {
+			accepted, err := p.RunAcceptPhase(sequenceNum, currentBallotNumber, p.state.StateLog.GetRequest(sequenceNum))
+			if err != nil {
+				acceptedCh <- err
+			}
+			if !accepted {
+				acceptedCh <- errors.New("insufficient quorum")
+			}
+			acceptedCh <- nil
+		}()
+
+		// Wait for accepted phase to complete
+		select {
+		case err := <-acceptedCh:
+			if err != nil {
+				return err
+			}
+		case <-p.ctx.Done():
+			return errors.New("proposer context cancelled")
 		}
 	}
 
 	// Run commit phase and set committed flag
-	err := p.RunCommitPhase(sequenceNum, p.state.StateLog.GetRequest(sequenceNum))
+	err := p.RunCommitPhase(sequenceNum, currentBallotNumber, p.state.StateLog.GetRequest(sequenceNum))
 
 	// Send checkpoint message if sequence number is a multiple of k and purge
 	if sequenceNum%p.config.K == 0 {
@@ -64,11 +84,11 @@ func (p *Proposer) HandleTransactionRequest(req *pb.TransactionRequest) error {
 }
 
 // RunAcceptPhase sends an accept request to all peers and returns the response from each peer
-func (p *Proposer) RunAcceptPhase(sequenceNum int64, req *pb.TransactionRequest) (bool, error) {
+func (p *Proposer) RunAcceptPhase(sequenceNum int64, ballotNumber *pb.BallotNumber, req *pb.TransactionRequest) (bool, error) {
 	// Set accepted flag and create accept message
 	p.state.StateLog.SetAccepted(sequenceNum)
 	acceptMessage := &pb.AcceptMessage{
-		B:           p.state.GetBallotNumber(),
+		B:           ballotNumber,
 		SequenceNum: sequenceNum,
 		Message:     req,
 	}
@@ -109,18 +129,20 @@ func (p *Proposer) RunAcceptPhase(sequenceNum int64, req *pb.TransactionRequest)
 			acceptedCount++
 		}
 		if acceptedCount >= p.config.F+1 {
+			log.Infof("[Proposer] Accept phase successful for request %s", utils.TransactionRequestString(req))
 			return true, nil
 		}
 	}
+	log.Warnf("[Proposer] Accept phase failed for request %s: insufficient quorum", utils.TransactionRequestString(req))
 	return false, nil
 }
 
 // RunCommitPhase commits the transaction request
-func (p *Proposer) RunCommitPhase(sequenceNum int64, req *pb.TransactionRequest) error {
+func (p *Proposer) RunCommitPhase(sequenceNum int64, ballotNumber *pb.BallotNumber, req *pb.TransactionRequest) error {
 	// Set committed flag and create commit message
 	p.state.StateLog.SetCommitted(sequenceNum)
 	commitMessage := &pb.CommitMessage{
-		B:           p.state.GetBallotNumber(),
+		B:           ballotNumber,
 		SequenceNum: sequenceNum,
 		Message:     req,
 	}
@@ -187,7 +209,7 @@ func (p *Proposer) SendCheckpointMessage(sequenceNum int64, digest []byte) {
 }
 
 // RunNewViewPhase runs the new view phase
-func (p *Proposer) RunNewViewPhase(checkpointedSequenceNum int64, acceptMessages []*pb.AcceptMessage) {
+func (p *Proposer) RunNewViewPhase(ballotNumber *pb.BallotNumber, checkpointedSequenceNum int64, acceptMessages []*pb.AcceptMessage) {
 	// Handle checkpoint
 	if checkpointedSequenceNum > p.state.GetLastExecutedSequenceNum() {
 		// If checkpoint is greater than executed sequence number, trigger install checkpoint routine
@@ -207,15 +229,16 @@ func (p *Proposer) RunNewViewPhase(checkpointedSequenceNum int64, acceptMessages
 
 	// Update state with new accept messages
 	for _, acceptMessage := range acceptMessages {
-		p.state.StateLog.CreateRecordIfNotExists(acceptMessage.B, acceptMessage.SequenceNum, acceptMessage.Message)
+		p.state.StateLog.CreateRecordIfNotExists(ballotNumber, acceptMessage.SequenceNum, acceptMessage.Message)
 		p.state.StateLog.SetAccepted(acceptMessage.SequenceNum)
 	}
 	// Set leader
+	// Since state logs are updated, it is safe to set leader to self
 	p.state.SetLeader(p.id)
 
 	// Create new view message
 	newViewMessage := &pb.NewViewMessage{
-		B:           p.state.GetBallotNumber(),
+		B:           ballotNumber,
 		SequenceNum: checkpointedSequenceNum,
 		AcceptLog:   acceptMessages,
 	}
@@ -261,17 +284,28 @@ func (p *Proposer) RunNewViewPhase(checkpointedSequenceNum int64, acceptMessages
 	// Wait for responses and check if quorum of accepts is reached
 	acceptedCountMap := make(map[int64]int64, 100)
 	for {
-		acceptedMessage, ok := <-responseCh
-		if !ok {
-			break
-		}
-
-		sequenceNum := acceptedMessage.SequenceNum
-		acceptedCountMap[sequenceNum]++
-		if acceptedCountMap[sequenceNum] == p.config.F {
-			go p.RunCommitPhase(sequenceNum, acceptedMessage.Message)
+		// Accept messages are processed until context is cancelled or response channel is closed
+		select {
+		case <-p.ctx.Done():
+			return
+		case acceptedMessage, ok := <-responseCh:
+			if !ok {
+				break
+			}
+			sequenceNum := acceptedMessage.SequenceNum
+			acceptedCountMap[sequenceNum]++
+			if acceptedCountMap[sequenceNum] == p.config.F {
+				go p.RunCommitPhase(sequenceNum, ballotNumber, acceptedMessage.Message)
+			}
 		}
 	}
+}
+
+// CancelContext cancels the context
+func (p *Proposer) CancelContext() {
+	p.cancel()
+	p.ctx, p.cancel = context.WithCancel(context.Background())
+	log.Infof("[Proposer] Context cancelled")
 }
 
 // CreateProposer creates a new proposer

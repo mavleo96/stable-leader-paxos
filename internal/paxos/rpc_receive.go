@@ -102,10 +102,15 @@ func (s *PaxosServer) NewViewRequest(req *pb.NewViewMessage, stream pb.PaxosNode
 
 	// Logger: Add received new view message
 	s.logger.AddReceivedNewViewMessage(req)
-
-	// Reset timer
 	log.Infof("[NewViewRequest] Received new view message %v", utils.BallotNumberString(req.B))
+
+	// Proposer context is cancelled to stop any ongoing prepare or accept phases as leader
+	// Timer is cleaned up and leader is set to new leader
+	s.proposer.CancelContext()
 	s.acceptor.timer.Cleanup()
+	s.state.ResetForwardedRequestsLog()
+	s.state.SetLeader(req.B.NodeID)
+	s.state.SetBallotNumber(req.B)
 
 	// Handle checkpoint
 	checkpointSequenceNum := req.SequenceNum

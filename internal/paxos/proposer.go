@@ -22,6 +22,7 @@ type Proposer struct {
 	// Components
 	logger       *Logger
 	checkpointer *CheckpointManager
+	timer        *SafeTimer
 
 	// Channels and context
 	executionTriggerCh  chan ExecuteRequest
@@ -41,8 +42,12 @@ func (p *Proposer) HandleTransactionRequest(req *pb.TransactionRequest) error {
 	}
 
 	// Assign a sequence number and create a record if it doesn't exist
-	sequenceNum, _ := p.state.AssignSequenceNumberAndCreateRecord(currentBallotNumber, req)
+	sequenceNum, created := p.state.AssignSequenceNumberAndCreateRecord(currentBallotNumber, req)
 	log.Infof("[Proposer] Assigned sequence number %d for request %s", sequenceNum, utils.LoggingString(req))
+
+	if created {
+		p.timer.IncrementWaitCountOrStart()
+	}
 
 	// Run accept phase and set accepted flag
 	if !p.state.StateLog.IsCommitted(sequenceNum) {
@@ -319,7 +324,7 @@ func (p *Proposer) Reset() {
 }
 
 // CreateProposer creates a new proposer
-func CreateProposer(id string, state *ServerState, config *ServerConfig, peers map[string]*models.Node, logger *Logger, checkpointer *CheckpointManager, executionTriggerCh chan ExecuteRequest, installCheckpointCh chan int64) *Proposer {
+func CreateProposer(id string, state *ServerState, config *ServerConfig, peers map[string]*models.Node, logger *Logger, checkpointer *CheckpointManager, timer *SafeTimer, executionTriggerCh chan ExecuteRequest, installCheckpointCh chan int64) *Proposer {
 	ctx, cancel := context.WithCancel(context.Background())
 	return &Proposer{
 		id:                  id,
@@ -328,6 +333,7 @@ func CreateProposer(id string, state *ServerState, config *ServerConfig, peers m
 		peers:               peers,
 		logger:              logger,
 		checkpointer:        checkpointer,
+		timer:               timer,
 		executionTriggerCh:  executionTriggerCh,
 		installCheckpointCh: installCheckpointCh,
 		ctx:                 ctx,

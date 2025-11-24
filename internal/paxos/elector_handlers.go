@@ -59,6 +59,18 @@ func (l *LeaderElector) PrepareQueueHandler(expiryTimeStamp time.Time) (*pb.Ball
 
 // PrepareRequestHandler handles the prepare request for backup node
 func (l *LeaderElector) PrepareRequestHandler(prepareMessage *pb.PrepareMessage) (*pb.AckMessage, error) {
+	// Initialize system if not initialized then immediately accept the prepare request
+	if !l.state.IsSysInitialized() {
+		l.state.SetBallotNumber(prepareMessage.B)
+		l.state.SetLeader(prepareMessage.B.NodeID)
+		log.Infof("[PrepareRequestHandler] System initialized, accepting prepare request")
+		l.state.SetSysInitialized()
+		return &pb.AckMessage{
+			B:           prepareMessage.B,
+			SequenceNum: 0,
+			AcceptLog:   nil,
+		}, nil
+	}
 
 	// Log the prepare request
 	responseCh := make(chan bool)

@@ -21,6 +21,7 @@ func (s *PaxosServer) ReconfigureNode(ctx context.Context, status *wrapperspb.Bo
 
 	// If node is alive, set leader to empty string and start timer and catchup routine
 	if s.config.Alive {
+		s.state.SetSysInitialized()
 		s.state.SetLeader("")
 		go s.CatchupRoutine()
 	}

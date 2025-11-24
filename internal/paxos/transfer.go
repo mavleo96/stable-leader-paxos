@@ -18,6 +18,11 @@ func (s *PaxosServer) TransferRequest(ctx context.Context, req *pb.TransactionRe
 		return nil, status.Errorf(codes.Unavailable, "node not alive")
 	}
 
+	// Initialize system if not initialized
+	if !s.state.IsSysInitialized() {
+		s.InitializeSystem()
+	}
+
 	// Get current ballot number
 	currentBallotNumber := s.state.GetBallotNumber()
 

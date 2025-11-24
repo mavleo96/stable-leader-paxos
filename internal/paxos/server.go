@@ -14,11 +14,9 @@ import (
 // PaxosServer represents the Paxos server node
 type PaxosServer struct {
 	*models.Node
-	config              *ServerConfig
-	state               *ServerState
-	peers               map[string]*models.Node
-	SysInitializedMutex sync.Mutex
-	SysInitialized      bool
+	config *ServerConfig
+	state  *ServerState
+	peers  map[string]*models.Node
 
 	// Component Managers
 	proposer *Proposer
@@ -36,16 +34,24 @@ type PaxosServer struct {
 
 // InitializeSystem initializes the system by leader election
 func (s *PaxosServer) InitializeSystem() {
-	s.SysInitializedMutex.Lock()
-	defer s.SysInitializedMutex.Unlock()
-	if !s.SysInitialized {
-		log.Infof("Initializing system by leader election")
-		// s.PrepareRoutine()
-		s.SysInitialized = true
-		log.Infof("System initialized")
+	s.state.initializeMutex.Lock()
+	defer s.state.initializeMutex.Unlock()
+	if !s.state.IsSysInitialized() {
+		log.Infof("[InitializeSystem] Initializing system")
+		newBallotNumber := &pb.BallotNumber{N: 1, NodeID: s.ID}
+		s.state.SetBallotNumber(newBallotNumber)
+		elected, _ := s.elector.InitiatePrepareHandler(newBallotNumber)
+		if !elected {
+			log.Infof("[InitializeSystem] Election failed")
+			return
+		}
+		go s.proposer.RunNewViewPhase(newBallotNumber, 0, nil)
+		s.state.SetSysInitialized()
+		log.Infof("[InitializeSystem] System initialized")
+		log.Infof("[InitializeSystem] Leader is %s", s.state.GetLeader())
 		return
 	}
-	log.Infof("System already initialized")
+	log.Infof("[InitializeSystem] System already initialized")
 }
 
 // Start starts the paxos server
@@ -80,17 +86,15 @@ func CreatePaxosServer(selfNode *models.Node, peerNodes map[string]*models.Node,
 	executor := CreateExecutor(serverState, serverConfig, bankDB, checkpointer, paxosTimer, executionTriggerCh, installCheckpointCh)
 
 	return &PaxosServer{
-		Node:                selfNode,
-		config:              serverConfig,
-		state:               serverState,
-		peers:               peerNodes,
-		SysInitializedMutex: sync.Mutex{},
-		SysInitialized:      true,
-		proposer:            proposer,
-		acceptor:            acceptor,
-		executor:            executor,
-		elector:             elector,
-		logger:              logger,
-		wg:                  sync.WaitGroup{},
+		Node:     selfNode,
+		config:   serverConfig,
+		state:    serverState,
+		peers:    peerNodes,
+		proposer: proposer,
+		acceptor: acceptor,
+		executor: executor,
+		elector:  elector,
+		logger:   logger,
+		wg:       sync.WaitGroup{},
 	}
 }

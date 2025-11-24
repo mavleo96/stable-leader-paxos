@@ -14,6 +14,8 @@ type ServerState struct {
 	id                          string
 	b                           *pb.BallotNumber
 	leader                      string
+	initializeMutex             sync.Mutex
+	sysInitialized              bool
 	lastExecutedSequenceNum     int64
 	lastCheckpointedSequenceNum int64
 	forwardedRequestsLog        []*pb.TransactionRequest
@@ -42,6 +44,20 @@ func (s *ServerState) IsLeader() bool {
 	s.mutex.RLock()
 	defer s.mutex.RUnlock()
 	return s.leader == s.id
+}
+
+// IsSysInitialized checks if the system is initialized
+func (s *ServerState) IsSysInitialized() bool {
+	s.mutex.RLock()
+	defer s.mutex.RUnlock()
+	return s.sysInitialized
+}
+
+// SetSysInitialized sets the system initialized
+func (s *ServerState) SetSysInitialized() {
+	s.mutex.Lock()
+	defer s.mutex.Unlock()
+	s.sysInitialized = true
 }
 
 // GetBallotNumber returns the current ballot number
@@ -175,8 +191,10 @@ func CreateServerState(id string) *ServerState {
 	return &ServerState{
 		mutex:                       sync.RWMutex{},
 		id:                          id,
-		b:                           &pb.BallotNumber{N: 1, NodeID: "n1"},
-		leader:                      "n1",
+		b:                           &pb.BallotNumber{N: 0, NodeID: ""},
+		leader:                      "",
+		initializeMutex:             sync.Mutex{},
+		sysInitialized:              false,
 		lastExecutedSequenceNum:     0,
 		lastCheckpointedSequenceNum: 0,
 		forwardedRequestsLog:        make([]*pb.TransactionRequest, 10),

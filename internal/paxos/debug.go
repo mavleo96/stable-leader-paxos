@@ -129,7 +129,8 @@ func (s *PaxosServer) PrintStatus(ctx context.Context, req *pb.StatusRequest) (*
 
 	printRange := []int64{req.SequenceNum}
 	if req.SequenceNum == 0 {
-		printRange = utils.Range(1, s.state.StateLog.MaxSequenceNum()+1)
+		log.Infof("[PrintStatus] Printing all sequence numbers in range (%d, %d)", s.state.GetLastCheckpointedSequenceNum()+1, s.state.MaxSequenceNum()+1)
+		printRange = utils.Range(s.state.GetLastCheckpointedSequenceNum()+1, s.state.MaxSequenceNum()+1)
 	}
 
 	for _, i := range printRange {

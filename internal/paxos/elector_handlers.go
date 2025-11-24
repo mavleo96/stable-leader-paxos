@@ -80,9 +80,11 @@ func (l *LeaderElector) PrepareRequestHandler(prepareMessage *pb.PrepareMessage)
 
 	// Return ack message with accepted log
 	acceptedLog := l.state.StateLog.GetAcceptedLog()
+	sequenceNum := l.state.GetLastCheckpointedSequenceNum()
 	return &pb.AckMessage{
-		B:         prepareMessage.B,
-		AcceptLog: acceptedLog,
+		B:           prepareMessage.B,
+		SequenceNum: sequenceNum,
+		AcceptLog:   acceptedLog,
 	}, nil
 }
 

@@ -21,20 +21,22 @@ import (
 const _ = grpc.SupportPackageIsVersion7
 
 const (
-	PaxosNode_TransferRequest_FullMethodName = "/pb.PaxosNode/TransferRequest"
-	PaxosNode_ForwardRequest_FullMethodName  = "/pb.PaxosNode/ForwardRequest"
-	PaxosNode_PrepareRequest_FullMethodName  = "/pb.PaxosNode/PrepareRequest"
-	PaxosNode_AcceptRequest_FullMethodName   = "/pb.PaxosNode/AcceptRequest"
-	PaxosNode_CommitRequest_FullMethodName   = "/pb.PaxosNode/CommitRequest"
-	PaxosNode_NewViewRequest_FullMethodName  = "/pb.PaxosNode/NewViewRequest"
-	PaxosNode_CatchupRequest_FullMethodName  = "/pb.PaxosNode/CatchupRequest"
-	PaxosNode_PrintLog_FullMethodName        = "/pb.PaxosNode/PrintLog"
-	PaxosNode_PrintDB_FullMethodName         = "/pb.PaxosNode/PrintDB"
-	PaxosNode_PrintStatus_FullMethodName     = "/pb.PaxosNode/PrintStatus"
-	PaxosNode_PrintView_FullMethodName       = "/pb.PaxosNode/PrintView"
-	PaxosNode_ReconfigureNode_FullMethodName = "/pb.PaxosNode/ReconfigureNode"
-	PaxosNode_KillLeader_FullMethodName      = "/pb.PaxosNode/KillLeader"
-	PaxosNode_ResetNode_FullMethodName       = "/pb.PaxosNode/ResetNode"
+	PaxosNode_TransferRequest_FullMethodName   = "/pb.PaxosNode/TransferRequest"
+	PaxosNode_ForwardRequest_FullMethodName    = "/pb.PaxosNode/ForwardRequest"
+	PaxosNode_PrepareRequest_FullMethodName    = "/pb.PaxosNode/PrepareRequest"
+	PaxosNode_AcceptRequest_FullMethodName     = "/pb.PaxosNode/AcceptRequest"
+	PaxosNode_CommitRequest_FullMethodName     = "/pb.PaxosNode/CommitRequest"
+	PaxosNode_CheckpointRequest_FullMethodName = "/pb.PaxosNode/CheckpointRequest"
+	PaxosNode_NewViewRequest_FullMethodName    = "/pb.PaxosNode/NewViewRequest"
+	PaxosNode_CatchupRequest_FullMethodName    = "/pb.PaxosNode/CatchupRequest"
+	PaxosNode_GetCheckpoint_FullMethodName     = "/pb.PaxosNode/GetCheckpoint"
+	PaxosNode_PrintLog_FullMethodName          = "/pb.PaxosNode/PrintLog"
+	PaxosNode_PrintDB_FullMethodName           = "/pb.PaxosNode/PrintDB"
+	PaxosNode_PrintStatus_FullMethodName       = "/pb.PaxosNode/PrintStatus"
+	PaxosNode_PrintView_FullMethodName         = "/pb.PaxosNode/PrintView"
+	PaxosNode_ReconfigureNode_FullMethodName   = "/pb.PaxosNode/ReconfigureNode"
+	PaxosNode_KillLeader_FullMethodName        = "/pb.PaxosNode/KillLeader"
+	PaxosNode_ResetNode_FullMethodName         = "/pb.PaxosNode/ResetNode"
 )
 
 // PaxosNodeClient is the client API for PaxosNode service.
@@ -46,8 +48,10 @@ type PaxosNodeClient interface {
 	PrepareRequest(ctx context.Context, in *PrepareMessage, opts ...grpc.CallOption) (*AckMessage, error)
 	AcceptRequest(ctx context.Context, in *AcceptMessage, opts ...grpc.CallOption) (*AcceptedMessage, error)
 	CommitRequest(ctx context.Context, in *CommitMessage, opts ...grpc.CallOption) (*emptypb.Empty, error)
+	CheckpointRequest(ctx context.Context, in *CheckpointMessage, opts ...grpc.CallOption) (*emptypb.Empty, error)
 	NewViewRequest(ctx context.Context, in *NewViewMessage, opts ...grpc.CallOption) (PaxosNode_NewViewRequestClient, error)
 	CatchupRequest(ctx context.Context, in *CatchupRequestMessage, opts ...grpc.CallOption) (*CatchupMessage, error)
+	GetCheckpoint(ctx context.Context, in *GetCheckpointMessage, opts ...grpc.CallOption) (*Checkpoint, error)
 	PrintLog(ctx context.Context, in *wrapperspb.Int64Value, opts ...grpc.CallOption) (*emptypb.Empty, error)
 	PrintDB(ctx context.Context, in *wrapperspb.Int64Value, opts ...grpc.CallOption) (*emptypb.Empty, error)
 	PrintStatus(ctx context.Context, in *StatusRequest, opts ...grpc.CallOption) (*emptypb.Empty, error)
@@ -110,6 +114,15 @@ func (c *paxosNodeClient) CommitRequest(ctx context.Context, in *CommitMessage, 
 	return out, nil
 }
 
+func (c *paxosNodeClient) CheckpointRequest(ctx context.Context, in *CheckpointMessage, opts ...grpc.CallOption) (*emptypb.Empty, error) {
+	out := new(emptypb.Empty)
+	err := c.cc.Invoke(ctx, PaxosNode_CheckpointRequest_FullMethodName, in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *paxosNodeClient) NewViewRequest(ctx context.Context, in *NewViewMessage, opts ...grpc.CallOption) (PaxosNode_NewViewRequestClient, error) {
 	stream, err := c.cc.NewStream(ctx, &PaxosNode_ServiceDesc.Streams[0], PaxosNode_NewViewRequest_FullMethodName, opts...)
 	if err != nil {
@@ -145,6 +158,15 @@ func (x *paxosNodeNewViewRequestClient) Recv() (*AcceptedMessage, error) {
 func (c *paxosNodeClient) CatchupRequest(ctx context.Context, in *CatchupRequestMessage, opts ...grpc.CallOption) (*CatchupMessage, error) {
 	out := new(CatchupMessage)
 	err := c.cc.Invoke(ctx, PaxosNode_CatchupRequest_FullMethodName, in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *paxosNodeClient) GetCheckpoint(ctx context.Context, in *GetCheckpointMessage, opts ...grpc.CallOption) (*Checkpoint, error) {
+	out := new(Checkpoint)
+	err := c.cc.Invoke(ctx, PaxosNode_GetCheckpoint_FullMethodName, in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -223,8 +245,10 @@ type PaxosNodeServer interface {
 	PrepareRequest(context.Context, *PrepareMessage) (*AckMessage, error)
 	AcceptRequest(context.Context, *AcceptMessage) (*AcceptedMessage, error)
 	CommitRequest(context.Context, *CommitMessage) (*emptypb.Empty, error)
+	CheckpointRequest(context.Context, *CheckpointMessage) (*emptypb.Empty, error)
 	NewViewRequest(*NewViewMessage, PaxosNode_NewViewRequestServer) error
 	CatchupRequest(context.Context, *CatchupRequestMessage) (*CatchupMessage, error)
+	GetCheckpoint(context.Context, *GetCheckpointMessage) (*Checkpoint, error)
 	PrintLog(context.Context, *wrapperspb.Int64Value) (*emptypb.Empty, error)
 	PrintDB(context.Context, *wrapperspb.Int64Value) (*emptypb.Empty, error)
 	PrintStatus(context.Context, *StatusRequest) (*emptypb.Empty, error)
@@ -254,11 +278,17 @@ func (UnimplementedPaxosNodeServer) AcceptRequest(context.Context, *AcceptMessag
 func (UnimplementedPaxosNodeServer) CommitRequest(context.Context, *CommitMessage) (*emptypb.Empty, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method CommitRequest not implemented")
 }
+func (UnimplementedPaxosNodeServer) CheckpointRequest(context.Context, *CheckpointMessage) (*emptypb.Empty, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method CheckpointRequest not implemented")
+}
 func (UnimplementedPaxosNodeServer) NewViewRequest(*NewViewMessage, PaxosNode_NewViewRequestServer) error {
 	return status.Errorf(codes.Unimplemented, "method NewViewRequest not implemented")
 }
 func (UnimplementedPaxosNodeServer) CatchupRequest(context.Context, *CatchupRequestMessage) (*CatchupMessage, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method CatchupRequest not implemented")
+}
+func (UnimplementedPaxosNodeServer) GetCheckpoint(context.Context, *GetCheckpointMessage) (*Checkpoint, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetCheckpoint not implemented")
 }
 func (UnimplementedPaxosNodeServer) PrintLog(context.Context, *wrapperspb.Int64Value) (*emptypb.Empty, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method PrintLog not implemented")
@@ -384,6 +414,24 @@ func _PaxosNode_CommitRequest_Handler(srv interface{}, ctx context.Context, dec 
 	return interceptor(ctx, in, info, handler)
 }
 
+func _PaxosNode_CheckpointRequest_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(CheckpointMessage)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PaxosNodeServer).CheckpointRequest(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PaxosNode_CheckpointRequest_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PaxosNodeServer).CheckpointRequest(ctx, req.(*CheckpointMessage))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _PaxosNode_NewViewRequest_Handler(srv interface{}, stream grpc.ServerStream) error {
 	m := new(NewViewMessage)
 	if err := stream.RecvMsg(m); err != nil {
@@ -419,6 +467,24 @@ func _PaxosNode_CatchupRequest_Handler(srv interface{}, ctx context.Context, dec
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(PaxosNodeServer).CatchupRequest(ctx, req.(*CatchupRequestMessage))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _PaxosNode_GetCheckpoint_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetCheckpointMessage)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PaxosNodeServer).GetCheckpoint(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PaxosNode_GetCheckpoint_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PaxosNodeServer).GetCheckpoint(ctx, req.(*GetCheckpointMessage))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -577,8 +643,16 @@ var PaxosNode_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _PaxosNode_CommitRequest_Handler,
 		},
 		{
+			MethodName: "CheckpointRequest",
+			Handler:    _PaxosNode_CheckpointRequest_Handler,
+		},
+		{
 			MethodName: "CatchupRequest",
 			Handler:    _PaxosNode_CatchupRequest_Handler,
+		},
+		{
+			MethodName: "GetCheckpoint",
+			Handler:    _PaxosNode_GetCheckpoint_Handler,
 		},
 		{
 			MethodName: "PrintLog",

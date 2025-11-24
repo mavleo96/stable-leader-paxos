@@ -20,6 +20,8 @@ type Logger struct {
 	receivedCommitMessages       []*pb.CommitMessage
 	sentNewViewMessages          []*pb.NewViewMessage
 	receivedNewViewMessages      []*pb.NewViewMessage
+	sentCheckpointMessages       []*pb.CheckpointMessage
+	receivedCheckpointMessages   []*pb.CheckpointMessage
 	receivedTransactionRequests  []*pb.TransactionRequest
 	forwardedTransactionRequests []*pb.TransactionRequest
 	sentTransactionResponses     []*pb.TransactionResponse
@@ -193,6 +195,34 @@ func (l *Logger) GetReceivedNewViewMessages() []*pb.NewViewMessage {
 	return l.receivedNewViewMessages
 }
 
+// AddSentCheckpointMessage adds a sent checkpoint message to the logger
+func (l *Logger) AddSentCheckpointMessage(message *pb.CheckpointMessage) {
+	l.mutex.Lock()
+	defer l.mutex.Unlock()
+	l.sentCheckpointMessages = append(l.sentCheckpointMessages, message)
+}
+
+// GetSentCheckpointMessages returns the sent checkpoint messages
+func (l *Logger) GetSentCheckpointMessages() []*pb.CheckpointMessage {
+	l.mutex.RLock()
+	defer l.mutex.RUnlock()
+	return l.sentCheckpointMessages
+}
+
+// AddReceivedCheckpointMessage adds a received checkpoint message to the logger
+func (l *Logger) AddReceivedCheckpointMessage(message *pb.CheckpointMessage) {
+	l.mutex.Lock()
+	defer l.mutex.Unlock()
+	l.receivedCheckpointMessages = append(l.receivedCheckpointMessages, message)
+}
+
+// GetReceivedCheckpointMessages returns the received checkpoint messages
+func (l *Logger) GetReceivedCheckpointMessages() []*pb.CheckpointMessage {
+	l.mutex.RLock()
+	defer l.mutex.RUnlock()
+	return l.receivedCheckpointMessages
+}
+
 // AddReceivedTransactionRequest adds a received transaction request to the logger
 func (l *Logger) AddReceivedTransactionRequest(message *pb.TransactionRequest) {
 	l.mutex.Lock()
@@ -251,6 +281,8 @@ func (l *Logger) Reset() {
 	l.receivedCommitMessages = make([]*pb.CommitMessage, 0)
 	l.sentNewViewMessages = make([]*pb.NewViewMessage, 0)
 	l.receivedNewViewMessages = make([]*pb.NewViewMessage, 0)
+	l.sentCheckpointMessages = make([]*pb.CheckpointMessage, 0)
+	l.receivedCheckpointMessages = make([]*pb.CheckpointMessage, 0)
 	l.receivedTransactionRequests = make([]*pb.TransactionRequest, 0)
 	l.forwardedTransactionRequests = make([]*pb.TransactionRequest, 0)
 	l.sentTransactionResponses = make([]*pb.TransactionResponse, 0)
@@ -272,6 +304,8 @@ func CreateLogger() *Logger {
 		receivedCommitMessages:       make([]*pb.CommitMessage, 0),
 		sentNewViewMessages:          make([]*pb.NewViewMessage, 0),
 		receivedNewViewMessages:      make([]*pb.NewViewMessage, 0),
+		sentCheckpointMessages:       make([]*pb.CheckpointMessage, 0),
+		receivedCheckpointMessages:   make([]*pb.CheckpointMessage, 0),
 		receivedTransactionRequests:  make([]*pb.TransactionRequest, 0),
 		forwardedTransactionRequests: make([]*pb.TransactionRequest, 0),
 		sentTransactionResponses:     make([]*pb.TransactionResponse, 0),

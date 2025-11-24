@@ -13,11 +13,10 @@ import (
 
 // SendCatchUpRequest sends a catch up request to the leader
 func (s *PaxosServer) SendCatchUpRequest(sequenceNum int64) (*pb.CatchupMessage, error) {
-
 	catchupRequest := &pb.CatchupRequestMessage{NodeID: s.ID, SequenceNum: sequenceNum}
 
 	// Multicast catch up request to all peers except self
-	responseChan := make(chan *pb.CatchupMessage)
+	responseChan := make(chan *pb.CatchupMessage, len(s.peers))
 	wg := sync.WaitGroup{}
 	for _, peer := range s.peers {
 		wg.Add(1)
@@ -25,7 +24,6 @@ func (s *PaxosServer) SendCatchUpRequest(sequenceNum int64) (*pb.CatchupMessage,
 			defer wg.Done()
 			catchupMessage, err := (*peer.Client).CatchupRequest(context.Background(), catchupRequest)
 			if err != nil || catchupMessage == nil {
-				log.Warnf("[SendCatchUpRequest] Failed to get catch up message from leader %s: %v", peer.ID, err)
 				return
 			}
 			responseChan <- catchupMessage
@@ -36,8 +34,10 @@ func (s *PaxosServer) SendCatchUpRequest(sequenceNum int64) (*pb.CatchupMessage,
 		close(responseChan)
 	}()
 
+	// Wait for response and return the catch up message
 	catchupMessage, ok := <-responseChan
 	if !ok {
+		log.Warnf("[SendCatchUpRequest] Failed to get catch up message from leader")
 		return nil, status.Errorf(codes.Unavailable, "failed to get catch up message from leader")
 	}
 	return catchupMessage, nil
@@ -45,16 +45,25 @@ func (s *PaxosServer) SendCatchUpRequest(sequenceNum int64) (*pb.CatchupMessage,
 
 // CatchupRoutine is the main routine for the catch up
 func (s *PaxosServer) CatchupRoutine() {
-	maxSequenceNum := s.state.StateLog.MaxSequenceNum()
+	maxSequenceNum := s.state.MaxSequenceNum()
 	catchupMessage, err := s.SendCatchUpRequest(maxSequenceNum)
 	if err != nil {
 		log.Warn(err)
 		return
 	}
 
-	log.Infof("[CatchupRoutine] Received catch up message from leader %s: %v", catchupMessage.B.NodeID, catchupMessage.B)
+	log.Infof("[CatchupRoutine] Received catch up message from leader %s: %v, msg: %s", catchupMessage.B.NodeID, catchupMessage.B, catchupMessage.String())
 	s.state.SetLeader(catchupMessage.B.NodeID)
 	s.state.SetBallotNumber(catchupMessage.B)
+
+	// Install checkpoint if not nil
+	checkpoint := catchupMessage.Checkpoint
+	if checkpoint != nil {
+		log.Infof("[CatchupRoutine] Installing checkpoint for sequence number %d, %s", checkpoint.SequenceNum, checkpoint.String())
+		s.executor.checkpointer.AddCheckpoint(checkpoint.SequenceNum, checkpoint.Snapshot)
+		s.executor.installCheckpointCh <- checkpoint.SequenceNum
+	}
+
 	for _, record := range catchupMessage.CommitLog {
 		s.acceptor.CommitRequestHandler(record)
 	}

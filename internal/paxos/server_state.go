@@ -3,18 +3,20 @@ package paxos
 import (
 	"sync"
 
+	"github.com/mavleo96/stable-leader-paxos/internal/utils"
 	pb "github.com/mavleo96/stable-leader-paxos/pb"
 	"google.golang.org/protobuf/proto"
 )
 
 // ServerState is a struct that contains the state of the paxos server
 type ServerState struct {
-	mutex                   sync.RWMutex
-	id                      string
-	b                       *pb.BallotNumber
-	leader                  string
-	lastExecutedSequenceNum int64
-	forwardedRequestsLog    []*pb.TransactionRequest
+	mutex                       sync.RWMutex
+	id                          string
+	b                           *pb.BallotNumber
+	leader                      string
+	lastExecutedSequenceNum     int64
+	lastCheckpointedSequenceNum int64
+	forwardedRequestsLog        []*pb.TransactionRequest
 
 	// Self-managed components
 	StateLog   *StateLog
@@ -56,6 +58,39 @@ func (s *ServerState) SetBallotNumber(b *pb.BallotNumber) {
 	s.b = b
 }
 
+// TODO: improve design later
+// AssignSequenceNumberAndCreateRecord assigns a sequence number to a log record for a given digest and creates a new log record if not found
+func (s *ServerState) AssignSequenceNumberAndCreateRecord(ballotNumber *pb.BallotNumber, request *pb.TransactionRequest) (int64, bool) {
+	s.mutex.Lock()
+	defer s.mutex.Unlock()
+	s.StateLog.mutex.Lock()
+	defer s.StateLog.mutex.Unlock()
+
+	// Check if request is already in log record
+	for sequenceNum := range s.StateLog.log {
+		record, exists := s.StateLog.log[sequenceNum]
+		if !exists {
+			continue
+		}
+		if record != nil && proto.Equal(record.request, request) {
+			if ballotNumberIsHigher(record.b, ballotNumber) {
+				record.b = ballotNumber
+				return record.sequenceNum, true
+			}
+			return record.sequenceNum, false
+		}
+	}
+
+	// If request is not in log record, assign new sequence number
+	sequenceNum := s.lastCheckpointedSequenceNum + 1
+	if utils.Max(utils.Keys(s.StateLog.log)) != 0 {
+		sequenceNum = utils.Max(utils.Keys(s.StateLog.log)) + 1
+	}
+	s.StateLog.log[sequenceNum] = createLogRecord(ballotNumber, sequenceNum, request)
+
+	return sequenceNum, true
+}
+
 // GetLastExecutedSequenceNum returns the last executed sequence number
 func (s *ServerState) GetLastExecutedSequenceNum() int64 {
 	s.mutex.RLock()
@@ -68,6 +103,33 @@ func (s *ServerState) SetLastExecutedSequenceNum(sequenceNum int64) {
 	s.mutex.Lock()
 	defer s.mutex.Unlock()
 	s.lastExecutedSequenceNum = sequenceNum
+}
+
+// GetLastCheckpointedSequenceNum returns the last checkpointed sequence number
+func (s *ServerState) GetLastCheckpointedSequenceNum() int64 {
+	s.mutex.RLock()
+	defer s.mutex.RUnlock()
+	return s.lastCheckpointedSequenceNum
+}
+
+// SetLastCheckpointedSequenceNum sets the last checkpointed sequence number
+func (s *ServerState) SetLastCheckpointedSequenceNum(sequenceNum int64) {
+	s.mutex.Lock()
+	defer s.mutex.Unlock()
+	s.lastCheckpointedSequenceNum = sequenceNum
+}
+
+// TODO: improve design later
+// MaxSequenceNum returns the maximum sequence number
+func (s *ServerState) MaxSequenceNum() int64 {
+	s.mutex.RLock()
+	defer s.mutex.RUnlock()
+	s.StateLog.mutex.RLock()
+	defer s.StateLog.mutex.RUnlock()
+	if utils.Max(utils.Keys(s.StateLog.log)) == 0 {
+		return s.lastCheckpointedSequenceNum
+	}
+	return utils.Max(utils.Keys(s.StateLog.log))
 }
 
 // AddForwardedRequest adds a forwarded request to the forwarded requests log
@@ -102,6 +164,7 @@ func (s *ServerState) Reset() {
 	defer s.mutex.Unlock()
 	s.b = &pb.BallotNumber{N: 0, NodeID: ""}
 	s.lastExecutedSequenceNum = 0
+	s.lastCheckpointedSequenceNum = 0
 	s.forwardedRequestsLog = make([]*pb.TransactionRequest, 10)
 	s.StateLog.Reset()
 	s.DedupTable.Reset()
@@ -110,13 +173,14 @@ func (s *ServerState) Reset() {
 // CreateServerState creates a new server state
 func CreateServerState(id string) *ServerState {
 	return &ServerState{
-		mutex:                   sync.RWMutex{},
-		id:                      id,
-		b:                       &pb.BallotNumber{N: 1, NodeID: "n1"},
-		leader:                  "n1",
-		lastExecutedSequenceNum: 0,
-		forwardedRequestsLog:    make([]*pb.TransactionRequest, 10),
-		StateLog:                CreateStateLog(id),
-		DedupTable:              CreateDedupTable(),
+		mutex:                       sync.RWMutex{},
+		id:                          id,
+		b:                           &pb.BallotNumber{N: 1, NodeID: "n1"},
+		leader:                      "n1",
+		lastExecutedSequenceNum:     0,
+		lastCheckpointedSequenceNum: 0,
+		forwardedRequestsLog:        make([]*pb.TransactionRequest, 10),
+		StateLog:                    CreateStateLog(id),
+		DedupTable:                  CreateDedupTable(),
 	}
 }

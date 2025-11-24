@@ -18,6 +18,9 @@ func (s *PaxosServer) TransferRequest(ctx context.Context, req *pb.TransactionRe
 		return nil, status.Errorf(codes.Unavailable, "node not alive")
 	}
 
+	// Get current ballot number
+	currentBallotNumber := s.state.GetBallotNumber()
+
 	// Forward request if not leader
 	if !s.state.IsLeader() {
 		if s.state.InForwardedRequestsLog(req) {
@@ -25,19 +28,21 @@ func (s *PaxosServer) TransferRequest(ctx context.Context, req *pb.TransactionRe
 			return UnsuccessfulTransactionResponse, status.Errorf(codes.Aborted, "not leader")
 		}
 		sequenceNum := s.state.StateLog.GetSequenceNumber(req)
-		if s.state.StateLog.IsAccepted(sequenceNum) && proto.Equal(s.state.StateLog.GetBallotNumber(sequenceNum), s.state.GetBallotNumber()) {
+		if s.state.StateLog.IsAccepted(sequenceNum) && proto.Equal(s.state.StateLog.GetBallotNumber(sequenceNum), currentBallotNumber) {
 			log.Warnf("[TransferRequest] Request %s already accepted", utils.TransactionRequestString(req))
 			return UnsuccessfulTransactionResponse, status.Errorf(codes.Aborted, "already accepted")
 		}
 		// Logger: Add received transaction request
 		s.logger.AddReceivedTransactionRequest(req)
 
+		// Add request to forwarded requests log
+		s.state.AddForwardedRequest(req)
+
 		s.acceptor.timer.IncrementWaitCountOrStart()
 		leader := s.state.GetLeader()
 		if leader != "" {
 			go s.ForwardToLeader(leader, req)
 		}
-		s.state.AddForwardedRequest(req)
 		return UnsuccessfulTransactionResponse, status.Errorf(codes.Aborted, "not leader")
 	}
 
@@ -48,7 +53,7 @@ func (s *PaxosServer) TransferRequest(ctx context.Context, req *pb.TransactionRe
 	timestamp, result := s.state.DedupTable.GetLastResult(req.Sender)
 	if timestamp != 0 && req.Timestamp == timestamp {
 		response := &pb.TransactionResponse{
-			B:         s.state.GetBallotNumber(),
+			B:         currentBallotNumber,
 			Timestamp: req.Timestamp,
 			Sender:    req.Sender,
 			Result:    utils.Int64ToBool(result),
@@ -73,7 +78,7 @@ func (s *PaxosServer) TransferRequest(ctx context.Context, req *pb.TransactionRe
 	// Create transaction response from dedup table
 	timestamp, result = s.state.DedupTable.GetLastResult(req.Sender)
 	response := &pb.TransactionResponse{
-		B:         s.state.GetBallotNumber(),
+		B:         currentBallotNumber,
 		Timestamp: timestamp,
 		Sender:    req.Sender,
 		Result:    utils.Int64ToBool(result),

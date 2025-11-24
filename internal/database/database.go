@@ -106,6 +106,17 @@ func (d *Database) UpdateDB(t *pb.Transaction) (bool, error) {
 	return success, err
 }
 
+// SetBalance sets the balance of the given account.
+func (d *Database) SetBalance(account string, balance int64) error {
+	return d.db.Update(func(tx *bbolt.Tx) error {
+		b := tx.Bucket([]byte("balances"))
+		if b == nil {
+			return errors.New("balances bucket not found")
+		}
+		return b.Put([]byte(account), []byte(strconv.FormatInt(balance, 10)))
+	})
+}
+
 // GetDBState gets the current state of the database.
 func (d *Database) GetDBState() (map[string]int64, error) {
 	dbState := make(map[string]int64)

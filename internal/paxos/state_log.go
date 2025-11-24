@@ -11,8 +11,8 @@ import (
 
 // StateLog is a struct that contains the state of the paxos system
 type StateLog struct {
-	id    string
 	mutex sync.RWMutex
+	id    string
 	log   map[int64]*LogRecord // seq -> record
 }
 
@@ -38,35 +38,36 @@ func (s *StateLog) GetSequenceNumber(request *pb.TransactionRequest) int64 {
 	return 0
 }
 
-// AssignSequenceNumberAndCreateRecord assigns a sequence number to a log record for a given digest and creates a new log record if not found
-func (s *StateLog) AssignSequenceNumberAndCreateRecord(ballotNumber *pb.BallotNumber, request *pb.TransactionRequest) (int64, bool) {
-	s.mutex.Lock()
-	defer s.mutex.Unlock()
+// // TODO: improve design later
+// // AssignSequenceNumberAndCreateRecord assigns a sequence number to a log record for a given digest and creates a new log record if not found
+// func (s *StateLog) AssignSequenceNumberAndCreateRecord(ballotNumber *pb.BallotNumber, request *pb.TransactionRequest) (int64, bool) {
+// 	s.mutex.Lock()
+// 	defer s.mutex.Unlock()
 
-	// Check if request is already in log record
-	for sequenceNum := range s.log {
-		record, exists := s.log[sequenceNum]
-		if !exists {
-			continue
-		}
-		if record != nil && proto.Equal(record.request, request) {
-			if ballotNumberIsHigher(record.b, ballotNumber) {
-				record.b = ballotNumber
-				return record.sequenceNum, true
-			}
-			return record.sequenceNum, false
-		}
-	}
+// 	// Check if request is already in log record
+// 	for sequenceNum := range s.log {
+// 		record, exists := s.log[sequenceNum]
+// 		if !exists {
+// 			continue
+// 		}
+// 		if record != nil && proto.Equal(record.request, request) {
+// 			if ballotNumberIsHigher(record.b, ballotNumber) {
+// 				record.b = ballotNumber
+// 				return record.sequenceNum, true
+// 			}
+// 			return record.sequenceNum, false
+// 		}
+// 	}
 
-	// If request is not in log record, assign new sequence number
-	sequenceNum := int64(1)
-	if utils.Max(utils.Keys(s.log)) != 0 {
-		sequenceNum = utils.Max(utils.Keys(s.log)) + 1
-	}
-	s.log[sequenceNum] = createLogRecord(ballotNumber, sequenceNum, request)
+// 	// If request is not in log record, assign new sequence number
+// 	sequenceNum := int64(1)
+// 	if utils.Max(utils.Keys(s.log)) != 0 {
+// 		sequenceNum = utils.Max(utils.Keys(s.log)) + 1
+// 	}
+// 	s.log[sequenceNum] = createLogRecord(ballotNumber, sequenceNum, request)
 
-	return sequenceNum, true
-}
+// 	return sequenceNum, true
+// }
 
 // CreateRecordIfNotExists creates a new log record if not found
 func (s *StateLog) CreateRecordIfNotExists(ballotNumber *pb.BallotNumber, sequenceNum int64, request *pb.TransactionRequest) bool {
@@ -99,15 +100,15 @@ func (s *StateLog) Delete(sequenceNum int64) {
 	delete(s.log, sequenceNum)
 }
 
-// Keys returns the keys of the log
-func (s *StateLog) MaxSequenceNum() int64 {
-	s.mutex.RLock()
-	defer s.mutex.RUnlock()
-	if utils.Max(utils.Keys(s.log)) == 0 {
-		return 0
-	}
-	return utils.Max(utils.Keys(s.log))
-}
+// // TODO: improve design later
+// func (s *StateLog) maxSequenceNum() int64 {
+// 	s.mutex.RLock()
+// 	defer s.mutex.RUnlock()
+// 	if utils.Max(utils.Keys(s.log)) == 0 {
+// 		return 0
+// 	}
+// 	return utils.Max(utils.Keys(s.log))
+// }
 
 // GetBallotNumber returns the ballot number for a given sequence number
 func (s *StateLog) GetBallotNumber(sequenceNum int64) *pb.BallotNumber {
@@ -223,6 +224,17 @@ func (s *StateLog) GetAcceptedLog() []*pb.AcceptedMessage {
 		})
 	}
 	return acceptedLog
+}
+
+// PurgeBelow purges the log below a given sequence number
+func (s *StateLog) PurgeBelowOrEqual(sequenceNum int64) {
+	s.mutex.Lock()
+	defer s.mutex.Unlock()
+	for i := range s.log {
+		if i <= sequenceNum {
+			delete(s.log, i)
+		}
+	}
 }
 
 // GetLogString returns the log string for a given sequence number

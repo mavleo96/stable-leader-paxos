@@ -107,6 +107,24 @@ func (s *PaxosServer) NewViewRequest(req *pb.NewViewMessage, stream pb.PaxosNode
 	log.Infof("[NewViewRequest] Received new view message %v", utils.BallotNumberString(req.B))
 	s.acceptor.timer.Cleanup()
 
+	// Handle checkpoint
+	checkpointSequenceNum := req.SequenceNum
+	if checkpointSequenceNum > s.state.GetLastExecutedSequenceNum() {
+		// If checkpoint is greater than executed sequence number, trigger install checkpoint routine
+
+		// Get checkpoint from other nodes
+		checkpoint, err := s.executor.checkpointer.SendGetCheckpointRequest(checkpointSequenceNum)
+		if err != nil {
+			log.Warnf("[NewViewRequest] Failed to get checkpoint for sequence number %d: %v", checkpointSequenceNum, err)
+			return err
+		}
+		s.executor.checkpointer.AddCheckpoint(checkpointSequenceNum, checkpoint.Snapshot)
+		s.executor.GetInstallCheckpointChannel() <- checkpointSequenceNum
+	} else if checkpointSequenceNum > s.state.GetLastCheckpointedSequenceNum() {
+		// Trigger checkpoint purge routine
+		s.executor.checkpointer.GetCheckpointPurgeRoutineCh() <- checkpointSequenceNum
+	}
+
 	// Handle accept messages
 	for _, acceptMessage := range req.AcceptLog {
 		acceptedMessage, err := s.acceptor.AcceptRequestHandler(acceptMessage)
@@ -126,6 +144,22 @@ func (s *PaxosServer) NewViewRequest(req *pb.NewViewMessage, stream pb.PaxosNode
 	return nil
 }
 
+// CheckpointRequest handles the checkpoint request and forwards it to the handler
+func (s *PaxosServer) CheckpointRequest(ctx context.Context, req *pb.CheckpointMessage) (*emptypb.Empty, error) {
+	if !s.config.Alive {
+		log.Warnf("[CheckpointRequest] Node %s is not alive", s.ID)
+		return nil, status.Errorf(codes.Unavailable, "node not alive")
+	}
+
+	// Logger: Add received checkpoint message
+	s.logger.AddReceivedCheckpointMessage(req)
+
+	// Add checkpoint message to checkpoint log
+	s.executor.checkpointer.BackupCheckpointMessageHandler(req)
+
+	return &emptypb.Empty{}, nil
+}
+
 // ForwardRequest handles the forward request and forwards it to the leader
 func (s *PaxosServer) ForwardRequest(ctx context.Context, req *pb.TransactionRequest) (*emptypb.Empty, error) {
 	if !s.config.Alive {
@@ -137,6 +171,13 @@ func (s *PaxosServer) ForwardRequest(ctx context.Context, req *pb.TransactionReq
 	if !s.state.IsLeader() {
 		log.Warnf("[ForwardRequest] Node %s is not leader", s.ID)
 		return nil, status.Errorf(codes.Unavailable, "not leader")
+	}
+
+	// Ignore if timestamp is already processed
+	timestamp, _ := s.state.DedupTable.GetLastResult(req.Sender)
+	if timestamp != 0 && req.Timestamp <= timestamp {
+		log.Infof("[ForwardRequest] Ignored %s since timestamp is already processed", utils.TransactionRequestString(req))
+		return &emptypb.Empty{}, nil
 	}
 
 	// Handle transaction request if not already handled
@@ -161,16 +202,27 @@ func (s *PaxosServer) CatchupRequest(ctx context.Context, req *pb.CatchupRequest
 		return nil, status.Errorf(codes.Unavailable, "not leader")
 	}
 
-	// Aggregate committed records
+	currentBallotNumber := s.state.GetBallotNumber()
+
+	// Get sequence numbers and checkpoint
 	log.Infof("[CatchupRequest] Received catch up request from %s for seq > %d", req.NodeID, req.SequenceNum)
+	maxSequenceNum := s.state.MaxSequenceNum()
+	minSequenceNum := req.SequenceNum
+	var checkpoint *pb.Checkpoint
+	if minSequenceNum < s.state.GetLastCheckpointedSequenceNum() {
+		minSequenceNum = s.state.GetLastCheckpointedSequenceNum()
+		checkpoint = s.executor.checkpointer.GetCheckpoint(minSequenceNum)
+	}
+
+	// Aggregate committed records
 	catchupLog := []*pb.CommitMessage{}
-	maxSequenceNum := s.state.StateLog.MaxSequenceNum()
-	for sequenceNum := req.SequenceNum + 1; sequenceNum <= maxSequenceNum; sequenceNum++ {
+	for sequenceNum := minSequenceNum + 1; sequenceNum <= maxSequenceNum; sequenceNum++ {
 		if !s.state.StateLog.IsCommitted(sequenceNum) {
 			continue
 		}
 		commitMessage := &pb.CommitMessage{
-			B:           s.state.StateLog.GetBallotNumber(sequenceNum),
+			// B:           s.state.StateLog.GetBallotNumber(sequenceNum),
+			B:           currentBallotNumber,
 			SequenceNum: sequenceNum,
 			Message:     s.state.StateLog.GetRequest(sequenceNum),
 		}
@@ -178,7 +230,25 @@ func (s *PaxosServer) CatchupRequest(ctx context.Context, req *pb.CatchupRequest
 	}
 
 	return &pb.CatchupMessage{
-		B:         s.state.GetBallotNumber(),
-		CommitLog: catchupLog,
+		B:          currentBallotNumber,
+		Checkpoint: checkpoint,
+		CommitLog:  catchupLog,
 	}, nil
+}
+
+// GetCheckpoint handles the get checkpoint request and returns the checkpoint
+func (s *PaxosServer) GetCheckpoint(ctx context.Context, req *pb.GetCheckpointMessage) (*pb.Checkpoint, error) {
+	if !s.config.Alive {
+		log.Warnf("[GetCheckpoint] Node %s is not alive", s.ID)
+		return nil, status.Errorf(codes.Unavailable, "node not alive")
+	}
+
+	// Check if checkpoint is available
+	checkpoint := s.executor.checkpointer.GetCheckpoint(req.SequenceNum)
+	if checkpoint == nil {
+		log.Warnf("[GetCheckpoint] Checkpoint for sequence number %d is not available", req.SequenceNum)
+		return nil, status.Errorf(codes.NotFound, "checkpoint not available")
+	}
+
+	return checkpoint, nil
 }

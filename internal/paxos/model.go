@@ -52,6 +52,7 @@ func (s *PaxosServer) InitializeSystem() {
 func (s *PaxosServer) Start(ctx context.Context) {
 	s.wg.Go(func() { s.executor.ExecuteRouter(ctx) })
 	s.wg.Go(func() { s.elector.ElectionRouter(ctx) })
+	s.wg.Go(func() { s.executor.checkpointer.CheckpointPurgeRoutine(ctx) })
 
 	s.wg.Wait()
 }
@@ -59,10 +60,11 @@ func (s *PaxosServer) Start(ctx context.Context) {
 // CreatePaxosServer creates a new PaxosServer instance
 func CreatePaxosServer(selfNode *models.Node, peerNodes map[string]*models.Node, clients []string, bankDB *database.Database) *PaxosServer {
 
-	serverConfig := CreateServerConfig(int64(len(peerNodes) + 1))
+	serverConfig := CreateServerConfig(int64(len(peerNodes)+1), K)
 	serverState := CreateServerState(selfNode.ID)
 
 	executionTriggerCh := make(chan ExecuteRequest, 100)
+	installCheckpointCh := make(chan int64, 100)
 
 	i, err := strconv.Atoi(selfNode.ID[1:])
 	if err != nil {
@@ -71,10 +73,11 @@ func CreatePaxosServer(selfNode *models.Node, peerNodes map[string]*models.Node,
 	paxosTimer := CreateSafeTimer(int64(i), int64(len(peerNodes)+1))
 
 	logger := CreateLogger()
-	proposer := CreateProposer(selfNode.ID, serverState, serverConfig, peerNodes, executionTriggerCh, logger)
-	elector := CreateLeaderElector(selfNode.ID, serverState, serverConfig, peerNodes, paxosTimer, proposer, logger)
+	checkpointer := CreateCheckpointManager(selfNode.ID, serverState, serverConfig, peerNodes)
+	proposer := CreateProposer(selfNode.ID, serverState, serverConfig, peerNodes, logger, checkpointer, executionTriggerCh, installCheckpointCh)
+	elector := CreateLeaderElector(selfNode.ID, serverState, serverConfig, peerNodes, paxosTimer, proposer, checkpointer, logger)
 	acceptor := CreateAcceptor(selfNode.ID, serverState, serverConfig, peerNodes, paxosTimer, executionTriggerCh)
-	executor := CreateExecutor(serverState, serverConfig, bankDB, paxosTimer, executionTriggerCh)
+	executor := CreateExecutor(serverState, serverConfig, bankDB, checkpointer, paxosTimer, executionTriggerCh, installCheckpointCh)
 
 	return &PaxosServer{
 		Node:                selfNode,

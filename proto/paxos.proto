@@ -16,8 +16,12 @@ service PaxosNode {
     rpc AcceptRequest (AcceptMessage) returns (AcceptedMessage);
     rpc CommitRequest (CommitMessage) returns (google.protobuf.Empty);
 
+    rpc CheckpointRequest(CheckpointMessage) returns (google.protobuf.Empty);
+
     rpc NewViewRequest (NewViewMessage) returns (stream AcceptedMessage);
+
     rpc CatchupRequest (CatchupRequestMessage) returns (CatchupMessage);
+    rpc GetCheckpoint (GetCheckpointMessage) returns (Checkpoint);
 
     rpc PrintLog (google.protobuf.Int64Value) returns (google.protobuf.Empty);
     rpc PrintDB (google.protobuf.Int64Value) returns (google.protobuf.Empty);
@@ -67,7 +71,8 @@ message PrepareMessage {
 
 message AckMessage {
     BallotNumber b = 1;
-    repeated AcceptedMessage acceptLog = 2;
+    int64 sequenceNum = 2;
+    repeated AcceptedMessage acceptLog = 3;
 }
 
 message BallotNumber {
@@ -98,11 +103,30 @@ message CommitMessage {
     TransactionRequest message = 3;
 }
 
+// ---------- Checkpoint ----------
+
+message CheckpointMessage {
+    int64 sequenceNum = 1;
+    bytes digest = 2;
+}
+
+message GetCheckpointMessage {
+    int64 sequenceNum = 1;
+    string nodeID = 2;
+}
+
+message Checkpoint {
+    int64 sequenceNum = 1;
+    bytes digest = 2;
+    map<string, int64> snapshot = 3;
+}
+
 // ---------- NewView ----------
 
 message NewViewMessage {
     BallotNumber b = 1;
-    repeated AcceptMessage acceptLog = 2;
+    int64 sequenceNum = 2;
+    repeated AcceptMessage acceptLog = 3;
 }
 
 // ---------- Catchup ----------
@@ -114,5 +138,6 @@ message CatchupRequestMessage {
 
 message CatchupMessage {
     BallotNumber b = 1;
-    repeated CommitMessage commitLog = 2;
+    Checkpoint checkpoint = 2;
+    repeated CommitMessage commitLog = 3;
 }

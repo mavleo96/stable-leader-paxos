@@ -30,6 +30,13 @@ func (a *Acceptor) AcceptRequestHandler(acceptMessage *pb.AcceptMessage) (*pb.Ac
 		a.state.SetBallotNumber(acceptMessage.B)
 	}
 
+	// Ignore if below checkpointed sequence number
+	if acceptMessage.SequenceNum <= a.state.GetLastCheckpointedSequenceNum() {
+		log.Infof("[Acceptor] Ignored accept request for sequence number %d since it is below checkpointed sequence number %d", acceptMessage.SequenceNum, a.state.GetLastCheckpointedSequenceNum())
+		// return nil, status.Errorf(codes.FailedPrecondition, "sequence number is below checkpointed sequence number")
+		return nil, nil
+	}
+
 	// Create record if not exists
 	created := a.state.StateLog.CreateRecordIfNotExists(acceptMessage.B, acceptMessage.SequenceNum, acceptMessage.Message)
 	if created && !a.state.InForwardedRequestsLog(acceptMessage.Message) && !a.state.StateLog.IsExecuted(acceptMessage.SequenceNum) {
@@ -54,6 +61,13 @@ func (a *Acceptor) CommitRequestHandler(commitMessage *pb.CommitMessage) (*empty
 	// Update state if higher ballot number
 	if ballotNumberIsHigher(a.state.GetBallotNumber(), commitMessage.B) {
 		a.state.SetBallotNumber(commitMessage.B)
+	}
+
+	// Ignore if below checkpointed sequence number
+	if commitMessage.SequenceNum <= a.state.GetLastCheckpointedSequenceNum() {
+		log.Infof("[Acceptor] Ignored commit request for sequence number %d since it is below checkpointed sequence number %d", commitMessage.SequenceNum, a.state.GetLastCheckpointedSequenceNum())
+		// return &emptypb.Empty{}, status.Errorf(codes.FailedPrecondition, "sequence number is below checkpointed sequence number")
+		return &emptypb.Empty{}, nil
 	}
 
 	// Create record if not exists

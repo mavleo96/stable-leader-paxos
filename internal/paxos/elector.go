@@ -16,9 +16,12 @@ type LeaderElector struct {
 	config            *ServerConfig
 	peers             map[string]*models.Node
 	prepareMessageLog *PrepareMessageLog
-	timer             *SafeTimer
-	proposer          *Proposer
-	logger            *Logger
+
+	// Components
+	timer        *SafeTimer
+	proposer     *Proposer
+	checkpointer *CheckpointManager
+	logger       *Logger
 }
 
 // Reset resets the leader elector
@@ -27,7 +30,7 @@ func (e *LeaderElector) Reset() {
 }
 
 // CreateLeaderElector creates a new leader elector
-func CreateLeaderElector(id string, state *ServerState, config *ServerConfig, peers map[string]*models.Node, timer *SafeTimer, proposer *Proposer, logger *Logger) *LeaderElector {
+func CreateLeaderElector(id string, state *ServerState, config *ServerConfig, peers map[string]*models.Node, timer *SafeTimer, proposer *Proposer, checkpointer *CheckpointManager, logger *Logger) *LeaderElector {
 	prepareMessageLog := CreatePrepareMessageLog(len(peers) + 1)
 	return &LeaderElector{
 		id:                id,
@@ -37,6 +40,7 @@ func CreateLeaderElector(id string, state *ServerState, config *ServerConfig, pe
 		prepareMessageLog: prepareMessageLog,
 		timer:             timer,
 		proposer:          proposer,
+		checkpointer:      checkpointer,
 		logger:            logger,
 	}
 }

@@ -14,20 +14,26 @@ import (
 
 // Proposer structure handles proposer logic for leader node
 type Proposer struct {
-	id                 string
-	state              *ServerState
-	config             *ServerConfig
-	peers              map[string]*models.Node
-	executionTriggerCh chan ExecuteRequest
-	logger             *Logger
-	ctx                context.Context
-	cancel             context.CancelFunc
+	id     string
+	state  *ServerState
+	config *ServerConfig
+	peers  map[string]*models.Node
+
+	// Components
+	logger       *Logger
+	checkpointer *CheckpointManager
+
+	// Channels and context
+	executionTriggerCh  chan ExecuteRequest
+	installCheckpointCh chan int64
+	ctx                 context.Context
+	cancel              context.CancelFunc
 }
 
 // HandleTransactionRequest handles the transaction request and returns the sequence number
 func (p *Proposer) HandleTransactionRequest(req *pb.TransactionRequest) error {
 	// Assign a sequence number and create a record if it doesn't exist
-	sequenceNum, _ := p.state.StateLog.AssignSequenceNumberAndCreateRecord(p.state.GetBallotNumber(), req)
+	sequenceNum, _ := p.state.AssignSequenceNumberAndCreateRecord(p.state.GetBallotNumber(), req)
 	log.Infof("[Proposer] Assigned sequence number %d for request %s", sequenceNum, utils.TransactionRequestString(req))
 
 	// Run accept phase and set accepted flag
@@ -44,7 +50,17 @@ func (p *Proposer) HandleTransactionRequest(req *pb.TransactionRequest) error {
 	}
 
 	// Run commit phase and set committed flag
-	return p.RunCommitPhase(sequenceNum, p.state.StateLog.GetRequest(sequenceNum))
+	err := p.RunCommitPhase(sequenceNum, p.state.StateLog.GetRequest(sequenceNum))
+
+	// Send checkpoint message if sequence number is a multiple of k and purge
+	if sequenceNum%p.config.K == 0 {
+		digest := p.checkpointer.GetCheckpoint(sequenceNum).Digest
+		p.SendCheckpointMessage(sequenceNum, digest)
+
+		p.checkpointer.GetCheckpointPurgeRoutineCh() <- sequenceNum
+	}
+
+	return err
 }
 
 // RunAcceptPhase sends an accept request to all peers and returns the response from each peer
@@ -143,21 +159,65 @@ func (p *Proposer) BroadcastCommitRequest(commitMessage *pb.CommitMessage) error
 	return nil
 }
 
+// SendCheckpointMessage sends a checkpoint message to all peers
+func (p *Proposer) SendCheckpointMessage(sequenceNum int64, digest []byte) {
+	// Create checkpoint message
+	checkpointMessage := &pb.CheckpointMessage{
+		SequenceNum: sequenceNum,
+		Digest:      digest,
+	}
+
+	// Logger: Add sent checkpoint message
+	p.logger.AddSentCheckpointMessage(checkpointMessage)
+
+	// Add checkpoint message to checkpoint message log
+	p.checkpointer.AddCheckpointMessage(sequenceNum, checkpointMessage)
+
+	// Multicast checkpoint message to all peers
+	log.Infof("[SendCheckpointMessage] Sending checkpoint message for sequence number %d to all peers", sequenceNum)
+	for _, peer := range p.peers {
+		go func(peer *models.Node) {
+			_, err := (*peer.Client).CheckpointRequest(context.Background(), checkpointMessage)
+			if err != nil {
+				log.Warnf("[SendCheckpointMessage] Failed to send checkpoint message to peer %s: %v", peer.ID, err)
+				return
+			}
+		}(peer)
+	}
+}
+
 // RunNewViewPhase runs the new view phase
-func (p *Proposer) RunNewViewPhase(ackMessages []*pb.AckMessage) {
-	currentBallotNumber := p.state.GetBallotNumber()
-	acceptMessages := aggregateAckMessages(currentBallotNumber, ackMessages)
+func (p *Proposer) RunNewViewPhase(checkpointedSequenceNum int64, acceptMessages []*pb.AcceptMessage) {
+	// Handle checkpoint
+	if checkpointedSequenceNum > p.state.GetLastExecutedSequenceNum() {
+		// If checkpoint is greater than executed sequence number, trigger install checkpoint routine
+
+		// Get checkpoint from other nodes
+		checkpoint, err := p.checkpointer.SendGetCheckpointRequest(checkpointedSequenceNum)
+		if err != nil {
+			log.Warnf("[RunNewViewPhase] Failed to get checkpoint for sequence number %d: %v", checkpointedSequenceNum, err)
+			return
+		}
+		p.checkpointer.AddCheckpoint(checkpointedSequenceNum, checkpoint.Snapshot)
+		p.installCheckpointCh <- checkpointedSequenceNum
+	} else if checkpointedSequenceNum > p.state.GetLastCheckpointedSequenceNum() {
+		// Trigger checkpoint purge routine
+		p.checkpointer.GetCheckpointPurgeRoutineCh() <- checkpointedSequenceNum
+	}
 
 	// Update state with new accept messages
 	for _, acceptMessage := range acceptMessages {
 		p.state.StateLog.CreateRecordIfNotExists(acceptMessage.B, acceptMessage.SequenceNum, acceptMessage.Message)
 		p.state.StateLog.SetAccepted(acceptMessage.SequenceNum)
 	}
+	// Set leader
+	p.state.SetLeader(p.id)
 
 	// Create new view message
 	newViewMessage := &pb.NewViewMessage{
-		B:         currentBallotNumber,
-		AcceptLog: acceptMessages,
+		B:           p.state.GetBallotNumber(),
+		SequenceNum: checkpointedSequenceNum,
+		AcceptLog:   acceptMessages,
 	}
 
 	// Logger: Add sent new view message
@@ -215,53 +275,18 @@ func (p *Proposer) RunNewViewPhase(ackMessages []*pb.AckMessage) {
 }
 
 // CreateProposer creates a new proposer
-func CreateProposer(id string, state *ServerState, config *ServerConfig, peers map[string]*models.Node, executionTriggerCh chan ExecuteRequest, logger *Logger) *Proposer {
+func CreateProposer(id string, state *ServerState, config *ServerConfig, peers map[string]*models.Node, logger *Logger, checkpointer *CheckpointManager, executionTriggerCh chan ExecuteRequest, installCheckpointCh chan int64) *Proposer {
 	ctx, cancel := context.WithCancel(context.Background())
 	return &Proposer{
-		id:                 id,
-		state:              state,
-		config:             config,
-		peers:              peers,
-		executionTriggerCh: executionTriggerCh,
-		logger:             logger,
-		ctx:                ctx,
-		cancel:             cancel,
+		id:                  id,
+		state:               state,
+		config:              config,
+		peers:               peers,
+		logger:              logger,
+		checkpointer:        checkpointer,
+		executionTriggerCh:  executionTriggerCh,
+		installCheckpointCh: installCheckpointCh,
+		ctx:                 ctx,
+		cancel:              cancel,
 	}
-}
-
-// aggregateAckMessages aggregates the accepted messages from all ack messages
-func aggregateAckMessages(newBallotNumber *pb.BallotNumber, ackMessages []*pb.AckMessage) []*pb.AcceptMessage {
-	// Aggregate accepted messages from all ack messages
-	acceptedMessagesMap := make(map[int64]*pb.AcceptedMessage, 100)
-	maxSequenceNum := int64(0)
-	for _, ackMessage := range ackMessages {
-		for _, acceptedMessage := range ackMessage.AcceptLog {
-			sequenceNum := acceptedMessage.SequenceNum
-			if sequenceNum > maxSequenceNum {
-				maxSequenceNum = sequenceNum
-			}
-			if msg, exists := acceptedMessagesMap[sequenceNum]; !exists || ballotNumberIsHigher(msg.B, acceptedMessage.B) {
-				acceptedMessagesMap[sequenceNum] = acceptedMessage
-			}
-		}
-	}
-
-	// Created sorted accept messages; fill in the gaps with no-op messages
-	sortedAcceptMessages := make([]*pb.AcceptMessage, maxSequenceNum)
-	for sequenceNum := int64(1); sequenceNum <= maxSequenceNum; sequenceNum++ {
-		if msg, exists := acceptedMessagesMap[sequenceNum]; exists {
-			sortedAcceptMessages[sequenceNum-1] = &pb.AcceptMessage{
-				B:           newBallotNumber,
-				SequenceNum: sequenceNum,
-				Message:     msg.Message,
-			}
-		} else {
-			sortedAcceptMessages[sequenceNum-1] = &pb.AcceptMessage{
-				B:           newBallotNumber,
-				SequenceNum: sequenceNum,
-				Message:     NoOperation,
-			}
-		}
-	}
-	return sortedAcceptMessages
 }

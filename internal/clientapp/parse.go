@@ -6,6 +6,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/mavleo96/stable-leader-paxos/internal/utils"
 	pb "github.com/mavleo96/stable-leader-paxos/pb"
 )
 
@@ -13,8 +14,8 @@ import (
 // N1 is the set number
 // N2 is the subset number (set divided into subsets by LF operation)
 type SetNumber struct {
-	N1 int
-	N2 int
+	N1 int64
+	N2 int64
 }
 
 // Custom types for transaction queues
@@ -60,7 +61,7 @@ func ParseRecords(records [][]string, clientList []string) (MasterTxnQueue, []Se
 		// and add alive nodes to alive nodes map
 		if record[0] != "" {
 			// Parse set number
-			n1, err := strconv.Atoi(record[0])
+			n1, err := strconv.ParseInt(record[0], 10, 64)
 			if err != nil {
 				return nil, nil, nil, err
 			}
@@ -71,7 +72,7 @@ func ParseRecords(records [][]string, clientList []string) (MasterTxnQueue, []Se
 			aliveNodesMap[setNum] = aliveNodes
 			setNumList = append(setNumList, setNum)
 			for _, clientID := range clientList {
-				masterQueue[clientID][lastElement(setNumList)] = make([]*pb.Transaction, 0)
+				masterQueue[clientID][*utils.LastElement(setNumList)] = make([]*pb.Transaction, 0)
 			}
 
 		}
@@ -79,13 +80,13 @@ func ParseRecords(records [][]string, clientList []string) (MasterTxnQueue, []Se
 		// If record is LF, add new set number to set number list
 		if record[1] == "LF" {
 			setNumList = append(setNumList, SetNumber{
-				N1: lastElement(setNumList).N1,
-				N2: lastElement(setNumList).N2 + 1,
+				N1: (*utils.LastElement(setNumList)).N1,
+				N2: (*utils.LastElement(setNumList)).N2 + 1,
 			})
 
 			// Initialize new lists for each client
 			for _, clientID := range clientList {
-				masterQueue[clientID][lastElement(setNumList)] = make([]*pb.Transaction, 0)
+				masterQueue[clientID][*utils.LastElement(setNumList)] = make([]*pb.Transaction, 0)
 			}
 			continue // LF is not a transaction
 		}
@@ -95,7 +96,7 @@ func ParseRecords(records [][]string, clientList []string) (MasterTxnQueue, []Se
 		if err != nil {
 			return nil, nil, nil, err
 		}
-		masterQueue[t.Sender][lastElement(setNumList)] = append(masterQueue[t.Sender][lastElement(setNumList)], &t)
+		masterQueue[t.Sender][*utils.LastElement(setNumList)] = append(masterQueue[t.Sender][*utils.LastElement(setNumList)], &t)
 	}
 	return masterQueue, setNumList, aliveNodesMap, nil
 }
@@ -118,9 +119,4 @@ func parseTransactionString(s string) (pb.Transaction, error) {
 // parseNodeString parses a string representation of a list of nodes of the format "[n1, n2, n3]"
 func parseNodeString(s string) []string {
 	return strings.Split(strings.Trim(s, "[]\""), ", ")
-}
-
-// lastElement returns the last element of a SetNumber slice
-func lastElement(slice []SetNumber) SetNumber {
-	return slice[len(slice)-1]
 }

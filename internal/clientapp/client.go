@@ -23,6 +23,7 @@ type result struct {
 	Err      error
 }
 
+// QueueRoutine is a persistent routine that processes set numbers from the queue
 func QueueRoutine(ctx context.Context, queueChan chan SetNumber, clientChannels map[string]chan SetNumber, nodeMap map[string]*models.Node) {
 	for {
 		select {
@@ -49,7 +50,7 @@ func QueueRoutine(ctx context.Context, queueChan chan SetNumber, clientChannels 
 }
 
 // ClientRoutine is a persistent routine that processes transactions for a client
-func ClientRoutine(ctx context.Context, clientID string, signalCh chan SetNumber, txnQueue ClientTxnQueue, nodeMap map[string]*models.Node) {
+func ClientRoutine(ctx context.Context, clientID string, signalCh chan SetNumber, resetCh chan bool, txnQueue ClientTxnQueue, nodeMap map[string]*models.Node) {
 	leaderNode := "n1" // leader initialized to n1 by default
 	for {
 		select {
@@ -61,6 +62,10 @@ func ClientRoutine(ctx context.Context, clientID string, signalCh chan SetNumber
 			}
 			// Signal main routine that the set is done
 			signalCh <- SetNumber{}
+
+		// Reset signal
+		case <-resetCh:
+			leaderNode = "n1"
 
 		// Exit signal
 		case <-ctx.Done():
@@ -90,24 +95,12 @@ retryLoop:
 		if attempt == 1 { // First attempt to leader
 			response, err = (*nodeMap[*leaderNode].Client).TransferRequest(ctx, request)
 			if err == nil {
-				log.Infof(
-					"%s <- %s: %s, %s",
-					clientID,
-					*leaderNode,
-					utils.LoggingString(request),
-					utils.LoggingString(response),
-				)
+				log.Infof("%s <- %s: %s, %s", clientID, *leaderNode, utils.LoggingString(request), utils.LoggingString(response))
 				cancel()
 				break retryLoop
 				// return
 			} else {
-				log.Warnf(
-					"%s <- %s: %s, %v",
-					clientID,
-					*leaderNode,
-					utils.LoggingString(request),
-					status.Convert(err).Message(),
-				)
+				log.Warnf("%s <- %s: %s, %v", clientID, *leaderNode, utils.LoggingString(request), status.Convert(err).Message())
 				cancel()
 				time.Sleep(clientTimeout)
 				continue retryLoop
@@ -121,21 +114,9 @@ retryLoop:
 				go func(node *models.Node) {
 					resp, err := (*node.Client).TransferRequest(ctx, request)
 					if err == nil {
-						log.Infof(
-							"%s <- %s: %s, %s",
-							clientID,
-							node.ID,
-							utils.LoggingString(request),
-							utils.LoggingString(resp),
-						)
+						log.Infof("%s <- %s: %s, %s", clientID, node.ID, utils.LoggingString(request), utils.LoggingString(resp))
 					} else {
-						log.Warnf(
-							"%s <- %s: %s, %v",
-							clientID,
-							node.ID,
-							utils.LoggingString(request),
-							status.Convert(err).Message(),
-						)
+						log.Warnf("%s <- %s: %s, %v", clientID, node.ID, utils.LoggingString(request), status.Convert(err).Message())
 					}
 					responsesCh <- result{Response: resp, Err: err}
 				}(node)

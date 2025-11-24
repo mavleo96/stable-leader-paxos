@@ -52,8 +52,10 @@ func main() {
 	// - client routine sends {nil, nil} to main routine when set is done
 	wg := sync.WaitGroup{}
 	clientChannels := make(map[string]chan clientapp.SetNumber)
+	resetChannels := make(map[string]chan bool)
 	for _, clientID := range cfg.Clients {
 		clientChannels[clientID] = make(chan clientapp.SetNumber)
+		resetChannels[clientID] = make(chan bool)
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -61,7 +63,7 @@ func main() {
 		wg.Add(1)
 		go func(ctx context.Context, id string) {
 			defer wg.Done()
-			clientapp.ClientRoutine(ctx, id, clientChannels[id], masterQueue[id], nodeMap)
+			clientapp.ClientRoutine(ctx, id, clientChannels[id], resetChannels[id], masterQueue[id], nodeMap)
 		}(ctx, clientID)
 
 	}
@@ -77,7 +79,7 @@ func main() {
 	// to control the execution of the test sets and log the results.
 	log.Info("Main interaction loop started")
 	scanner := bufio.NewScanner(os.Stdin)
-
+	setNum := clientapp.SetNumber{N1: 0, N2: 0}
 interactionLoop:
 	for {
 		// Read command from stdin
@@ -114,7 +116,7 @@ interactionLoop:
 		switch cmd {
 		case "next":
 			// send set number to queue routine
-			var setNum clientapp.SetNumber
+			// var setNum clientapp.SetNumber
 			for {
 				if len(setNumList) == 0 {
 					break interactionLoop
@@ -133,16 +135,19 @@ interactionLoop:
 				break
 			}
 		case "print log":
-			clientapp.SendPrintLogCommand(nodeMap, int64(0))
+			clientapp.SendPrintLogCommand(nodeMap, setNum.N1)
 		case "print db":
-			clientapp.SendPrintDBCommand(nodeMap, int64(0))
+			clientapp.SendPrintDBCommand(nodeMap, setNum.N1)
 		case "print status":
-			clientapp.SendPrintStatusCommand(nodeMap, int64(0), int64(arg))
+			clientapp.SendPrintStatusCommand(nodeMap, setNum.N1, setNum.N2)
 		case "print view":
-			clientapp.SendPrintViewCommand(nodeMap, int64(0))
+			clientapp.SendPrintViewCommand(nodeMap, setNum.N1)
 		case "kill leader":
 			clientapp.KillLeader(nodeMap)
-		case "reset nodes":
+		case "reset":
+			for _, clientID := range cfg.Clients {
+				resetChannels[clientID] <- true
+			}
 			clientapp.SendResetCommand(nodeMap)
 		case "exit":
 			break interactionLoop

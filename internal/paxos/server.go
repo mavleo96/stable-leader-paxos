@@ -40,6 +40,7 @@ func (s *PaxosServer) InitializeSystem() {
 		log.Infof("[InitializeSystem] Initializing system")
 		newBallotNumber := &pb.BallotNumber{N: 1, NodeID: s.ID}
 		s.state.SetBallotNumber(newBallotNumber)
+		s.state.SetLeader(s.ID)
 		elected, _ := s.elector.InitiatePrepareHandler(newBallotNumber)
 		if !elected {
 			log.Infof("[InitializeSystem] Election failed")
@@ -79,7 +80,7 @@ func CreatePaxosServer(selfNode *models.Node, peerNodes map[string]*models.Node,
 	paxosTimer := CreateSafeTimer(int64(i), int64(len(peerNodes)+1))
 
 	logger := CreateLogger()
-	checkpointer := CreateCheckpointManager(selfNode.ID, serverState, serverConfig, peerNodes)
+	checkpointer := CreateCheckpointManager(selfNode.ID, serverState, serverConfig, peerNodes, logger)
 	proposer := CreateProposer(selfNode.ID, serverState, serverConfig, peerNodes, logger, checkpointer, executionTriggerCh, installCheckpointCh)
 	elector := CreateLeaderElector(selfNode.ID, serverState, serverConfig, peerNodes, paxosTimer, proposer, checkpointer, logger)
 	acceptor := CreateAcceptor(selfNode.ID, serverState, serverConfig, peerNodes, paxosTimer, executionTriggerCh)

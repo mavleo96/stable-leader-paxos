@@ -42,7 +42,7 @@ func (p *Proposer) HandleTransactionRequest(req *pb.TransactionRequest) error {
 
 	// Assign a sequence number and create a record if it doesn't exist
 	sequenceNum, _ := p.state.AssignSequenceNumberAndCreateRecord(currentBallotNumber, req)
-	log.Infof("[Proposer] Assigned sequence number %d for request %s", sequenceNum, utils.TransactionRequestString(req))
+	log.Infof("[Proposer] Assigned sequence number %d for request %s", sequenceNum, utils.LoggingString(req))
 
 	// Run accept phase and set accepted flag
 	if !p.state.StateLog.IsCommitted(sequenceNum) {
@@ -99,7 +99,7 @@ func (p *Proposer) RunAcceptPhase(sequenceNum int64, ballotNumber *pb.BallotNumb
 	// Multicast accept request to all peers
 	wg := sync.WaitGroup{}
 	responseCh := make(chan bool, len(p.peers))
-	log.Infof("[Proposer] Running accept phase for request %s", utils.TransactionRequestString(req))
+	log.Infof("[Proposer] Running accept phase for request %s", utils.LoggingString(req))
 	for _, peer := range p.peers {
 		wg.Add(1)
 		go func(peer *models.Node, responseCh chan bool) {
@@ -129,11 +129,11 @@ func (p *Proposer) RunAcceptPhase(sequenceNum int64, ballotNumber *pb.BallotNumb
 			acceptedCount++
 		}
 		if acceptedCount >= p.config.F+1 {
-			log.Infof("[Proposer] Accept phase successful for request %s", utils.TransactionRequestString(req))
+			log.Infof("[Proposer] Accept phase successful for request %s", utils.LoggingString(req))
 			return true, nil
 		}
 	}
-	log.Warnf("[Proposer] Accept phase failed for request %s: insufficient quorum", utils.TransactionRequestString(req))
+	log.Warnf("[Proposer] Accept phase failed for request %s: insufficient quorum", utils.LoggingString(req))
 	return false, nil
 }
 
@@ -168,7 +168,7 @@ func (p *Proposer) RunCommitPhase(sequenceNum int64, ballotNumber *pb.BallotNumb
 
 // BroadcastCommitRequest sends a commit request to all peers
 func (p *Proposer) BroadcastCommitRequest(commitMessage *pb.CommitMessage) error {
-	log.Infof("[Proposer] Broadcasting commit request %s", utils.TransactionRequestString(commitMessage.Message))
+	log.Infof("[Proposer] Broadcasting commit request %s", utils.LoggingString(commitMessage.Message))
 	for _, peer := range p.peers {
 		go func(peer *models.Node) {
 			_, err := (*peer.Client).CommitRequest(context.Background(), commitMessage)
@@ -287,11 +287,11 @@ func (p *Proposer) RunNewViewPhase(ballotNumber *pb.BallotNumber, checkpointedSe
 		// Accept messages are processed until context is cancelled or response channel is closed
 		select {
 		case <-p.ctx.Done():
-			log.Infof("[RunNewViewPhase] New view phase cancelled for ballot number %s", utils.BallotNumberString(ballotNumber))
+			log.Infof("[RunNewViewPhase] New view phase cancelled for ballot number %s", utils.LoggingString(ballotNumber))
 			return
 		case acceptedMessage, ok := <-responseCh:
 			if !ok {
-				log.Infof("[RunNewViewPhase] New view phase completed for ballot number %s", utils.BallotNumberString(ballotNumber))
+				log.Infof("[RunNewViewPhase] New view phase completed for ballot number %s", utils.LoggingString(ballotNumber))
 				break
 			}
 			sequenceNum := acceptedMessage.SequenceNum

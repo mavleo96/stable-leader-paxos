@@ -21,79 +21,139 @@ func (s *PaxosServer) PrintLog(ctx context.Context, req *wrapperspb.Int64Value) 
 
 	fmt.Println("Sent Prepare Messages:")
 	for _, message := range s.logger.GetSentPrepareMessages() {
-		fmt.Println(message.String())
+		fmt.Println(utils.FormattedLoggingString(message))
 	}
 	fmt.Println("")
 
 	fmt.Println("Received Prepare Messages:")
 	for _, message := range s.logger.GetReceivedPrepareMessages() {
-		fmt.Println(message.String())
+		fmt.Println(utils.FormattedLoggingString(message))
 	}
 	fmt.Println("")
 
 	fmt.Println("Sent Ack Messages:")
 	for _, message := range s.logger.GetSentAckMessages() {
-		fmt.Println(message.String())
+		fmt.Println(utils.FormattedLoggingString(message))
 	}
 	fmt.Println("")
 
 	fmt.Println("Received Ack Messages:")
 	for _, message := range s.logger.GetReceivedAckMessages() {
-		fmt.Println(message.String())
+		fmt.Println(utils.FormattedLoggingString(message))
 	}
 	fmt.Println("")
 
 	fmt.Println("Sent Accept Messages:")
 	for _, message := range s.logger.GetSentAcceptMessages() {
-		fmt.Println(message.String())
+		fmt.Println(utils.FormattedLoggingString(message))
 	}
 	fmt.Println("")
 
 	fmt.Println("Received Accept Messages:")
 	for _, message := range s.logger.GetReceivedAcceptMessages() {
-		fmt.Println(message.String())
+		fmt.Println(utils.FormattedLoggingString(message))
 	}
 	fmt.Println("")
 
 	fmt.Println("Sent Accepted Messages:")
 	for _, message := range s.logger.GetSentAcceptedMessages() {
-		fmt.Println(message.String())
+		fmt.Println(utils.FormattedLoggingString(message))
 	}
 	fmt.Println("")
 
 	fmt.Println("Received Accepted Messages:")
 	for _, message := range s.logger.GetReceivedAcceptedMessages() {
-		fmt.Println(message.String())
+		fmt.Println(utils.FormattedLoggingString(message))
 	}
 	fmt.Println("")
 
 	fmt.Println("Sent Commit Messages:")
 	for _, message := range s.logger.GetSentCommitMessages() {
-		fmt.Println(message.String())
+		fmt.Println(utils.FormattedLoggingString(message))
 	}
 	fmt.Println("")
 
 	fmt.Println("Received Commit Messages:")
 	for _, message := range s.logger.GetReceivedCommitMessages() {
-		fmt.Println(message.String())
+		fmt.Println(utils.FormattedLoggingString(message))
+	}
+	fmt.Println("")
+
+	fmt.Println("Sent Checkpoint Messages:")
+	for _, message := range s.logger.GetSentCheckpointMessages() {
+		fmt.Println(utils.FormattedLoggingString(message))
+	}
+	fmt.Println("")
+
+	fmt.Println("Received Checkpoint Messages:")
+	for _, message := range s.logger.GetReceivedCheckpointMessages() {
+		fmt.Println(utils.FormattedLoggingString(message))
+	}
+	fmt.Println("")
+
+	fmt.Println("Sent Catchup Request Messages:")
+	for _, message := range s.logger.GetSentCatchupRequestMessages() {
+		fmt.Println(utils.FormattedLoggingString(message))
+	}
+	fmt.Println("")
+
+	fmt.Println("Received Catchup Request Messages:")
+	for _, message := range s.logger.GetReceivedCatchupRequestMessages() {
+		fmt.Println(utils.FormattedLoggingString(message))
+	}
+	fmt.Println("")
+
+	fmt.Println("Sent Catchup Messages:")
+	for _, message := range s.logger.GetSentCatchupMessages() {
+		fmt.Println(utils.FormattedLoggingString(message))
+	}
+	fmt.Println("")
+
+	fmt.Println("Received Catchup Messages:")
+	for _, message := range s.logger.GetReceivedCatchupMessages() {
+		fmt.Println(utils.FormattedLoggingString(message))
+	}
+	fmt.Println("")
+
+	fmt.Println("Sent Get Checkpoint Messages:")
+	for _, message := range s.logger.GetSentGetCheckpointMessages() {
+		fmt.Println(utils.FormattedLoggingString(message))
+	}
+	fmt.Println("")
+
+	fmt.Println("Received Get Checkpoint Messages:")
+	for _, message := range s.logger.GetReceivedGetCheckpointMessages() {
+		fmt.Println(utils.FormattedLoggingString(message))
+	}
+	fmt.Println("")
+
+	fmt.Println("Sent Checkpoint:")
+	for _, message := range s.logger.GetSentCheckpoint() {
+		fmt.Println(utils.FormattedLoggingString(message))
+	}
+	fmt.Println("")
+
+	fmt.Println("Received Checkpoint:")
+	for _, message := range s.logger.GetReceivedCheckpoint() {
+		fmt.Println(utils.FormattedLoggingString(message))
 	}
 	fmt.Println("")
 
 	fmt.Println("Received Transaction Requests:")
 	for _, message := range s.logger.GetReceivedTransactionRequests() {
-		fmt.Println(message.String())
+		fmt.Println(utils.FormattedLoggingString(message))
 	}
 	fmt.Println("")
 
 	fmt.Println("Forwarded Transaction Requests:")
 	for _, message := range s.logger.GetForwardedTransactionRequests() {
-		fmt.Println(message.String())
+		fmt.Println(utils.FormattedLoggingString(message))
 	}
 	fmt.Println("")
 
 	fmt.Println("Sent Transaction Responses:")
 	for _, message := range s.logger.GetSentTransactionResponses() {
-		fmt.Println(message.String())
+		fmt.Println(utils.FormattedLoggingString(message))
 	}
 	fmt.Println("")
 
@@ -153,13 +213,13 @@ func (s *PaxosServer) PrintView(ctx context.Context, req *wrapperspb.Int64Value)
 
 	fmt.Println("Sent new view messages:")
 	for _, message := range s.logger.GetSentNewViewMessages() {
-		fmt.Println(message.String())
+		fmt.Println(utils.FormattedLoggingString(message))
 	}
 	fmt.Println("")
 
 	fmt.Println("Received new view messages:")
 	for _, message := range s.logger.GetReceivedNewViewMessages() {
-		fmt.Println(message.String())
+		fmt.Println(utils.FormattedLoggingString(message))
 	}
 	fmt.Println("")
 

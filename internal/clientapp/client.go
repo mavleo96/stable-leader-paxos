@@ -94,8 +94,8 @@ retryLoop:
 					"%s <- %s: %s, %s",
 					clientID,
 					*leaderNode,
-					utils.TransactionString(request.Transaction),
-					utils.TransactionResponseString(response),
+					utils.LoggingString(request),
+					utils.LoggingString(response),
 				)
 				cancel()
 				break retryLoop
@@ -105,7 +105,7 @@ retryLoop:
 					"%s <- %s: %s, %v",
 					clientID,
 					*leaderNode,
-					utils.TransactionString(request.Transaction),
+					utils.LoggingString(request),
 					status.Convert(err).Message(),
 				)
 				cancel()
@@ -125,15 +125,15 @@ retryLoop:
 							"%s <- %s: %s, %s",
 							clientID,
 							node.ID,
-							utils.TransactionString(request.Transaction),
-							utils.TransactionResponseString(resp),
+							utils.LoggingString(request),
+							utils.LoggingString(resp),
 						)
 					} else {
 						log.Warnf(
 							"%s <- %s: %s, %v",
 							clientID,
 							node.ID,
-							utils.TransactionString(request.Transaction),
+							utils.LoggingString(request),
 							status.Convert(err).Message(),
 						)
 					}

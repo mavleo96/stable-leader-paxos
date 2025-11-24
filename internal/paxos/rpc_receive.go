@@ -25,7 +25,7 @@ func (s *PaxosServer) PrepareRequest(ctx context.Context, req *pb.PrepareMessage
 	// TODO: should this be part of handler?
 	// Reject if ballot number is lower than promised ballot number
 	if !ballotNumberIsHigherOrEqual(s.state.GetBallotNumber(), req.B) {
-		log.Warnf("[PrepareRequest] Rejected %s since ballot number is lower than promised ballot number", utils.BallotNumberString(req.B))
+		log.Warnf("[PrepareRequest] Rejected %s since ballot number is lower than promised ballot number", utils.LoggingString(req.B))
 		return nil, status.Errorf(codes.Aborted, "ballot number is lower than promised ballot number")
 	}
 
@@ -55,7 +55,7 @@ func (s *PaxosServer) AcceptRequest(ctx context.Context, req *pb.AcceptMessage) 
 	// TODO: should this be part of handler?
 	// Reject if ballot number is lower than promised ballot number
 	if !ballotNumberIsHigherOrEqual(s.state.GetBallotNumber(), req.B) {
-		log.Warnf("[AcceptRequest] Rejected %s since ballot number is lower than promised ballot number", utils.TransactionRequestString(req.Message))
+		log.Warnf("[AcceptRequest] Rejected %s since ballot number is lower than promised ballot number", utils.LoggingString(req.Message))
 		return nil, status.Errorf(codes.Aborted, "ballot number is lower than promised ballot number")
 	}
 
@@ -85,7 +85,7 @@ func (s *PaxosServer) CommitRequest(ctx context.Context, req *pb.CommitMessage) 
 	// TODO: should this be part of handler?
 	// Reject if ballot number is lower than promised ballot number
 	if !ballotNumberIsHigherOrEqual(s.state.GetBallotNumber(), req.B) {
-		log.Warnf("[CommitRequest] Rejected %s since ballot number is lower than promised ballot number", utils.TransactionRequestString(req.Message))
+		log.Warnf("[CommitRequest] Rejected %s since ballot number is lower than promised ballot number", utils.LoggingString(req.Message))
 		return nil, status.Errorf(codes.Aborted, "ballot number is lower than promised ballot number")
 	}
 
@@ -102,7 +102,7 @@ func (s *PaxosServer) NewViewRequest(req *pb.NewViewMessage, stream pb.PaxosNode
 
 	// Logger: Add received new view message
 	s.logger.AddReceivedNewViewMessage(req)
-	log.Infof("[NewViewRequest] Received new view message %v", utils.BallotNumberString(req.B))
+	log.Infof("[NewViewRequest] Received new view message %v", utils.LoggingString(req.B))
 
 	// Proposer context is cancelled to stop any ongoing prepare or accept phases as leader
 	// Timer is cleaned up and leader is set to new leader
@@ -145,7 +145,7 @@ func (s *PaxosServer) NewViewRequest(req *pb.NewViewMessage, stream pb.PaxosNode
 			log.Fatal(err)
 		}
 	}
-	log.Infof("[NewViewRequest] Finished streaming accepts for %s", utils.BallotNumberString(req.B))
+	log.Infof("[NewViewRequest] Finished streaming accepts for %s", utils.LoggingString(req.B))
 	return nil
 }
 
@@ -181,7 +181,7 @@ func (s *PaxosServer) ForwardRequest(ctx context.Context, req *pb.TransactionReq
 	// Ignore if timestamp is already processed
 	timestamp, _ := s.state.DedupTable.GetLastResult(req.Sender)
 	if timestamp != 0 && req.Timestamp <= timestamp {
-		log.Infof("[ForwardRequest] Ignored %s since timestamp is already processed", utils.TransactionRequestString(req))
+		log.Infof("[ForwardRequest] Ignored %s since timestamp is already processed", utils.LoggingString(req))
 		return &emptypb.Empty{}, nil
 	}
 
@@ -206,6 +206,9 @@ func (s *PaxosServer) CatchupRequest(ctx context.Context, req *pb.CatchupRequest
 		log.Warnf("[CatchupRequest] Node %s is not leader", s.ID)
 		return nil, status.Errorf(codes.Unavailable, "not leader")
 	}
+
+	// Logger: Add received catchup request message
+	s.logger.AddReceivedCatchupRequestMessage(req)
 
 	currentBallotNumber := s.state.GetBallotNumber()
 
@@ -234,11 +237,16 @@ func (s *PaxosServer) CatchupRequest(ctx context.Context, req *pb.CatchupRequest
 		catchupLog = append(catchupLog, commitMessage)
 	}
 
-	return &pb.CatchupMessage{
+	catchupMessage := &pb.CatchupMessage{
 		B:          currentBallotNumber,
 		Checkpoint: checkpoint,
 		CommitLog:  catchupLog,
-	}, nil
+	}
+
+	// Logger: Add sent catchup message
+	s.logger.AddSentCatchupMessage(catchupMessage)
+
+	return catchupMessage, nil
 }
 
 // GetCheckpoint handles the get checkpoint request and returns the checkpoint
@@ -248,12 +256,18 @@ func (s *PaxosServer) GetCheckpoint(ctx context.Context, req *pb.GetCheckpointMe
 		return nil, status.Errorf(codes.Unavailable, "node not alive")
 	}
 
+	// Logger: Add received get checkpoint message
+	s.logger.AddReceivedGetCheckpointMessage(req)
+
 	// Check if checkpoint is available
 	checkpoint := s.executor.checkpointer.GetCheckpoint(req.SequenceNum)
 	if checkpoint == nil {
 		log.Warnf("[GetCheckpoint] Checkpoint for sequence number %d is not available", req.SequenceNum)
 		return nil, status.Errorf(codes.NotFound, "checkpoint not available")
 	}
+
+	// Logger: Add sent checkpoint message
+	s.logger.AddSentCheckpoint(checkpoint)
 
 	return checkpoint, nil
 }

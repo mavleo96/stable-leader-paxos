@@ -29,12 +29,12 @@ func (s *PaxosServer) TransferRequest(ctx context.Context, req *pb.TransactionRe
 	// Forward request if not leader
 	if !s.state.IsLeader() {
 		if s.state.InForwardedRequestsLog(req) {
-			log.Warnf("[TransferRequest] Request %s already forwarded", utils.TransactionRequestString(req))
+			log.Warnf("[TransferRequest] Request %s already forwarded", utils.LoggingString(req))
 			return UnsuccessfulTransactionResponse, status.Errorf(codes.Aborted, "not leader")
 		}
 		sequenceNum := s.state.StateLog.GetSequenceNumber(req)
 		if s.state.StateLog.IsAccepted(sequenceNum) && proto.Equal(s.state.StateLog.GetBallotNumber(sequenceNum), currentBallotNumber) {
-			log.Warnf("[TransferRequest] Request %s already accepted", utils.TransactionRequestString(req))
+			log.Warnf("[TransferRequest] Request %s already accepted", utils.LoggingString(req))
 			return UnsuccessfulTransactionResponse, status.Errorf(codes.Aborted, "already accepted")
 		}
 		// Logger: Add received transaction request
@@ -70,7 +70,7 @@ func (s *PaxosServer) TransferRequest(ctx context.Context, req *pb.TransactionRe
 
 	// Older timestamp requests are ignored
 	if timestamp != 0 && req.Timestamp < timestamp {
-		log.Warnf("[TransferRequest] Ignored %s; Last reply timestamp %d", utils.TransactionRequestString(req), timestamp)
+		log.Warnf("[TransferRequest] Ignored %s; Last reply timestamp %d", utils.LoggingString(req), timestamp)
 		return UnsuccessfulTransactionResponse, status.Errorf(codes.AlreadyExists, "old timestamp")
 	}
 
@@ -101,6 +101,6 @@ func (s *PaxosServer) ForwardToLeader(leader string, req *pb.TransactionRequest)
 	s.logger.AddForwardedTransactionRequest(req)
 
 	// Forward request to leader
-	log.Infof("[ForwardToLeader] Forwarding request %s to leader %s", utils.TransactionRequestString(req), leader)
+	log.Infof("[ForwardToLeader] Forwarding request %s to leader %s", utils.LoggingString(req), leader)
 	(*s.peers[leader].Client).ForwardRequest(context.Background(), req)
 }

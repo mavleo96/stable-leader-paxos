@@ -61,7 +61,7 @@ executeLoop:
 				e.state.StateLog.SetExecuted(i)
 				e.state.DedupTable.UpdateLastResult(request.Sender, request.Timestamp, result)
 				e.timer.DecrementWaitCountAndResetOrStopIfZero()
-				log.Infof("[Executor] Executed sequence number %d, %s", i, utils.TransactionRequestString(request))
+				log.Infof("[Executor] Executed sequence number %d, %s", i, utils.LoggingString(request))
 
 				e.state.SetLastExecutedSequenceNum(i)
 

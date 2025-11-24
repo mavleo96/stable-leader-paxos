@@ -7,24 +7,32 @@ import (
 )
 
 type Logger struct {
-	mutex                        sync.RWMutex
-	sentPrepareMessages          []*pb.PrepareMessage
-	receivedPrepareMessages      []*pb.PrepareMessage
-	sentAckMessages              []*pb.AckMessage
-	receivedAckMessages          []*pb.AckMessage
-	sentAcceptMessages           []*pb.AcceptMessage
-	receivedAcceptMessages       []*pb.AcceptMessage
-	sentAcceptedMessages         []*pb.AcceptedMessage
-	receivedAcceptedMessages     []*pb.AcceptedMessage
-	sentCommitMessages           []*pb.CommitMessage
-	receivedCommitMessages       []*pb.CommitMessage
-	sentNewViewMessages          []*pb.NewViewMessage
-	receivedNewViewMessages      []*pb.NewViewMessage
-	sentCheckpointMessages       []*pb.CheckpointMessage
-	receivedCheckpointMessages   []*pb.CheckpointMessage
-	receivedTransactionRequests  []*pb.TransactionRequest
-	forwardedTransactionRequests []*pb.TransactionRequest
-	sentTransactionResponses     []*pb.TransactionResponse
+	mutex                          sync.RWMutex
+	sentPrepareMessages            []*pb.PrepareMessage
+	receivedPrepareMessages        []*pb.PrepareMessage
+	sentAckMessages                []*pb.AckMessage
+	receivedAckMessages            []*pb.AckMessage
+	sentAcceptMessages             []*pb.AcceptMessage
+	receivedAcceptMessages         []*pb.AcceptMessage
+	sentAcceptedMessages           []*pb.AcceptedMessage
+	receivedAcceptedMessages       []*pb.AcceptedMessage
+	sentCommitMessages             []*pb.CommitMessage
+	receivedCommitMessages         []*pb.CommitMessage
+	sentNewViewMessages            []*pb.NewViewMessage
+	receivedNewViewMessages        []*pb.NewViewMessage
+	sentCheckpointMessages         []*pb.CheckpointMessage
+	receivedCheckpointMessages     []*pb.CheckpointMessage
+	sentCatchupRequestMessages     []*pb.CatchupRequestMessage
+	receivedCatchupRequestMessages []*pb.CatchupRequestMessage
+	sentCatchupMessages            []*pb.CatchupMessage
+	receivedCatchupMessages        []*pb.CatchupMessage
+	sentGetCheckpointMessages      []*pb.GetCheckpointMessage
+	receivedGetCheckpointMessages  []*pb.GetCheckpointMessage
+	sentCheckpoint                 []*pb.Checkpoint
+	receivedCheckpoint             []*pb.Checkpoint
+	receivedTransactionRequests    []*pb.TransactionRequest
+	forwardedTransactionRequests   []*pb.TransactionRequest
+	sentTransactionResponses       []*pb.TransactionResponse
 }
 
 // AddSentPrepareMessage adds a sent prepare message to the logger
@@ -221,6 +229,118 @@ func (l *Logger) GetReceivedCheckpointMessages() []*pb.CheckpointMessage {
 	l.mutex.RLock()
 	defer l.mutex.RUnlock()
 	return l.receivedCheckpointMessages
+}
+
+// AddSentCatchupRequestMessage adds a sent catchup request message to the logger
+func (l *Logger) AddSentCatchupRequestMessage(message *pb.CatchupRequestMessage) {
+	l.mutex.Lock()
+	defer l.mutex.Unlock()
+	l.sentCatchupRequestMessages = append(l.sentCatchupRequestMessages, message)
+}
+
+// GetSentCatchupRequestMessages returns the sent catchup request messages
+func (l *Logger) GetSentCatchupRequestMessages() []*pb.CatchupRequestMessage {
+	l.mutex.RLock()
+	defer l.mutex.RUnlock()
+	return l.sentCatchupRequestMessages
+}
+
+// AddReceivedCatchupRequestMessage adds a received catchup request message to the logger
+func (l *Logger) AddReceivedCatchupRequestMessage(message *pb.CatchupRequestMessage) {
+	l.mutex.Lock()
+	defer l.mutex.Unlock()
+	l.receivedCatchupRequestMessages = append(l.receivedCatchupRequestMessages, message)
+}
+
+// GetReceivedCatchupRequestMessages returns the received catchup request messages
+func (l *Logger) GetReceivedCatchupRequestMessages() []*pb.CatchupRequestMessage {
+	l.mutex.RLock()
+	defer l.mutex.RUnlock()
+	return l.receivedCatchupRequestMessages
+}
+
+// AddSentCatchupMessage adds a sent catchup message to the logger
+func (l *Logger) AddSentCatchupMessage(message *pb.CatchupMessage) {
+	l.mutex.Lock()
+	defer l.mutex.Unlock()
+	l.sentCatchupMessages = append(l.sentCatchupMessages, message)
+}
+
+// GetSentCatchupMessages returns the sent catchup messages
+func (l *Logger) GetSentCatchupMessages() []*pb.CatchupMessage {
+	l.mutex.RLock()
+	defer l.mutex.RUnlock()
+	return l.sentCatchupMessages
+}
+
+// AddReceivedCatchupMessage adds a received catchup message to the logger
+func (l *Logger) AddReceivedCatchupMessage(message *pb.CatchupMessage) {
+	l.mutex.Lock()
+	defer l.mutex.Unlock()
+	l.receivedCatchupMessages = append(l.receivedCatchupMessages, message)
+}
+
+// GetReceivedCatchupMessages returns the received catchup messages
+func (l *Logger) GetReceivedCatchupMessages() []*pb.CatchupMessage {
+	l.mutex.RLock()
+	defer l.mutex.RUnlock()
+	return l.receivedCatchupMessages
+}
+
+// AddSentGetCheckpointMessage adds a sent get checkpoint message to the logger
+func (l *Logger) AddSentGetCheckpointMessage(message *pb.GetCheckpointMessage) {
+	l.mutex.Lock()
+	defer l.mutex.Unlock()
+	l.sentGetCheckpointMessages = append(l.sentGetCheckpointMessages, message)
+}
+
+// GetSentGetCheckpointMessages returns the sent get checkpoint messages
+func (l *Logger) GetSentGetCheckpointMessages() []*pb.GetCheckpointMessage {
+	l.mutex.RLock()
+	defer l.mutex.RUnlock()
+	return l.sentGetCheckpointMessages
+}
+
+// AddReceivedGetCheckpointMessage adds a received get checkpoint message to the logger
+func (l *Logger) AddReceivedGetCheckpointMessage(message *pb.GetCheckpointMessage) {
+	l.mutex.Lock()
+	defer l.mutex.Unlock()
+	l.receivedGetCheckpointMessages = append(l.receivedGetCheckpointMessages, message)
+}
+
+// GetReceivedGetCheckpointMessages returns the received get checkpoint messages
+func (l *Logger) GetReceivedGetCheckpointMessages() []*pb.GetCheckpointMessage {
+	l.mutex.RLock()
+	defer l.mutex.RUnlock()
+	return l.receivedGetCheckpointMessages
+}
+
+// AddSentCheckpoint adds a sent checkpoint to the logger
+func (l *Logger) AddSentCheckpoint(message *pb.Checkpoint) {
+	l.mutex.Lock()
+	defer l.mutex.Unlock()
+	l.sentCheckpoint = append(l.sentCheckpoint, message)
+}
+
+// GetSentCheckpoint returns the sent checkpoint
+func (l *Logger) GetSentCheckpoint() []*pb.Checkpoint {
+	l.mutex.RLock()
+	defer l.mutex.RUnlock()
+	return l.sentCheckpoint
+}
+
+// AddReceivedCheckpoint adds a received checkpoint to the logger
+func (l *Logger) AddReceivedCheckpoint(message *pb.Checkpoint) {
+	l.mutex.Lock()
+	defer l.mutex.Unlock()
+	l.receivedCheckpoint = append(l.receivedCheckpoint, message)
+}
+
+// GetReceivedCheckpoint returns the received checkpoint
+func (l *Logger) GetReceivedCheckpoint() []*pb.Checkpoint {
+	l.mutex.RLock()
+	defer l.mutex.RUnlock()
+	return l.receivedCheckpoint
 }
 
 // AddReceivedTransactionRequest adds a received transaction request to the logger

@@ -246,7 +246,7 @@ func (s *StateLog) GetLogString(sequenceNum int64) string {
 		return fmt.Sprintf("s: %d, status: X", sequenceNum)
 	}
 	status := statusString(record)
-	return fmt.Sprintf("s: %d, status: %s, ballot number: %s, request: %s", sequenceNum, status, utils.BallotNumberString(record.b), utils.TransactionRequestString(record.request))
+	return fmt.Sprintf("s: %d, status: %s, ballot number: %s, request: %s", sequenceNum, status, utils.LoggingString(record.b), utils.LoggingString(record.request))
 }
 
 // Reset resets the state log

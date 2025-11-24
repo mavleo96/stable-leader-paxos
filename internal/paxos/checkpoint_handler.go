@@ -31,7 +31,10 @@ func (c *CheckpointManager) BackupCheckpointMessageHandler(checkpointMessage *pb
 
 // SendGetCheckpointRequest multicasts a request to get missing checkpoints
 func (c *CheckpointManager) SendGetCheckpointRequest(sequenceNum int64) (*pb.Checkpoint, error) {
-	getCheckpointRequest := &pb.GetCheckpointMessage{SequenceNum: sequenceNum}
+	getCheckpointRequest := &pb.GetCheckpointMessage{SequenceNum: sequenceNum, NodeID: c.id}
+
+	// Logger: Add sent get checkpoint request message
+	c.logger.AddSentGetCheckpointMessage(getCheckpointRequest)
 
 	// Multicast get checkpoint request to all peers
 	responseChan := make(chan *pb.Checkpoint, len(c.peers))
@@ -58,6 +61,10 @@ func (c *CheckpointManager) SendGetCheckpointRequest(sequenceNum int64) (*pb.Che
 		log.Warnf("[SendGetCheckpointRequest] Failed to get checkpoint")
 		return nil, status.Errorf(codes.Unavailable, "failed to get checkpoint from leader")
 	}
+
+	// Logger: Add received get checkpoint message
+	c.logger.AddReceivedCheckpoint(checkpoint)
+
 	return checkpoint, nil
 }
 

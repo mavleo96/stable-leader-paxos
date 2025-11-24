@@ -18,7 +18,7 @@ electionLoop:
 			log.Warnf("[ElectionRouter] Context done at %d", time.Now().UnixMilli())
 			return
 		case <-l.timer.TimeoutCh:
-			log.Infof("[ElectionRouter] Timer timeout for ballot number %s at %d", utils.BallotNumberString(l.state.GetBallotNumber()), time.Now().UnixMilli())
+			log.Infof("[ElectionRouter] Timer timeout for ballot number %s at %d", utils.LoggingString(l.state.GetBallotNumber()), time.Now().UnixMilli())
 		}
 
 		// Reset leader and forwarded requests log
@@ -47,6 +47,6 @@ electionLoop:
 		// Election successful: give control to proposer
 		highestCheckpointedSequenceNum, acceptMessages := aggregateAckMessages(newBallotNumber, ackMessages)
 		go l.proposer.RunNewViewPhase(newBallotNumber, highestCheckpointedSequenceNum, acceptMessages)
-		log.Infof("[ElectionRouter] New leader with promised ballot number %s at %d", utils.BallotNumberString(newBallotNumber), time.Now().UnixMilli())
+		log.Infof("[ElectionRouter] New leader with promised ballot number %s at %d", utils.LoggingString(newBallotNumber), time.Now().UnixMilli())
 	}
 }

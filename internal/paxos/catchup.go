@@ -15,6 +15,9 @@ import (
 func (s *PaxosServer) SendCatchUpRequest(sequenceNum int64) (*pb.CatchupMessage, error) {
 	catchupRequest := &pb.CatchupRequestMessage{NodeID: s.ID, SequenceNum: sequenceNum}
 
+	// Logger: Add sent catchup request message
+	s.logger.AddSentCatchupRequestMessage(catchupRequest)
+
 	// Multicast catch up request to all peers except self
 	responseChan := make(chan *pb.CatchupMessage, len(s.peers))
 	wg := sync.WaitGroup{}
@@ -40,6 +43,10 @@ func (s *PaxosServer) SendCatchUpRequest(sequenceNum int64) (*pb.CatchupMessage,
 		log.Warnf("[SendCatchUpRequest] Failed to get catch up message from leader")
 		return nil, status.Errorf(codes.Unavailable, "failed to get catch up message from leader")
 	}
+
+	// Logger: Add received catchup message
+	s.logger.AddReceivedCatchupMessage(catchupMessage)
+
 	return catchupMessage, nil
 }
 

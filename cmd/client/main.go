@@ -91,15 +91,15 @@ interactionLoop:
 		cmd := strings.TrimSpace(scanner.Text())
 
 		// If command contains "print status", then parse the argument
-		var arg int
+		var arg int64
 		if strings.HasPrefix(cmd, "print status") {
 			var err error
 			n := strings.TrimPrefix(cmd, "print status")
 			n = strings.TrimSpace(n)
 			if n == "all" {
-				arg = 0
+				arg = int64(0)
 			} else {
-				arg, err = strconv.Atoi(n)
+				arg, err = strconv.ParseInt(n, 10, 64)
 			}
 			if err != nil {
 				log.Warn(err)
@@ -139,7 +139,7 @@ interactionLoop:
 		case "print db":
 			clientapp.SendPrintDBCommand(nodeMap, setNum.N1)
 		case "print status":
-			clientapp.SendPrintStatusCommand(nodeMap, setNum.N1, setNum.N2)
+			clientapp.SendPrintStatusCommand(nodeMap, setNum.N1, arg)
 		case "print view":
 			clientapp.SendPrintViewCommand(nodeMap, setNum.N1)
 		case "kill leader":

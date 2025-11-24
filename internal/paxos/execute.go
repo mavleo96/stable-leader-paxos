@@ -12,6 +12,8 @@ type Executor struct {
 	state  *ServerState
 	config *ServerConfig
 
+	executeQueue map[int64][]ExecuteRequest // sequence number -> execute requests
+
 	// Components
 	checkpointer *CheckpointManager
 	timer        *SafeTimer
@@ -30,6 +32,27 @@ type ExecuteRequest struct {
 	SignalCh    chan bool
 }
 
+// Enqueue is used to enqueue an execute request
+func (e *Executor) enqueue(sequenceNum int64, executeRequest ExecuteRequest) {
+	e.mutex.Lock()
+	defer e.mutex.Unlock()
+
+	// Create queue if not exists
+	if _, ok := e.executeQueue[sequenceNum]; !ok {
+		e.executeQueue[sequenceNum] = make([]ExecuteRequest, 0)
+	}
+	e.executeQueue[sequenceNum] = append(e.executeQueue[sequenceNum], executeRequest)
+}
+
+// Dequeue is used to dequeue execute requests for a given sequence number
+func (e *Executor) dequeue(sequenceNum int64) []ExecuteRequest {
+	e.mutex.Lock()
+	defer e.mutex.Unlock()
+	executeRequests := e.executeQueue[sequenceNum]
+	delete(e.executeQueue, sequenceNum)
+	return executeRequests
+}
+
 // GetExecutionTriggerChannel is used to get the execution trigger channel
 func (e *Executor) GetExecutionTriggerChannel() chan<- ExecuteRequest {
 	return e.executionTriggerCh
@@ -44,6 +67,7 @@ func (e *Executor) GetInstallCheckpointChannel() chan<- int64 {
 func (e *Executor) Reset() {
 	e.mutex.Lock()
 	defer e.mutex.Unlock()
+	e.executeQueue = make(map[int64][]ExecuteRequest)
 }
 
 // CreateExecutor is used to create a new executor
@@ -52,6 +76,7 @@ func CreateExecutor(state *ServerState, config *ServerConfig, db *database.Datab
 		mutex:               sync.Mutex{},
 		state:               state,
 		config:              config,
+		executeQueue:        make(map[int64][]ExecuteRequest),
 		checkpointer:        checkpointer,
 		timer:               timer,
 		db:                  db,

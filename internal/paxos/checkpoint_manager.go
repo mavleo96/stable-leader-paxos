@@ -79,6 +79,7 @@ func (c *CheckpointManager) Reset() {
 	c.mutex.Lock()
 	defer c.mutex.Unlock()
 	c.checkpoints = make(map[int64]*pb.Checkpoint, 5)
+	c.checkpointMessageLog = make(map[int64]*pb.CheckpointMessage, 5)
 }
 
 // CreateCheckpointManager creates a new check point manager

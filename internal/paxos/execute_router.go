@@ -17,14 +17,10 @@ executeLoop:
 		case <-ctx.Done():
 			return
 		case executeRequest := <-e.executionTriggerCh:
-			// log.Infof("[Executor] Received execute signal for sequence number %d", executeRequest.SequenceNum)
+			log.Infof("[Executor] Received execute request for sequence number %d", executeRequest.SequenceNum)
 
-			// Requeue pending execute requests
-			// for _, pendingExecuteRequest := range pendingExecuteRequests {
-			// 	e.executionTriggerCh <- pendingExecuteRequest
-			// }
-			// pendingExecuteRequests = pendingExecuteRequests[:0]
-			// log.Infof("[Executor] Requeued all pending execute requests")
+			// Enqueue execute request
+			e.enqueue(executeRequest.SequenceNum, executeRequest)
 
 			// If request is already executed, send signal to requestor
 			if executeRequest.SequenceNum <= e.state.GetLastCheckpointedSequenceNum() ||
@@ -36,12 +32,11 @@ executeLoop:
 
 			// Try to execute the transaction
 			lastExecutedSequenceNum := e.state.GetLastExecutedSequenceNum()
+			maxSequenceNum := e.state.MaxSequenceNum()
 		tryLoop:
-			for i := lastExecutedSequenceNum + 1; i <= executeRequest.SequenceNum; i++ {
+			for i := lastExecutedSequenceNum + 1; i <= maxSequenceNum; i++ {
 				if !e.state.StateLog.IsCommitted(i) {
-					// Requeue execution request
-					e.executionTriggerCh <- executeRequest
-					// pendingExecuteRequests = append(pendingExecuteRequests, executeRequest)
+					log.Infof("[Executor] Sequence number %d is not committed", i)
 					continue executeLoop
 				}
 				if e.state.StateLog.IsExecuted(i) {
@@ -80,10 +75,15 @@ executeLoop:
 					e.checkpointer.AddCheckpoint(i, dbState)
 					e.checkpointer.GetCheckpointPurgeRoutineCh() <- i
 				}
-			}
 
-			executeRequest.SignalCh <- true
-			close(executeRequest.SignalCh)
+				// Dequeue execute requests
+				log.Infof("[Executor] Dequeuing execute requests and sending signals for sequence number %d", i)
+				executeRequests := e.dequeue(i)
+				for _, executeRequest := range executeRequests {
+					executeRequest.SignalCh <- true
+					close(executeRequest.SignalCh)
+				}
+			}
 
 		case sequenceNum := <-e.installCheckpointCh:
 			// Get checkpoint

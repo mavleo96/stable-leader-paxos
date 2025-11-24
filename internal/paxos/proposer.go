@@ -308,6 +308,13 @@ func (p *Proposer) CancelContext() {
 	log.Infof("[Proposer] Context cancelled")
 }
 
+// Reset resets the proposer
+func (p *Proposer) Reset() {
+	p.cancel()
+	p.ctx, p.cancel = context.WithCancel(context.Background())
+	log.Infof("[Proposer] Reset")
+}
+
 // CreateProposer creates a new proposer
 func CreateProposer(id string, state *ServerState, config *ServerConfig, peers map[string]*models.Node, logger *Logger, checkpointer *CheckpointManager, executionTriggerCh chan ExecuteRequest, installCheckpointCh chan int64) *Proposer {
 	ctx, cancel := context.WithCancel(context.Background())

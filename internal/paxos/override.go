@@ -46,6 +46,8 @@ func (s *PaxosServer) ResetNode(ctx context.Context, req *emptypb.Empty) (*empty
 	s.executor.db.ResetDB(10)
 	s.executor.Reset()
 	s.elector.Reset()
+	s.executor.checkpointer.Reset()
+	s.proposer.Reset()
 	s.logger.Reset()
 
 	return &emptypb.Empty{}, nil

@@ -5,6 +5,7 @@ import (
 	"sync"
 
 	"github.com/mavleo96/stable-leader-paxos/internal/models"
+	"github.com/mavleo96/stable-leader-paxos/internal/utils"
 	pb "github.com/mavleo96/stable-leader-paxos/pb"
 	log "github.com/sirupsen/logrus"
 	"google.golang.org/grpc/codes"
@@ -55,13 +56,16 @@ func (s *PaxosServer) CatchupRoutine() {
 	maxSequenceNum := s.state.MaxSequenceNum()
 	catchupMessage, err := s.SendCatchUpRequest(maxSequenceNum)
 	if err != nil {
-		log.Warn(err)
+		log.Warnf("[CatchupRoutine] Failed to send catch up request: %v", err)
 		return
 	}
-
+	if !s.phaseManager.AcceptorBallotNumberHandler(catchupMessage.B) {
+		log.Warnf("[CatchupRoutine] Failed to check and update phase for ballot number %s", utils.LoggingString(catchupMessage.B))
+		return
+	}
 	log.Infof("[CatchupRoutine] Received catch up message from leader %s: %v, msg: %s", catchupMessage.B.NodeID, catchupMessage.B, catchupMessage.String())
-	s.state.SetLeader(catchupMessage.B.NodeID)
-	s.state.SetBallotNumber(catchupMessage.B)
+	// s.state.SetLeader(catchupMessage.B.NodeID)
+	// s.state.SetBallotNumber(catchupMessage.B)
 
 	// Install checkpoint if not nil
 	checkpoint := catchupMessage.Checkpoint

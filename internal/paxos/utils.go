@@ -1,45 +1,27 @@
 package paxos
 
 import (
-	"crypto/rand"
-	"math/big"
-	"time"
+	"cmp"
 
 	pb "github.com/mavleo96/stable-leader-paxos/pb"
 )
 
-// Response Utilities
+// Response Constants
 
-// UnsuccessfulTransactionResponse is the response returned when a transaction is unsuccessful
-var UnsuccessfulTransactionResponse = &pb.TransactionResponse{}
+// EmptyTransactionResponse is the response returned when a transaction is unsuccessful
+var EmptyTransactionResponse = &pb.TransactionResponse{}
 
 // NoOperation is the request returned when no operation is needed
 var NoOperation = &pb.TransactionRequest{}
 
 // BallotNumber Utilities
 
-// ballotNumberIsHigherOrEqual checks if current >= new
-func ballotNumberIsHigherOrEqual(current *pb.BallotNumber, new *pb.BallotNumber) bool {
-	if new.N == current.N {
-		return new.NodeID >= current.NodeID
+// compareBallotNumbers compares two ballot numbers
+func compareBallotNumbers(x *pb.BallotNumber, y *pb.BallotNumber) int {
+	if x.N == y.N {
+		return cmp.Compare(x.NodeID, y.NodeID)
 	}
-	return new.N >= current.N
-}
-
-// ballotNumberIsHigher checks if current > new
-func ballotNumberIsHigher(current *pb.BallotNumber, new *pb.BallotNumber) bool {
-	if new.N == current.N {
-		return new.NodeID > current.NodeID
-	}
-	return new.N > current.N
-}
-
-// Timer Utilities
-
-// RandomTimeout returns a random timeout between min and max
-func RandomTimeout(min time.Duration, max time.Duration) (time.Duration, error) {
-	n, err := rand.Int(rand.Reader, big.NewInt(max.Milliseconds()-min.Milliseconds()))
-	return time.Duration(n.Int64()+min.Milliseconds()) * time.Millisecond, err
+	return cmp.Compare(x.N, y.N)
 }
 
 // Message Utilities
@@ -66,7 +48,7 @@ func aggregateAckMessages(newBallotNumber *pb.BallotNumber, ackMessages []*pb.Ac
 			if sequenceNum > maxSequenceNum {
 				maxSequenceNum = sequenceNum
 			}
-			if msg, exists := acceptedMessagesMap[sequenceNum]; !exists || ballotNumberIsHigher(msg.B, acceptedMessage.B) {
+			if msg, exists := acceptedMessagesMap[sequenceNum]; !exists || compareBallotNumbers(acceptedMessage.B, msg.B) == 1 {
 				acceptedMessagesMap[sequenceNum] = acceptedMessage
 			}
 		}

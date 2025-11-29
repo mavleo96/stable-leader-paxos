@@ -1,7 +1,8 @@
 package paxos
 
 import (
-	"context"
+	"crypto/rand"
+	"math/big"
 	"sync"
 	"time"
 
@@ -15,9 +16,7 @@ type SafeTimer struct {
 	timeout   time.Duration
 	running   bool
 	waitCount int64
-	ctx       context.Context
-	cancel    context.CancelFunc
-	TimeoutCh chan bool
+	TimeoutCh chan time.Time
 }
 
 // IncrementWaitCountOrStart is used to increment the wait count and start the timer if it is not running
@@ -55,42 +54,41 @@ func (t *SafeTimer) DecrementWaitCountAndResetOrStopIfZero() {
 	log.Infof("[Timer] Decremented wait count: %d, running: %v at %d", t.waitCount, t.running, time.Now().UnixMilli())
 }
 
-// Cleanup resets the timer and clears the wait count
-func (t *SafeTimer) Cleanup() bool {
+// Stop stops the timer
+func (t *SafeTimer) Stop() {
 	t.mutex.Lock()
 	defer t.mutex.Unlock()
 
 	stopped := t.timer.Stop()
 	t.running = false
 	t.waitCount = 0
-	t.cancel()
-	t.ctx, t.cancel = context.WithCancel(context.Background())
-	log.Infof("[Timer] Cleanup wait count: %d, running: %t at %d", t.waitCount, t.running, time.Now().UnixMilli())
-	return !stopped
+	log.Infof("[Timer] Stop timer at %d, stopped: %t", time.Now().UnixMilli(), stopped)
 }
 
 // run is the internal goroutine that handles timeout events.
 func (t *SafeTimer) run() {
-	for range t.timer.C {
-		log.Infof("[Timer] Timer expired at %d", time.Now().UnixMilli())
-		t.cancel()
-		t.Cleanup()
-		t.TimeoutCh <- true
-		log.Infof("[Timer] Timeout channel signaled at %d", time.Now().UnixMilli())
+	for expiredTime := range t.timer.C {
+		log.Infof("[Timer] Timer expired at %d", expiredTime.UnixMilli())
+		t.mutex.Lock()
+
+		stopped := t.timer.Stop()
+		t.running = false
+		t.waitCount = 0
+		log.Infof("[Timer] run: Timer reset to wait count %d, running: %t, stopped: %t at %d", t.waitCount, t.running, stopped, time.Now().UnixMilli())
+		t.mutex.Unlock()
+		t.TimeoutCh <- expiredTime
 	}
 	log.Infof("[Timer] Timer goroutine ended at %d", time.Now().UnixMilli())
 }
 
-// GetContext returns the timer's context for cancellation signaling.
-func (t *SafeTimer) GetContext() context.Context {
-	t.mutex.Lock()
-	defer t.mutex.Unlock()
-	return t.ctx
+// randomTimeout returns a random timeout between min and max
+func randomTimeout(min time.Duration, max time.Duration) (time.Duration, error) {
+	n, err := rand.Int(rand.Reader, big.NewInt(max.Milliseconds()-min.Milliseconds()))
+	return time.Duration(n.Int64()+min.Milliseconds()) * time.Millisecond, err
 }
 
 // CreateSafeTimer creates and initializes a SafeTimer instance.
 func CreateSafeTimer(i int64, n int64) *SafeTimer {
-
 	// Staggered timeout
 	timeout := minBackupTimeout + (maxBackupTimeout-minBackupTimeout)*time.Duration(i)/time.Duration(n)
 
@@ -100,10 +98,9 @@ func CreateSafeTimer(i int64, n int64) *SafeTimer {
 		timeout:   timeout,
 		running:   false,
 		waitCount: 0,
-		TimeoutCh: make(chan bool),
+		TimeoutCh: make(chan time.Time),
 	}
 	t.timer.Stop()
-	t.ctx, t.cancel = context.WithCancel(context.Background())
 	go t.run()
 	return t
 }

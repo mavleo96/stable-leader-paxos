@@ -17,13 +17,14 @@ func (s *PaxosServer) ReconfigureNode(ctx context.Context, status *wrapperspb.Bo
 
 	// Set node status and cleanup timer
 	s.config.Alive = status.Value
-	s.acceptor.timer.Cleanup()
 
 	// If node is alive, set leader to empty string and start timer and catchup routine
-	if s.config.Alive {
-		s.state.SetSysInitialized()
-		s.state.SetLeader("")
+	if status.Value {
 		go s.CatchupRoutine()
+		s.config.Alive = true
+	} else {
+		s.config.Alive = false
+		s.phaseManager.timer.Stop()
 	}
 	log.Warnf("Node %s status changed to %v", s.ID, s.config.Alive)
 	return &emptypb.Empty{}, nil
@@ -35,7 +36,8 @@ func (s *PaxosServer) KillLeader(ctx context.Context, in *emptypb.Empty) (*empty
 		return &emptypb.Empty{}, nil
 	}
 	s.config.Alive = false
-	s.state.SetLeader("")
+	// s.phaseManager.ResetTimerCtx()
+	s.phaseManager.timer.Stop()
 	log.Warnf("Node %s status changed to %v", s.ID, s.config.Alive)
 	return &emptypb.Empty{}, nil
 }
@@ -44,11 +46,12 @@ func (s *PaxosServer) KillLeader(ctx context.Context, in *emptypb.Empty) (*empty
 func (s *PaxosServer) ResetNode(ctx context.Context, req *emptypb.Empty) (*emptypb.Empty, error) {
 	// Reset server state
 	s.state.Reset()
-	s.executor.db.ResetDB(10)
-	s.executor.Reset()
-	s.elector.Reset()
-	s.executor.checkpointer.Reset()
+	s.acceptor.Reset()
 	s.proposer.Reset()
+	s.phaseManager.Reset()
+	s.executor.Reset()
+	s.executor.db.ResetDB(10)
+	s.executor.checkpointer.Reset()
 	s.logger.Reset()
 
 	return &emptypb.Empty{}, nil

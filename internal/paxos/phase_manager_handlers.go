@@ -1,0 +1,200 @@
+package paxos
+
+import (
+	"errors"
+	"time"
+
+	"github.com/mavleo96/stable-leader-paxos/internal/utils"
+	pb "github.com/mavleo96/stable-leader-paxos/pb"
+	log "github.com/sirupsen/logrus"
+)
+
+// PrepareQueueHandler handles the prepare messages queued on timeout
+func (pm *PhaseManager) PrepareQueueHandler(expiredTime time.Time) (bool, *pb.BallotNumber, error) {
+	// Get highest valid prepare message in log and if the message is valid
+	highestBallotNumber, valid := pm.GetHighestValidPrepareMessageInLog(expiredTime)
+	log.Infof("[PrepareQueueHandler] Highest valid prepare message in log: %s, valid: %t", utils.LoggingString(highestBallotNumber), valid)
+
+	// Loop through prepare messages
+	for _, prepareMessageEntry := range pm.prepareMessageLog {
+		// If ballot number is not the same, respond false on channel
+		if compareBallotNumbers(prepareMessageEntry.PrepareMessage.B, highestBallotNumber) != 0 {
+			// Respond false on channel
+			if prepareMessageEntry.ResponseCh != nil {
+				log.Infof("[PrepareQueueHandler] Responding false on channel for ballot number %s since it is not the highest ballot number", utils.LoggingString(prepareMessageEntry.PrepareMessage.B))
+				prepareMessageEntry.ResponseCh <- false
+				close(prepareMessageEntry.ResponseCh)
+				prepareMessageEntry.ResponseCh = nil
+			}
+		} else if !valid {
+			// If prepare message is expired, respond false on channel
+			// Respond false on channel
+			if prepareMessageEntry.ResponseCh != nil {
+				log.Infof("[PrepareQueueHandler] Responding false on channel for ballot number %s since it is expired", utils.LoggingString(prepareMessageEntry.PrepareMessage.B))
+				prepareMessageEntry.ResponseCh <- false
+				close(prepareMessageEntry.ResponseCh)
+				prepareMessageEntry.ResponseCh = nil
+			}
+		} else {
+			// If prepare message is valid then update state
+			log.Infof("[PrepareQueueHandler] Updating state for ballot number %s", utils.LoggingString(prepareMessageEntry.PrepareMessage.B))
+			pm.state.SetBallotNumber(prepareMessageEntry.PrepareMessage.B)
+			pm.state.SetLeader(prepareMessageEntry.PrepareMessage.B.NodeID)
+			pm.state.ResetForwardedRequestsLog()
+			pm.ResetTimerCtx()
+
+			// Respond true on channel
+			if prepareMessageEntry.ResponseCh != nil {
+				log.Infof("[PrepareQueueHandler] Responding true on channel for ballot number %s since it is the highest ballot number", utils.LoggingString(prepareMessageEntry.PrepareMessage.B))
+				prepareMessageEntry.ResponseCh <- true
+				close(prepareMessageEntry.ResponseCh)
+				prepareMessageEntry.ResponseCh = nil
+			}
+		}
+	}
+
+	return valid, highestBallotNumber, nil
+}
+
+// PrepareRequestHandler handles the prepare request; waits for response and returns ack message if accepted
+func (pm *PhaseManager) PrepareRequestHandler(prepareMessage *pb.PrepareMessage) (*pb.AckMessage, error) {
+	// Log the prepare request
+	responseCh := make(chan bool, 1)
+	prepareMessageEntry := &PrepareMessageEntry{
+		PrepareMessage: prepareMessage,
+		ResponseCh:     responseCh,
+		Timestamp:      time.Now(),
+	}
+	pm.GetSendPrepareMessageCh() <- prepareMessageEntry
+
+	// Note: server state is already updated in PrepareQueueHandler
+	valid := <-responseCh
+	if !valid {
+		log.Warnf("[PrepareRequestHandler] Prepare request rejected for ballot number %s", utils.LoggingString(prepareMessage.B))
+		return nil, errors.New("prepare request rejected for ballot number")
+	}
+
+	log.Infof("[PrepareRequestHandler] Promised ballot number %s", utils.LoggingString(pm.state.GetBallotNumber()))
+
+	// Return ack message with accepted log
+	acceptedLog := pm.state.StateLog.GetAcceptedLog()
+	sequenceNum := pm.state.GetLastCheckpointedSequenceNum()
+	return &pb.AckMessage{
+		B:           prepareMessage.B,
+		SequenceNum: sequenceNum,
+		AcceptLog:   acceptedLog,
+	}, nil
+}
+
+// InitiatePrepareHandler initiates the prepare phase
+func (p *Proposer) InitiatePrepareHandler(ballotNumber *pb.BallotNumber) bool {
+	// Create prepare message
+	prepareMessage := &pb.PrepareMessage{B: ballotNumber}
+
+	// Multicast prepare message to all peers
+	responseCh := make(chan *pb.AckMessage, len(p.peers))
+	go p.SendPrepareMessage(prepareMessage, responseCh)
+
+	// Wait for response and return true if all responses are true
+	accepted := int64(1)
+	// Create ack message entry
+	ackMessageEntry := &pb.AckMessage{
+		B:           ballotNumber,
+		SequenceNum: p.state.GetLastCheckpointedSequenceNum(),
+		AcceptLog:   p.state.StateLog.GetAcceptedLog(),
+	}
+	ackMessages := make([]*pb.AckMessage, 0)
+	ackMessages = append(ackMessages, ackMessageEntry)
+collectLoop:
+	for {
+		select {
+		// TODO: maybe don't use timer ctx here
+		case <-p.phaseManager.GetTimerCtx().Done():
+			log.Warnf("[InitiatePrepareHandler] Timer context done for ballot number %s at %d", utils.LoggingString(ballotNumber), time.Now().UnixMilli())
+			return false
+		case ackMessage, ok := <-responseCh:
+			if !ok {
+				log.Warnf("[InitiatePrepareHandler] Response channel closed for ballot number %s", utils.LoggingString(ballotNumber))
+				return false
+			}
+			ackMessages = append(ackMessages, ackMessage)
+			accepted++
+			if accepted >= p.config.F+1 {
+				log.Infof("[InitiatePrepareHandler] Accepted quorum for ballot number %s", utils.LoggingString(ballotNumber))
+				// return true, ackMessages
+				break collectLoop
+			}
+		}
+	}
+
+	// Aggregate ack messages
+	checkpointedSequenceNum, acceptMessages := aggregateAckMessages(ballotNumber, ackMessages)
+
+	// Handle checkpoint
+	if checkpointedSequenceNum > p.state.GetLastExecutedSequenceNum() {
+		// If checkpoint is greater than executed sequence number, trigger install checkpoint routine
+
+		// Get checkpoint from other nodes
+		checkpoint, err := p.checkpointer.SendGetCheckpointRequest(checkpointedSequenceNum)
+		if err != nil {
+			log.Warnf("[RunNewViewPhase] Failed to get checkpoint for sequence number %d: %v", checkpointedSequenceNum, err)
+			return false
+		}
+		p.checkpointer.AddCheckpoint(checkpointedSequenceNum, checkpoint.Snapshot)
+		p.installCheckpointCh <- checkpointedSequenceNum
+	} else if checkpointedSequenceNum > p.state.GetLastCheckpointedSequenceNum() {
+		// Trigger checkpoint purge routine
+		p.checkpointer.GetCheckpointPurgeRoutineCh() <- checkpointedSequenceNum
+	}
+
+	// Update state with new accept messages
+	for _, acceptMessage := range acceptMessages {
+		p.state.StateLog.CreateRecordIfNotExists(ballotNumber, acceptMessage.SequenceNum, acceptMessage.Message)
+		p.state.StateLog.SetAccepted(acceptMessage.SequenceNum)
+	}
+	// Set leader
+	// Since state logs are updated, it is safe to set leader to self
+	// Check and update phase
+	// if !p.phaseManager.ProposerPhaseChangeHandler(ballotNumber) {
+	// 	return false
+	// }
+	p.state.SetLeader(p.id)
+	p.phaseManager.ResetTimerCtx()
+	// p.state.SetBallotNumber(ballotNumber)
+	// p.state.SetLeader(p.id)
+	// p.state.ResetForwardedRequestsLog()
+	// p.phaseManager.CancelPhaseCtx()
+
+	go p.RunNewViewPhase(ballotNumber, checkpointedSequenceNum, acceptMessages)
+	log.Infof("[InitiatePrepareHandler] New leader with promised ballot number %s at %d", utils.LoggingString(ballotNumber), time.Now().UnixMilli())
+	return true
+}
+
+// AcceptorBallotNumberHandler handles the ballot number for the acceptor
+func (pm *PhaseManager) AcceptorBallotNumberHandler(ballotNumber *pb.BallotNumber) bool {
+	pm.mutex.Lock()
+	defer pm.mutex.Unlock()
+
+	switch compareBallotNumbers(ballotNumber, pm.state.GetBallotNumber()) {
+	case 1:
+		// Update state and stop timer
+		pm.state.SetBallotNumber(ballotNumber)
+		pm.state.SetLeader(ballotNumber.NodeID)
+		pm.state.ResetForwardedRequestsLog()
+		pm.timer.Stop()
+
+		log.Infof("[PhaseManager] Changed ballot number to %s", utils.LoggingString(ballotNumber))
+
+		// Return true to indicate phase is valid
+		return true
+	case 0:
+		// Return true to indicate phase is valid
+		return true
+		// Return false to indicate phase is invalid
+	case -1:
+		return false
+	default:
+		log.Warnf("Invalid ballot number (%s vs %s) comparison: %d", utils.LoggingString(pm.state.GetBallotNumber()), utils.LoggingString(ballotNumber), compareBallotNumbers(pm.state.GetBallotNumber(), ballotNumber))
+		return false
+	}
+}

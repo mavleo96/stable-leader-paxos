@@ -22,15 +22,8 @@ func (s *PaxosServer) PrepareRequest(ctx context.Context, req *pb.PrepareMessage
 	// Logger: Add received prepare message
 	s.logger.AddReceivedPrepareMessage(req)
 
-	// TODO: should this be part of handler?
-	// Reject if ballot number is lower than promised ballot number
-	if !ballotNumberIsHigherOrEqual(s.state.GetBallotNumber(), req.B) {
-		log.Warnf("[PrepareRequest] Rejected %s since ballot number is lower than promised ballot number", utils.LoggingString(req.B))
-		return nil, status.Errorf(codes.Aborted, "ballot number is lower than promised ballot number")
-	}
-
 	// Handle prepare request
-	ackMessage, err := s.elector.PrepareRequestHandler(req)
+	ackMessage, err := s.phaseManager.PrepareRequestHandler(req)
 	if err != nil {
 		return nil, status.Error(codes.Aborted, err.Error())
 	}
@@ -51,13 +44,6 @@ func (s *PaxosServer) AcceptRequest(ctx context.Context, req *pb.AcceptMessage) 
 
 	// Logger: Add received accept message
 	s.logger.AddReceivedAcceptMessage(req)
-
-	// TODO: should this be part of handler?
-	// Reject if ballot number is lower than promised ballot number
-	if !ballotNumberIsHigherOrEqual(s.state.GetBallotNumber(), req.B) {
-		log.Warnf("[AcceptRequest] Rejected %s since ballot number is lower than promised ballot number", utils.LoggingString(req.Message))
-		return nil, status.Errorf(codes.Aborted, "ballot number is lower than promised ballot number")
-	}
 
 	// Handle accept request
 	acceptedMessage, err := s.acceptor.AcceptRequestHandler(req)
@@ -82,13 +68,6 @@ func (s *PaxosServer) CommitRequest(ctx context.Context, req *pb.CommitMessage) 
 	// Logger: Add received commit message
 	s.logger.AddReceivedCommitMessage(req)
 
-	// TODO: should this be part of handler?
-	// Reject if ballot number is lower than promised ballot number
-	if !ballotNumberIsHigherOrEqual(s.state.GetBallotNumber(), req.B) {
-		log.Warnf("[CommitRequest] Rejected %s since ballot number is lower than promised ballot number", utils.LoggingString(req.Message))
-		return nil, status.Errorf(codes.Aborted, "ballot number is lower than promised ballot number")
-	}
-
 	// Handle commit request
 	return s.acceptor.CommitRequestHandler(req)
 }
@@ -104,13 +83,11 @@ func (s *PaxosServer) NewViewRequest(req *pb.NewViewMessage, stream pb.PaxosNode
 	s.logger.AddReceivedNewViewMessage(req)
 	log.Infof("[NewViewRequest] Received new view message %v", utils.LoggingString(req.B))
 
-	// Proposer context is cancelled to stop any ongoing prepare or accept phases as leader
-	// Timer is cleaned up and leader is set to new leader
-	s.proposer.CancelContext()
-	s.acceptor.timer.Cleanup()
-	s.state.ResetForwardedRequestsLog()
-	s.state.SetLeader(req.B.NodeID)
-	s.state.SetBallotNumber(req.B)
+	// Handle new view
+	err := s.acceptor.NewViewRequestHandler(req)
+	if err != nil {
+		return status.Error(codes.Aborted, err.Error())
+	}
 
 	// Handle checkpoint
 	checkpointSequenceNum := req.SequenceNum

@@ -14,11 +14,10 @@ type ServerState struct {
 	id                          string
 	b                           *pb.BallotNumber
 	leader                      string
-	initializeMutex             sync.Mutex
-	sysInitialized              bool
 	lastExecutedSequenceNum     int64
 	lastCheckpointedSequenceNum int64
 	forwardedRequestsLog        []*pb.TransactionRequest
+	// prepareMessageLog           []*pb.PrepareMessage
 
 	// Self-managed components
 	StateLog   *StateLog
@@ -39,25 +38,18 @@ func (s *ServerState) SetLeader(leader string) {
 	s.leader = leader
 }
 
+// ResetLeader resets the leader of the paxos server
+func (s *ServerState) ResetLeader() {
+	s.mutex.Lock()
+	defer s.mutex.Unlock()
+	s.leader = ""
+}
+
 // IsLeader checks if the server is the leader
 func (s *ServerState) IsLeader() bool {
 	s.mutex.RLock()
 	defer s.mutex.RUnlock()
 	return s.leader == s.id
-}
-
-// IsSysInitialized checks if the system is initialized
-func (s *ServerState) IsSysInitialized() bool {
-	s.mutex.RLock()
-	defer s.mutex.RUnlock()
-	return s.sysInitialized
-}
-
-// SetSysInitialized sets the system initialized
-func (s *ServerState) SetSysInitialized() {
-	s.mutex.Lock()
-	defer s.mutex.Unlock()
-	s.sysInitialized = true
 }
 
 // GetBallotNumber returns the current ballot number
@@ -89,7 +81,7 @@ func (s *ServerState) AssignSequenceNumberAndCreateRecord(ballotNumber *pb.Ballo
 			continue
 		}
 		if record != nil && proto.Equal(record.request, request) {
-			if ballotNumberIsHigher(record.b, ballotNumber) {
+			if compareBallotNumbers(ballotNumber, record.b) == 1 {
 				record.b = ballotNumber
 				return record.sequenceNum, true
 			}
@@ -174,6 +166,27 @@ func (s *ServerState) ResetForwardedRequestsLog() {
 	s.forwardedRequestsLog = make([]*pb.TransactionRequest, 0)
 }
 
+// // AddPrepareMessage adds a prepare message to the prepare message log
+// func (s *ServerState) AddPrepareMessage(prepareMessage *pb.PrepareMessage) {
+// 	s.mutex.Lock()
+// 	defer s.mutex.Unlock()
+// 	s.prepareMessageLog = append(s.prepareMessageLog, prepareMessage)
+// }
+
+// // GetHighestBallotNumberInPrepareMessageLog gets the highest ballot number from the prepare message log
+// func (s *ServerState) GetHighestBallotNumberInPrepareMessageLog() *pb.BallotNumber {
+// 	s.mutex.RLock()
+// 	defer s.mutex.RUnlock()
+// 	highestBallotNumber := s.b
+// 	for _, prepareMessage := range s.prepareMessageLog {
+// 		// if ballotNumberIsHigher(highestBallotNumber, prepareMessage.B) {
+// 		if compareBallotNumbers(prepareMessage.B, highestBallotNumber) == 1 {
+// 			highestBallotNumber = prepareMessage.B
+// 		}
+// 	}
+// 	return highestBallotNumber
+// }
+
 // Reset resets the server state
 func (s *ServerState) Reset() {
 	s.mutex.Lock()
@@ -181,7 +194,8 @@ func (s *ServerState) Reset() {
 	s.b = &pb.BallotNumber{N: 0, NodeID: ""}
 	s.lastExecutedSequenceNum = 0
 	s.lastCheckpointedSequenceNum = 0
-	s.forwardedRequestsLog = make([]*pb.TransactionRequest, 10)
+	s.forwardedRequestsLog = make([]*pb.TransactionRequest, 0)
+	// s.prepareMessageLog = make([]*pb.PrepareMessage, 0)
 	s.StateLog.Reset()
 	s.DedupTable.Reset()
 }
@@ -191,14 +205,13 @@ func CreateServerState(id string) *ServerState {
 	return &ServerState{
 		mutex:                       sync.RWMutex{},
 		id:                          id,
-		b:                           &pb.BallotNumber{N: 0, NodeID: ""},
-		leader:                      "",
-		initializeMutex:             sync.Mutex{},
-		sysInitialized:              false,
+		b:                           &pb.BallotNumber{N: 1, NodeID: "n1"},
+		leader:                      "n1",
 		lastExecutedSequenceNum:     0,
 		lastCheckpointedSequenceNum: 0,
-		forwardedRequestsLog:        make([]*pb.TransactionRequest, 10),
-		StateLog:                    CreateStateLog(id),
-		DedupTable:                  CreateDedupTable(),
+		forwardedRequestsLog:        make([]*pb.TransactionRequest, 0),
+		// prepareMessageLog:           make([]*pb.PrepareMessage, 0),
+		StateLog:   CreateStateLog(id),
+		DedupTable: CreateDedupTable(),
 	}
 }

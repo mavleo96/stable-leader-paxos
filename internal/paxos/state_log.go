@@ -38,37 +38,6 @@ func (s *StateLog) GetSequenceNumber(request *pb.TransactionRequest) int64 {
 	return 0
 }
 
-// // TODO: improve design later
-// // AssignSequenceNumberAndCreateRecord assigns a sequence number to a log record for a given digest and creates a new log record if not found
-// func (s *StateLog) AssignSequenceNumberAndCreateRecord(ballotNumber *pb.BallotNumber, request *pb.TransactionRequest) (int64, bool) {
-// 	s.mutex.Lock()
-// 	defer s.mutex.Unlock()
-
-// 	// Check if request is already in log record
-// 	for sequenceNum := range s.log {
-// 		record, exists := s.log[sequenceNum]
-// 		if !exists {
-// 			continue
-// 		}
-// 		if record != nil && proto.Equal(record.request, request) {
-// 			if ballotNumberIsHigher(record.b, ballotNumber) {
-// 				record.b = ballotNumber
-// 				return record.sequenceNum, true
-// 			}
-// 			return record.sequenceNum, false
-// 		}
-// 	}
-
-// 	// If request is not in log record, assign new sequence number
-// 	sequenceNum := int64(1)
-// 	if utils.Max(utils.Keys(s.log)) != 0 {
-// 		sequenceNum = utils.Max(utils.Keys(s.log)) + 1
-// 	}
-// 	s.log[sequenceNum] = createLogRecord(ballotNumber, sequenceNum, request)
-
-// 	return sequenceNum, true
-// }
-
 // CreateRecordIfNotExists creates a new log record if not found
 func (s *StateLog) CreateRecordIfNotExists(ballotNumber *pb.BallotNumber, sequenceNum int64, request *pb.TransactionRequest) bool {
 	s.mutex.Lock()
@@ -77,7 +46,8 @@ func (s *StateLog) CreateRecordIfNotExists(ballotNumber *pb.BallotNumber, sequen
 		s.log[sequenceNum] = createLogRecord(ballotNumber, sequenceNum, request)
 		return true
 	}
-	if ballotNumberIsHigher(s.log[sequenceNum].b, ballotNumber) {
+	// if ballotNumberIsHigher(s.log[sequenceNum].b, ballotNumber) {
+	if compareBallotNumbers(ballotNumber, s.log[sequenceNum].b) == 1 {
 		s.log[sequenceNum].b = ballotNumber
 		s.log[sequenceNum].request = request
 		return true

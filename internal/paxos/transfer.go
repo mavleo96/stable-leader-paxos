@@ -18,38 +18,41 @@ func (s *PaxosServer) TransferRequest(ctx context.Context, req *pb.TransactionRe
 		return nil, status.Errorf(codes.Unavailable, "node not alive")
 	}
 
-	// Initialize system if not initialized
-	if !s.state.IsSysInitialized() {
-		s.InitializeSystem()
-	}
-
-	// Get current ballot number
+	// // Get current ballot number
 	currentBallotNumber := s.state.GetBallotNumber()
+	log.Infof("[TransferRequest] Request %s to be processed with current ballot number: %s", utils.LoggingString(req), utils.LoggingString(currentBallotNumber))
 
 	// Forward request if not leader
 	if !s.state.IsLeader() {
+		// If request is already forwarded, return empty transaction response
 		if s.state.InForwardedRequestsLog(req) {
-			log.Warnf("[TransferRequest] Request %s already forwarded", utils.LoggingString(req))
-			return UnsuccessfulTransactionResponse, status.Errorf(codes.Aborted, "not leader")
+			log.Warnf("[TransferRequest] Request %s already forwarded for ballot number: %s", utils.LoggingString(req), utils.LoggingString(currentBallotNumber))
+			return EmptyTransactionResponse, status.Errorf(codes.Aborted, "not leader; already forwarded")
 		}
+
+		// If request is already accepted in current ballot number, return empty transaction response
 		sequenceNum := s.state.StateLog.GetSequenceNumber(req)
 		if s.state.StateLog.IsAccepted(sequenceNum) && proto.Equal(s.state.StateLog.GetBallotNumber(sequenceNum), currentBallotNumber) {
 			log.Warnf("[TransferRequest] Request %s already accepted", utils.LoggingString(req))
-			return UnsuccessfulTransactionResponse, status.Errorf(codes.Aborted, "already accepted")
+			return EmptyTransactionResponse, status.Errorf(codes.Aborted, "not leader; already accepted")
 		}
+
 		// Logger: Add received transaction request
 		s.logger.AddReceivedTransactionRequest(req)
 
-		// Add request to forwarded requests log
+		// Add request to forwarded requests log and start timer
 		s.state.AddForwardedRequest(req)
+		s.phaseManager.timer.IncrementWaitCountOrStart()
 
-		s.acceptor.timer.IncrementWaitCountOrStart()
+		// Forward request to leader
 		leader := s.state.GetLeader()
 		if leader != "" {
 			go s.ForwardToLeader(leader, req)
 		}
-		return UnsuccessfulTransactionResponse, status.Errorf(codes.Aborted, "not leader")
+		return EmptyTransactionResponse, status.Errorf(codes.Aborted, "not leader; forwarded to leader")
 	}
+
+	// Leader logic
 
 	// Logger: Add received transaction request
 	s.logger.AddReceivedTransactionRequest(req)
@@ -71,13 +74,13 @@ func (s *PaxosServer) TransferRequest(ctx context.Context, req *pb.TransactionRe
 	// Older timestamp requests are ignored
 	if timestamp != 0 && req.Timestamp < timestamp {
 		log.Warnf("[TransferRequest] Ignored %s; Last reply timestamp %d", utils.LoggingString(req), timestamp)
-		return UnsuccessfulTransactionResponse, status.Errorf(codes.AlreadyExists, "old timestamp")
+		return EmptyTransactionResponse, status.Errorf(codes.AlreadyExists, "old timestamp")
 	}
 
 	// Handle transaction request
 	err := s.proposer.HandleTransactionRequest(req)
 	if err != nil {
-		return UnsuccessfulTransactionResponse, status.Error(codes.Aborted, err.Error())
+		return EmptyTransactionResponse, status.Error(codes.FailedPrecondition, err.Error())
 	}
 
 	// Create transaction response from dedup table

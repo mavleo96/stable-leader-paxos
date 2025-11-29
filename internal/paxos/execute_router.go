@@ -25,8 +25,9 @@ executeLoop:
 			// If request is already executed, send signal to requestor
 			if executeRequest.SequenceNum <= e.state.GetLastCheckpointedSequenceNum() ||
 				e.state.StateLog.IsExecuted(executeRequest.SequenceNum) {
-				executeRequest.SignalCh <- true
-				close(executeRequest.SignalCh)
+				// TODO: this is a debug value to check for race condition
+				executeRequest.ResultCh <- -1000
+				close(executeRequest.ResultCh)
 				continue executeLoop
 			}
 
@@ -80,8 +81,8 @@ executeLoop:
 				log.Infof("[Executor] Dequeuing execute requests and sending signals for sequence number %d", i)
 				executeRequests := e.dequeue(i)
 				for _, executeRequest := range executeRequests {
-					executeRequest.SignalCh <- true
-					close(executeRequest.SignalCh)
+					executeRequest.ResultCh <- result
+					close(executeRequest.ResultCh)
 				}
 			}
 

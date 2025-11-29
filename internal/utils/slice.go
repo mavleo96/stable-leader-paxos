@@ -2,12 +2,12 @@ package utils
 
 import "cmp"
 
-// LastElement returns the pointer to the last element of a slice of any type
-func LastElement[T any](slice []T) *T {
+// LastElement returns the last element of a slice of any type
+func LastElement[T any](slice []T) T {
 	if len(slice) == 0 {
-		return nil
+		return *new(T)
 	}
-	return &slice[len(slice)-1]
+	return slice[len(slice)-1]
 }
 
 // Pop returns the last element of a slice and the slice without the last element

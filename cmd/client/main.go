@@ -12,6 +12,7 @@ import (
 	"github.com/mavleo96/stable-leader-paxos/internal/clientapp"
 	"github.com/mavleo96/stable-leader-paxos/internal/config"
 	"github.com/mavleo96/stable-leader-paxos/internal/models"
+	"github.com/mavleo96/stable-leader-paxos/pb"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -33,6 +34,17 @@ func main() {
 		log.Fatal(err)
 	}
 
+	// Initialize leader node - try n1 first, otherwise use first available node
+	leaderNode := "n1"
+	if _, exists := nodeMap[leaderNode]; !exists {
+		// If n1 doesn't exist, use the first available node
+		for nodeID := range nodeMap {
+			leaderNode = nodeID
+			break
+		}
+	}
+	log.Infof("Leader node initialized to %s", leaderNode)
+
 	// Parse Transactions
 	// The entire csv file is loaded into memory and transactions are queued by
 	// client and set number like preserving the order for each client.
@@ -40,46 +52,47 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	// masterQueue is a nested map of client id to set number to list of transactions.
-	masterQueue, setNumList, aliveNodesMap, err := clientapp.ParseRecords(records, cfg.Clients)
+	testSets, err := clientapp.ParseRecords(records, nodeMap, cfg.Clients)
 	if err != nil {
 		log.Fatal(err)
+	}
+
+	// Create main context and wait group
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	wg := sync.WaitGroup{}
+
+	// Create channels
+	testSetCh := make(chan clientapp.TestSet)                 // Channel for main routine to send test sets to coordinator
+	signalCh := make(chan bool, len(cfg.Clients))             // Channel for client routines to send signals to coordinator
+	clientChannels := make(map[string]chan []*pb.Transaction) // Channel for coordinator to send transactions to clients
+	resetChannels := make(map[string]chan bool)               // Channel for main routine to send reset signals to clients
+	for _, clientID := range cfg.Clients {
+		// Use buffered channel to prevent blocking if client routine is busy
+		clientChannels[clientID] = make(chan []*pb.Transaction, 1)
+		resetChannels[clientID] = make(chan bool, 1)
 	}
 
 	// Client Routines
 	// Each client has its own goroutine and channel. The channel is used by main routine and client routine to communicate.
 	// - main routine sends set number to client routine
 	// - client routine sends {nil, nil} to main routine when set is done
-	wg := sync.WaitGroup{}
-	clientChannels := make(map[string]chan clientapp.SetNumber)
-	resetChannels := make(map[string]chan bool)
 	for _, clientID := range cfg.Clients {
-		clientChannels[clientID] = make(chan clientapp.SetNumber)
-		resetChannels[clientID] = make(chan bool)
-	}
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	for _, clientID := range cfg.Clients {
-		wg.Add(1)
-		go func(ctx context.Context, id string) {
-			defer wg.Done()
-			clientapp.ClientRoutine(ctx, id, clientChannels[id], resetChannels[id], masterQueue[id], nodeMap)
-		}(ctx, clientID)
+		wg.Go(func() {
+			clientapp.ClientRoutine(ctx, clientID, leaderNode, clientChannels[clientID], resetChannels[clientID], signalCh, nodeMap)
+		})
 
 	}
-	queueChan := make(chan clientapp.SetNumber, 5)
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		clientapp.QueueRoutine(ctx, queueChan, clientChannels, nodeMap)
-	}()
+
+	// Coordinator routine to coordinate the test sets
+	wg.Go(func() { clientapp.Coordinator(ctx, nodeMap, testSetCh, clientChannels, signalCh) })
 
 	// Main interaction loop
 	// This loop is used to interact with the user and execute commands
 	// to control the execution of the test sets and log the results.
 	log.Info("Main interaction loop started")
 	scanner := bufio.NewScanner(os.Stdin)
-	setNum := clientapp.SetNumber{N1: 0, N2: 0}
+	testSetIndex := int64(-1)
 interactionLoop:
 	for {
 		// Read command from stdin
@@ -115,33 +128,19 @@ interactionLoop:
 		// Execute command
 		switch cmd {
 		case "next":
-			// send set number to queue routine
-			// var setNum clientapp.SetNumber
-			for {
-				if len(setNumList) == 0 {
-					break interactionLoop
-				} else if len(setNumList) > 1 {
-					setNum, setNumList = setNumList[0], setNumList[1:]
-				} else {
-					setNum, setNumList = setNumList[0], make([]clientapp.SetNumber, 0)
-				}
-				if setNum.N2 == 1 {
-					clientapp.ReconfigureNodes(nodeMap, aliveNodesMap[setNum])
-				}
-				queueChan <- setNum
-				if len(setNumList) > 0 && setNumList[0].N2 > 1 {
-					continue
-				}
-				break
+			testSetIndex++
+			if testSetIndex == int64(len(testSets)) {
+				break interactionLoop
 			}
+			testSetCh <- *testSets[testSetIndex]
 		case "print log":
-			clientapp.SendPrintLogCommand(nodeMap, setNum.N1)
+			clientapp.SendPrintLogCommand(nodeMap, testSetIndex)
 		case "print db":
-			clientapp.SendPrintDBCommand(nodeMap, setNum.N1)
+			clientapp.SendPrintDBCommand(nodeMap, testSetIndex)
 		case "print status":
-			clientapp.SendPrintStatusCommand(nodeMap, setNum.N1, arg)
+			clientapp.SendPrintStatusCommand(nodeMap, testSetIndex, arg)
 		case "print view":
-			clientapp.SendPrintViewCommand(nodeMap, setNum.N1)
+			clientapp.SendPrintViewCommand(nodeMap, testSetIndex)
 		case "kill leader":
 			clientapp.KillLeader(nodeMap)
 		case "reset":

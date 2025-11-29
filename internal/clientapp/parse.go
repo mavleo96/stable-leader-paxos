@@ -2,25 +2,15 @@ package clientapp
 
 import (
 	"encoding/csv"
+	"errors"
 	"os"
 	"strconv"
 	"strings"
 
+	"github.com/mavleo96/stable-leader-paxos/internal/models"
 	"github.com/mavleo96/stable-leader-paxos/internal/utils"
 	pb "github.com/mavleo96/stable-leader-paxos/pb"
 )
-
-// SetNumber represent test set number
-// N1 is the set number
-// N2 is the subset number (set divided into subsets by LF operation)
-type SetNumber struct {
-	N1 int64
-	N2 int64
-}
-
-// Custom types for transaction queues
-type ClientTxnQueue map[SetNumber][]*pb.Transaction
-type MasterTxnQueue map[string]ClientTxnQueue
 
 // ReadCSV reads records from a csv file at given path
 func ReadCSV(path string) ([][]string, error) {
@@ -38,74 +28,79 @@ func ReadCSV(path string) ([][]string, error) {
 	return records, nil
 }
 
-// ParseRecords parses the records and creates a master queue of transactions
-// Returns a map of client id to set number to list of transaction pointers, a list of set numbers, a map of set number to list of alive nodes, and an error
-func ParseRecords(records [][]string, clientList []string) (MasterTxnQueue, []SetNumber, map[SetNumber][]string, error) {
-	// txnQueue is a nested map of client id to set number to list of transaction pointers
-	masterQueue := make(MasterTxnQueue)
-	for _, clientID := range clientList {
-		masterQueue[clientID] = make(ClientTxnQueue)
-	}
-
-	// aliveNodesMap is a map of set number to list of alive nodes
-	aliveNodesMap := make(map[SetNumber][]string)
+// ParseRecords parses the records from a csv file and returns a list of test sets
+func ParseRecords(records [][]string, nodeMap map[string]*models.Node, clientIDs []string) ([]*TestSet, error) {
+	testSets := make([]*TestSet, 0)
 
 	// Process records
-	var setNumList []SetNumber
 	for i, record := range records {
 		if i == 0 {
 			continue // skip header row
 		}
 
-		// If set number is new, initialize new lists for each client, add set number to set number list
-		// and add alive nodes to alive nodes map
+		// If set number is new, create new test set
 		if record[0] != "" {
 			// Parse set number
-			n1, err := strconv.ParseInt(record[0], 10, 64)
+			setNumber, err := strconv.ParseInt(record[0], 10, 64)
 			if err != nil {
-				return nil, nil, nil, err
-			}
-			setNum := SetNumber{N1: n1, N2: 1}
-
-			// Parse alive nodes
-			aliveNodes := parseNodeString(record[2])
-			aliveNodesMap[setNum] = aliveNodes
-			setNumList = append(setNumList, setNum)
-			for _, clientID := range clientList {
-				masterQueue[clientID][*utils.LastElement(setNumList)] = make([]*pb.Transaction, 0)
+				return []*TestSet{}, err
 			}
 
-		}
-
-		// If record is LF, add new set number to set number list
-		if record[1] == "LF" {
-			setNumList = append(setNumList, SetNumber{
-				N1: (*utils.LastElement(setNumList)).N1,
-				N2: (*utils.LastElement(setNumList)).N2 + 1,
+			liveNodes := parseNodeString(record[2], nodeMap)
+			emptyTransactionList := makeEmptyTransactionListMap(clientIDs)
+			testSets = append(testSets, &TestSet{
+				SetNumber:         setNumber,
+				TransactionsLists: []TransactionListMap{emptyTransactionList},
+				Overrides:         make([]Override, 0),
+				Live:              liveNodes,
 			})
 
-			// Initialize new lists for each client
-			for _, clientID := range clientList {
-				masterQueue[clientID][*utils.LastElement(setNumList)] = make([]*pb.Transaction, 0)
+		}
+		currentTestSet := utils.LastElement(testSets)
+
+		// If record first element is not "(" then it is an override
+		if record[1][0] != '(' {
+			override, err := parseOverrideString(record[1])
+			if err != nil {
+				return []*TestSet{}, err
 			}
-			continue // LF is not a transaction
+			currentTestSet.Overrides = append(currentTestSet.Overrides, override)
+
+			// Initialize new transaction list for the next leg of transactions
+			emptyTransactionList := makeEmptyTransactionListMap(clientIDs)
+			currentTestSet.TransactionsLists = append(currentTestSet.TransactionsLists, emptyTransactionList)
+			continue
 		}
 
 		// Parse and append transaction
 		t, err := parseTransactionString(record[1])
 		if err != nil {
-			return nil, nil, nil, err
+			return []*TestSet{}, err
 		}
-		masterQueue[t.Sender][*utils.LastElement(setNumList)] = append(masterQueue[t.Sender][*utils.LastElement(setNumList)], &t)
+		lastIdx := len(currentTestSet.TransactionsLists) - 1
+		currentTransactionList := currentTestSet.TransactionsLists[lastIdx]
+		currentTransactionList[t.Sender] = append(currentTransactionList[t.Sender], &t)
 	}
-	return masterQueue, setNumList, aliveNodesMap, nil
+	return testSets, nil
+}
+
+func makeEmptyTransactionListMap(clientIDs []string) TransactionListMap {
+	transactionListMap := make(TransactionListMap)
+	for _, clientID := range clientIDs {
+		transactionListMap[clientID] = make([]*pb.Transaction, 0)
+	}
+	return transactionListMap
 }
 
 // parseTransactionString parses a transaction string of the format "(Sender, Receiver, Amount)"
 func parseTransactionString(s string) (pb.Transaction, error) {
-	var p []string = strings.Split(strings.Trim(s, "()\""), ", ")
+	p := strings.Split(strings.Trim(s, "()\""), ", ")
 
-	amount, err := strconv.Atoi(p[2])
+	if len(p) != 3 {
+		return pb.Transaction{}, errors.New("invalid transaction string: " + s)
+	}
+
+	amount, err := strconv.ParseInt(p[2], 10, 64)
 	if err != nil {
 		return pb.Transaction{}, err
 	}
@@ -113,10 +108,43 @@ func parseTransactionString(s string) (pb.Transaction, error) {
 	return pb.Transaction{
 		Sender:   p[0],
 		Receiver: p[1],
-		Amount:   int64(amount)}, nil
+		Amount:   amount,
+	}, nil
 }
 
 // parseNodeString parses a string representation of a list of nodes of the format "[n1, n2, n3]"
-func parseNodeString(s string) []string {
-	return strings.Split(strings.Trim(s, "[]\""), ", ")
+func parseNodeString(s string, nodeMap map[string]*models.Node) []*models.Node {
+	nodes := make([]*models.Node, 0)
+
+	cleanedString := strings.Trim(s, "[]\"")
+	if cleanedString == "" {
+		return nodes
+	}
+
+	for _, n := range strings.Split(cleanedString, ", ") {
+		if node, exists := nodeMap[n]; exists {
+			nodes = append(nodes, node)
+		}
+	}
+	return nodes
+}
+
+// parseOverrideString
+func parseOverrideString(s string) (Override, error) {
+	cleanedString := strings.Trim(s, ", ")
+	if cleanedString == "" {
+		return Override{}, errors.New("invalid override string: " + s)
+	}
+
+	overrideOp := ""
+	switch cleanedString {
+	case "LF":
+		overrideOp = "kill leader"
+	default:
+		return Override{}, errors.New("invalid override string: " + s)
+	}
+
+	return Override{
+		OverrideType: overrideOp,
+	}, nil
 }

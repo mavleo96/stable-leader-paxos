@@ -11,10 +11,12 @@ import (
 )
 
 // ReconfigureNodes reconfigures the nodes to the given alive nodes
-func ReconfigureNodes(nodeMap map[string]*models.Node, aliveNodes []string) {
-	log.Infof("Reconfiguring nodes to %v", aliveNodes)
+func ReconfigureNodes(nodeMap map[string]*models.Node, aliveNodes []*models.Node) {
+	log.Infof("Reconfiguring nodes to %v", nodeStringSlice(aliveNodes))
 	for _, node := range nodeMap {
-		status := slices.Contains(aliveNodes, node.ID)
+		status := slices.ContainsFunc(aliveNodes, func(aliveNode *models.Node) bool {
+			return aliveNode.ID == node.ID
+		})
 		_, err := (*node.Client).ReconfigureNode(context.Background(), &wrapperspb.BoolValue{Value: status})
 		if err != nil {
 			log.Warnf("Error reconfiguring node %s: %v", node.ID, err)
@@ -42,4 +44,13 @@ func SendResetCommand(nodeMap map[string]*models.Node) {
 			log.Warnf("Error sending reset command to node %s: %v", node.ID, err)
 		}
 	}
+}
+
+// nodeStringSlice returns a slice of strings representing the IDs of the nodes
+func nodeStringSlice(nodes []*models.Node) []string {
+	nodeStrings := make([]string, 0)
+	for _, node := range nodes {
+		nodeStrings = append(nodeStrings, node.ID)
+	}
+	return nodeStrings
 }

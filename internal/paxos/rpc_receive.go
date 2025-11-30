@@ -111,7 +111,7 @@ func (s *PaxosServer) NewViewRequest(req *pb.NewViewMessage, stream pb.PaxosNode
 	for _, acceptMessage := range req.AcceptLog {
 		acceptedMessage, err := s.acceptor.AcceptRequestHandler(acceptMessage)
 		if err != nil {
-			log.Fatal(err)
+			log.Warnf("[NewViewRequest] Failed to handle accept message %v: %v", utils.LoggingString(acceptMessage), err)
 			return err
 		}
 

@@ -32,7 +32,7 @@ func (s *PaxosServer) InitiateCatchupHandler() {
 	if checkpoint != nil {
 		log.Infof("[InitiateCatchupHandler] Installing checkpoint for sequence number %d, %s", checkpoint.SequenceNum, checkpoint.String())
 		s.executor.checkpointer.AddCheckpoint(checkpoint.SequenceNum, checkpoint.Snapshot)
-		s.executor.installCheckpointCh <- checkpoint.SequenceNum
+		s.executor.GetInstallCheckpointChannel() <- checkpoint.SequenceNum
 	}
 
 	// Handle commit log

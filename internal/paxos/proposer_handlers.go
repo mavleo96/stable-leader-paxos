@@ -142,7 +142,7 @@ func (p *Proposer) RunNewViewPhase(ballotNumber *pb.BallotNumber, checkpointedSe
 	for {
 		// Accept messages are processed until context is cancelled or response channel is closed
 		select {
-		case <-p.phaseManager.GetTimerCtx().Done():
+		case <-p.phaseManager.GetProposerCtx().Done():
 			log.Infof("[RunNewViewPhase] New view phase cancelled for ballot number %s", utils.LoggingString(ballotNumber))
 			return
 		case acceptedMessage, ok := <-responseCh:

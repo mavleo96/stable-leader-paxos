@@ -86,6 +86,7 @@ func (pm *PhaseManager) PrepareRequestHandler(prepareMessage *pb.PrepareMessage)
 	}, nil
 }
 
+// TODO: Improve design later
 // InitiatePrepareHandler initiates the prepare phase
 func (p *Proposer) InitiatePrepareHandler(ballotNumber *pb.BallotNumber) bool {
 	// Create prepare message

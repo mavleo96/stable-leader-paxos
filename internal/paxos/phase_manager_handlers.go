@@ -16,7 +16,7 @@ func (pm *PhaseManager) PrepareQueueHandler(expiredTime time.Time) (bool, *pb.Ba
 	log.Infof("[PrepareQueueHandler] Highest valid prepare message in log: %s, valid: %t", utils.LoggingString(highestBallotNumber), valid)
 
 	// Loop through prepare messages
-	for _, prepareMessageEntry := range pm.prepareMessageLog {
+	for _, prepareMessageEntry := range pm.GetPrepareMessageLog() {
 		// If ballot number is not the same, respond false on channel
 		if compareBallotNumbers(prepareMessageEntry.PrepareMessage.B, highestBallotNumber) != 0 {
 			// Respond false on channel
@@ -107,24 +107,24 @@ func (p *Proposer) InitiatePrepareHandler(ballotNumber *pb.BallotNumber) bool {
 	ackMessages = append(ackMessages, ackMessageEntry)
 collectLoop:
 	for {
-		select {
-		// TODO: maybe don't use timer ctx here
-		case <-p.phaseManager.GetTimerCtx().Done():
-			log.Warnf("[InitiatePrepareHandler] Timer context done for ballot number %s at %d", utils.LoggingString(ballotNumber), time.Now().UnixMilli())
+
+		// // TODO: maybe don't use timer ctx here
+		// case <-p.phaseManager.GetTimerCtx().Done():
+		// 	log.Warnf("[InitiatePrepareHandler] Timer context done for ballot number %s at %d", utils.LoggingString(ballotNumber), time.Now().UnixMilli())
+		// 	return false
+		ackMessage, ok := <-responseCh
+		if !ok {
+			log.Warnf("[InitiatePrepareHandler] Response channel closed for ballot number %s", utils.LoggingString(ballotNumber))
 			return false
-		case ackMessage, ok := <-responseCh:
-			if !ok {
-				log.Warnf("[InitiatePrepareHandler] Response channel closed for ballot number %s", utils.LoggingString(ballotNumber))
-				return false
-			}
-			ackMessages = append(ackMessages, ackMessage)
-			accepted++
-			if accepted >= p.config.F+1 {
-				log.Infof("[InitiatePrepareHandler] Accepted quorum for ballot number %s", utils.LoggingString(ballotNumber))
-				// return true, ackMessages
-				break collectLoop
-			}
 		}
+		ackMessages = append(ackMessages, ackMessage)
+		accepted++
+		if accepted >= p.config.F+1 {
+			log.Infof("[InitiatePrepareHandler] Accepted quorum for ballot number %s", utils.LoggingString(ballotNumber))
+			// return true, ackMessages
+			break collectLoop
+		}
+
 	}
 
 	// Aggregate ack messages
@@ -152,29 +152,19 @@ collectLoop:
 		p.state.StateLog.CreateRecordIfNotExists(ballotNumber, acceptMessage.SequenceNum, acceptMessage.Message)
 		p.state.StateLog.SetAccepted(acceptMessage.SequenceNum)
 	}
-	// Set leader
-	// Since state logs are updated, it is safe to set leader to self
-	// Check and update phase
-	// if !p.phaseManager.ProposerPhaseChangeHandler(ballotNumber) {
-	// 	return false
-	// }
+	// Set leader and reset timer and proposer contexts
 	p.state.SetLeader(p.id)
 	p.phaseManager.ResetTimerCtx()
-	// p.state.SetBallotNumber(ballotNumber)
-	// p.state.SetLeader(p.id)
-	// p.state.ResetForwardedRequestsLog()
-	// p.phaseManager.CancelPhaseCtx()
+	p.phaseManager.ResetProposerCtx()
 
 	go p.RunNewViewPhase(ballotNumber, checkpointedSequenceNum, acceptMessages)
 	log.Infof("[InitiatePrepareHandler] New leader with promised ballot number %s at %d", utils.LoggingString(ballotNumber), time.Now().UnixMilli())
 	return true
 }
 
-// AcceptorBallotNumberHandler handles the ballot number for the acceptor
-func (pm *PhaseManager) AcceptorBallotNumberHandler(ballotNumber *pb.BallotNumber) bool {
-	pm.mutex.Lock()
-	defer pm.mutex.Unlock()
-
+// HandleBallotNumber validates and updates the ballot number when a higher ballot is received
+func (pm *PhaseManager) HandleBallotNumber(ballotNumber *pb.BallotNumber) bool {
+	// Compare ballot numbers; return true if ballot is valid and false if not
 	switch compareBallotNumbers(ballotNumber, pm.state.GetBallotNumber()) {
 	case 1:
 		// Update state and stop timer
@@ -182,19 +172,18 @@ func (pm *PhaseManager) AcceptorBallotNumberHandler(ballotNumber *pb.BallotNumbe
 		pm.state.SetLeader(ballotNumber.NodeID)
 		pm.state.ResetForwardedRequestsLog()
 		pm.timer.Stop()
+		pm.ResetTimerCtx()
+		pm.ResetProposerCtx()
 
-		log.Infof("[PhaseManager] Changed ballot number to %s", utils.LoggingString(ballotNumber))
+		log.Infof("[HandleBallotNumber] Changed ballot number to %s", utils.LoggingString(ballotNumber))
 
-		// Return true to indicate phase is valid
 		return true
 	case 0:
-		// Return true to indicate phase is valid
 		return true
-		// Return false to indicate phase is invalid
 	case -1:
 		return false
 	default:
-		log.Warnf("Invalid ballot number (%s vs %s) comparison: %d", utils.LoggingString(pm.state.GetBallotNumber()), utils.LoggingString(ballotNumber), compareBallotNumbers(pm.state.GetBallotNumber(), ballotNumber))
+		log.Panicf("Invalid ballot number (%s vs %s) comparison: %d", utils.LoggingString(pm.state.GetBallotNumber()), utils.LoggingString(ballotNumber), compareBallotNumbers(pm.state.GetBallotNumber(), ballotNumber))
 		return false
 	}
 }

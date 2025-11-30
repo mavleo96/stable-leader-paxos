@@ -17,7 +17,6 @@ type ServerState struct {
 	lastExecutedSequenceNum     int64
 	lastCheckpointedSequenceNum int64
 	forwardedRequestsLog        []*pb.TransactionRequest
-	// prepareMessageLog           []*pb.PrepareMessage
 
 	// Self-managed components
 	StateLog   *StateLog
@@ -166,36 +165,15 @@ func (s *ServerState) ResetForwardedRequestsLog() {
 	s.forwardedRequestsLog = make([]*pb.TransactionRequest, 0)
 }
 
-// // AddPrepareMessage adds a prepare message to the prepare message log
-// func (s *ServerState) AddPrepareMessage(prepareMessage *pb.PrepareMessage) {
-// 	s.mutex.Lock()
-// 	defer s.mutex.Unlock()
-// 	s.prepareMessageLog = append(s.prepareMessageLog, prepareMessage)
-// }
-
-// // GetHighestBallotNumberInPrepareMessageLog gets the highest ballot number from the prepare message log
-// func (s *ServerState) GetHighestBallotNumberInPrepareMessageLog() *pb.BallotNumber {
-// 	s.mutex.RLock()
-// 	defer s.mutex.RUnlock()
-// 	highestBallotNumber := s.b
-// 	for _, prepareMessage := range s.prepareMessageLog {
-// 		// if ballotNumberIsHigher(highestBallotNumber, prepareMessage.B) {
-// 		if compareBallotNumbers(prepareMessage.B, highestBallotNumber) == 1 {
-// 			highestBallotNumber = prepareMessage.B
-// 		}
-// 	}
-// 	return highestBallotNumber
-// }
-
 // Reset resets the server state
 func (s *ServerState) Reset() {
 	s.mutex.Lock()
 	defer s.mutex.Unlock()
-	s.b = &pb.BallotNumber{N: 0, NodeID: ""}
+	s.b = &pb.BallotNumber{N: 1, NodeID: "n1"}
+	s.leader = "n1"
 	s.lastExecutedSequenceNum = 0
 	s.lastCheckpointedSequenceNum = 0
 	s.forwardedRequestsLog = make([]*pb.TransactionRequest, 0)
-	// s.prepareMessageLog = make([]*pb.PrepareMessage, 0)
 	s.StateLog.Reset()
 	s.DedupTable.Reset()
 }
@@ -210,8 +188,7 @@ func CreateServerState(id string) *ServerState {
 		lastExecutedSequenceNum:     0,
 		lastCheckpointedSequenceNum: 0,
 		forwardedRequestsLog:        make([]*pb.TransactionRequest, 0),
-		// prepareMessageLog:           make([]*pb.PrepareMessage, 0),
-		StateLog:   CreateStateLog(id),
-		DedupTable: CreateDedupTable(),
+		StateLog:                    CreateStateLog(id),
+		DedupTable:                  CreateDedupTable(),
 	}
 }

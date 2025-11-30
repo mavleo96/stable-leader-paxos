@@ -15,12 +15,9 @@ func (s *PaxosServer) ReconfigureNode(ctx context.Context, status *wrapperspb.Bo
 		return &emptypb.Empty{}, nil
 	}
 
-	// Set node status and cleanup timer
-	s.config.Alive = status.Value
-
 	// If node is alive, set leader to empty string and start timer and catchup routine
 	if status.Value {
-		go s.CatchupRoutine()
+		s.InitiateCatchupHandler()
 		s.config.Alive = true
 	} else {
 		s.config.Alive = false
@@ -36,7 +33,7 @@ func (s *PaxosServer) KillLeader(ctx context.Context, in *emptypb.Empty) (*empty
 		return &emptypb.Empty{}, nil
 	}
 	s.config.Alive = false
-	// s.phaseManager.ResetTimerCtx()
+	s.phaseManager.CancelProposerCtx()
 	s.phaseManager.timer.Stop()
 	log.Warnf("Node %s status changed to %v", s.ID, s.config.Alive)
 	return &emptypb.Empty{}, nil

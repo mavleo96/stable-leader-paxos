@@ -18,6 +18,14 @@ func (s *PaxosServer) TransferRequest(ctx context.Context, req *pb.TransactionRe
 		return nil, status.Errorf(codes.Unavailable, "node not alive")
 	}
 
+	// Ignore if timer context is cancelled
+	select {
+	case <-s.phaseManager.GetTimerCtx().Done():
+		log.Warnf("[TransferRequest] Timer context cancelled; ignoring request %s", utils.LoggingString(req))
+		return EmptyTransactionResponse, status.Errorf(codes.Aborted, "timer context cancelled")
+	default:
+	}
+
 	// // Get current ballot number
 	currentBallotNumber := s.state.GetBallotNumber()
 	log.Infof("[TransferRequest] Request %s to be processed with current ballot number: %s", utils.LoggingString(req), utils.LoggingString(currentBallotNumber))

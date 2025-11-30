@@ -13,11 +13,6 @@ func (p *Proposer) HandleTransactionRequest(req *pb.TransactionRequest) error {
 	// Get current ballot number
 	currentBallotNumber := p.state.GetBallotNumber()
 
-	// Check if leader
-	if !p.state.IsLeader() {
-		return errors.New("not leader")
-	}
-
 	// Assign a sequence number and create a record if it doesn't exist
 	sequenceNum, created := p.state.AssignSequenceNumberAndCreateRecord(currentBallotNumber, req)
 	log.Infof("[Proposer] Assigned sequence number %d for request %s", sequenceNum, utils.LoggingString(req))
@@ -27,6 +22,11 @@ func (p *Proposer) HandleTransactionRequest(req *pb.TransactionRequest) error {
 	}
 
 	// Note: We are accepting the request even if the timer is expired; but this maybe handled in transfer.go where this function is called
+	select {
+	case <-p.phaseManager.GetProposerCtx().Done():
+		return errors.New("not leader/proposer")
+	default:
+	}
 
 	// Run accept phase and set accepted flag
 	if !p.state.StateLog.IsCommitted(sequenceNum) {
@@ -48,8 +48,9 @@ func (p *Proposer) HandleTransactionRequest(req *pb.TransactionRequest) error {
 			if err != nil {
 				return err
 			}
-		case <-p.phaseManager.GetTimerCtx().Done():
-			return errors.New("timer context cancelled")
+		case <-p.phaseManager.GetProposerCtx().Done():
+			log.Warnf("[Proposer] Accept phase cancelled for request %s while waiting for accepted messages", utils.LoggingString(req))
+			return errors.New("not leader/proposer")
 		}
 	}
 

@@ -13,7 +13,8 @@ import (
 func (a *Acceptor) AcceptRequestHandler(acceptMessage *pb.AcceptMessage) (*pb.AcceptedMessage, error) {
 
 	// Check and update phase
-	if !a.phaseManager.AcceptorBallotNumberHandler(acceptMessage.B) {
+	if !a.phaseManager.HandleBallotNumber(acceptMessage.B) {
+		log.Warnf("[Acceptor] Ballot number %s is lower than promised ballot number %s", utils.LoggingString(acceptMessage.B), utils.LoggingString(a.state.GetBallotNumber()))
 		return nil, errors.New("ballot number is lower than promised ballot number")
 	}
 
@@ -46,7 +47,8 @@ func (a *Acceptor) AcceptRequestHandler(acceptMessage *pb.AcceptMessage) (*pb.Ac
 func (a *Acceptor) CommitRequestHandler(commitMessage *pb.CommitMessage) (*emptypb.Empty, error) {
 
 	// Check and update phase
-	if !a.phaseManager.AcceptorBallotNumberHandler(commitMessage.B) {
+	if !a.phaseManager.HandleBallotNumber(commitMessage.B) {
+		log.Warnf("[Acceptor] Ballot number %s is lower than promised ballot number %s", utils.LoggingString(commitMessage.B), utils.LoggingString(a.state.GetBallotNumber()))
 		return nil, errors.New("ballot number is lower than promised ballot number")
 	}
 
@@ -80,9 +82,11 @@ func (a *Acceptor) CommitRequestHandler(commitMessage *pb.CommitMessage) (*empty
 	return &emptypb.Empty{}, nil
 }
 
+// NewViewRequestHandler handles the new view request for backup node
 func (a *Acceptor) NewViewRequestHandler(newViewMessage *pb.NewViewMessage) error {
 	// Check and update phase
-	if !a.phaseManager.AcceptorBallotNumberHandler(newViewMessage.B) {
+	if !a.phaseManager.HandleBallotNumber(newViewMessage.B) {
+		log.Warnf("[Acceptor] Ballot number %s is lower than promised ballot number %s", utils.LoggingString(newViewMessage.B), utils.LoggingString(a.state.GetBallotNumber()))
 		return errors.New("ballot number is lower than promised ballot number")
 	}
 

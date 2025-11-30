@@ -12,24 +12,25 @@ import (
 type PhaseManager struct {
 	mutex sync.Mutex
 
+	// Components
+	timer *SafeTimer
+	state *ServerState
+
 	// Timer context
 	// Note: this context is owned by phase manager and not the timer
 	// because we have have to stop/reset the timer without cancelling the context
 	// Ex: When we recieve we a request with higher ballot is handled by acceptor module
-	timerCtx     context.Context
-	timerCancel  context.CancelFunc
-	timerExpired bool
+	timerCtx    context.Context
+	timerCancel context.CancelFunc
 
 	// When a higher ballot number is received and if proposer, we need to stop proposer handlers without timing out
 	// Because timing out triggers prepare handlers
+	proposerCtx    context.Context
+	proposerCancel context.CancelFunc
 
 	// Prepare message log
 	prepareMessageLog    []*PrepareMessageEntry
 	sendPrepareMessageCh chan *PrepareMessageEntry
-
-	// Components
-	timer *SafeTimer
-	state *ServerState
 
 	// Function pointers
 	initiatePrepareHandler func(ballotNumber *pb.BallotNumber) bool
@@ -38,9 +39,8 @@ type PhaseManager struct {
 // PrepareMessageEntry is the entry for a prepare message
 type PrepareMessageEntry struct {
 	PrepareMessage *pb.PrepareMessage
-	// BallotNumber   *pb.BallotNumber
-	ResponseCh chan bool
-	Timestamp  time.Time
+	ResponseCh     chan bool
+	Timestamp      time.Time
 }
 
 // GetSendPrepareMessageCh returns the channel to send prepare messages to the phase manager
@@ -57,7 +57,6 @@ func (pm *PhaseManager) GetTimerCtx() context.Context {
 func (pm *PhaseManager) CancelTimerCtx() {
 	pm.mutex.Lock()
 	defer pm.mutex.Unlock()
-	pm.timerExpired = true
 	pm.timerCancel()
 }
 
@@ -65,15 +64,26 @@ func (pm *PhaseManager) CancelTimerCtx() {
 func (pm *PhaseManager) ResetTimerCtx() {
 	pm.mutex.Lock()
 	defer pm.mutex.Unlock()
-	pm.timerExpired = false
 	pm.timerCtx, pm.timerCancel = context.WithCancel(context.Background())
 }
 
-// GetTimerExpired returns the timer expired status
-func (pm *PhaseManager) GetTimerExpired() bool {
+// GetProposerCtx returns the context of the proposer
+func (pm *PhaseManager) GetProposerCtx() context.Context {
+	return pm.proposerCtx
+}
+
+// CancelProposerCtx cancels the context of the proposer
+func (pm *PhaseManager) CancelProposerCtx() {
 	pm.mutex.Lock()
 	defer pm.mutex.Unlock()
-	return pm.timerExpired
+	pm.proposerCancel()
+}
+
+// ResetProposerCtx resets the context of the proposer
+func (pm *PhaseManager) ResetProposerCtx() {
+	pm.mutex.Lock()
+	defer pm.mutex.Unlock()
+	pm.proposerCtx, pm.proposerCancel = context.WithCancel(context.Background())
 }
 
 // AddPrepareMessageToLog adds a prepare message to the log
@@ -81,6 +91,13 @@ func (pm *PhaseManager) AddPrepareMessageToLog(prepareMessageEntry *PrepareMessa
 	pm.mutex.Lock()
 	defer pm.mutex.Unlock()
 	pm.prepareMessageLog = append(pm.prepareMessageLog, prepareMessageEntry)
+}
+
+// GetPrepareMessageLog returns the prepare message log
+func (pm *PhaseManager) GetPrepareMessageLog() []*PrepareMessageEntry {
+	pm.mutex.Lock()
+	defer pm.mutex.Unlock()
+	return pm.prepareMessageLog
 }
 
 // GetHighestValidPrepareMessageInLog gets the highest valid prepare message in the log
@@ -103,19 +120,6 @@ func (pm *PhaseManager) GetHighestValidPrepareMessageInLog(expiryTime time.Time)
 	return highestBallotNumber, valid
 }
 
-// // GetHighestBallotNumberInPrepareMessageLog gets the highest ballot number from the prepare message log
-// func (pm *PhaseManager) GetHighestBallotNumberInPrepareMessageLog() *pb.BallotNumber {
-// 	pm.mutex.Lock()
-// 	defer pm.mutex.Unlock()
-// 	highestBallotNumber := pm.state.GetBallotNumber()
-// 	for _, prepareMessage := range pm.prepareMessageLog {
-// 		if compareBallotNumbers(prepareMessage.B, highestBallotNumber) == 1 {
-// 			highestBallotNumber = prepareMessage.B
-// 		}
-// 	}
-// 	return highestBallotNumber
-// }
-
 // Reset resets the phase manager
 func (pm *PhaseManager) Reset() {
 	pm.mutex.Lock()
@@ -125,8 +129,10 @@ func (pm *PhaseManager) Reset() {
 	// for len(pm.sendPrepareMessageCh) > 0 {
 	// 	<-pm.sendPrepareMessageCh
 	// }
-	pm.sendPrepareMessageCh = make(chan *PrepareMessageEntry, 100)
-	pm.timerCtx, pm.timerCancel = context.WithCancel(context.Background())
+	// pm.sendPrepareMessageCh = make(chan *PrepareMessageEntry, 10)
+	pm.ResetTimerCtx()
+	pm.ResetProposerCtx()
+	// pm.CancelProposerCtx()
 }
 
 // CreatePhaseManager creates a new phase manager instance
@@ -135,13 +141,13 @@ func CreatePhaseManager(state *ServerState, timer *SafeTimer) *PhaseManager {
 	// and the phase change complete channel is used to signal that the phase change is complete
 	pm := &PhaseManager{
 		mutex:                sync.Mutex{},
+		prepareMessageLog:    make([]*PrepareMessageEntry, 0),
+		sendPrepareMessageCh: make(chan *PrepareMessageEntry, 10),
 		state:                state,
 		timer:                timer,
-		timerExpired:         false,
-		prepareMessageLog:    make([]*PrepareMessageEntry, 0),
-		sendPrepareMessageCh: make(chan *PrepareMessageEntry, 100),
 	}
-	pm.timerCtx, pm.timerCancel = context.WithCancel(context.Background())
-	// pm.timerCancel()
+	pm.ResetTimerCtx()
+	pm.ResetProposerCtx()
+	// pm.CancelProposerCtx()
 	return pm
 }

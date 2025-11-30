@@ -94,6 +94,12 @@ executeLoop:
 				continue executeLoop
 			}
 
+			// If executed sequence number is greater than or equal to checkpoint sequence number, skip
+			if sequenceNum <= e.state.GetLastExecutedSequenceNum() {
+				log.Infof("[Executor] Checkpoint for sequence number %d is already installed", sequenceNum)
+				continue executeLoop
+			}
+
 			// Install checkpoint
 			snapshot := checkpoint.Snapshot
 			for clientID, balance := range snapshot {

@@ -222,6 +222,7 @@ func (s *PaxosServer) CatchupRequest(ctx context.Context, req *pb.CatchupRequest
 
 	// Logger: Add sent catchup message
 	s.logger.AddSentCatchupMessage(catchupMessage)
+	log.Infof("[CatchupRequest] Sent catchup message %v", utils.LoggingString(catchupMessage))
 
 	return catchupMessage, nil
 }

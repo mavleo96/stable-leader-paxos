@@ -12,6 +12,36 @@ import (
 	"google.golang.org/grpc/status"
 )
 
+// InitiateCatchupHandler is the handler for the catch up
+func (s *PaxosServer) InitiateCatchupHandler() {
+	maxSequenceNum := s.state.GetLastExecutedSequenceNum()
+	catchupMessage, err := s.SendCatchUpRequest(maxSequenceNum)
+	log.Infof("[InitiateCatchupHandler] Got catch up message from leader: %s", catchupMessage.String())
+	if err != nil {
+		log.Warnf("[InitiateCatchupHandler] Failed to send catch up request: %v", err)
+		return
+	}
+	if !s.phaseManager.HandleBallotNumber(catchupMessage.B) {
+		log.Warnf("[InitiateCatchupHandler] Failed to check and update phase for ballot number %s", utils.LoggingString(catchupMessage.B))
+		return
+	}
+	log.Infof("[InitiateCatchupHandler] Received catch up message from leader %s: %v, msg: %s", catchupMessage.B.NodeID, catchupMessage.B, catchupMessage.String())
+
+	// Install checkpoint if not nil
+	checkpoint := catchupMessage.Checkpoint
+	if checkpoint != nil {
+		log.Infof("[InitiateCatchupHandler] Installing checkpoint for sequence number %d, %s", checkpoint.SequenceNum, checkpoint.String())
+		s.executor.checkpointer.AddCheckpoint(checkpoint.SequenceNum, checkpoint.Snapshot)
+		s.executor.installCheckpointCh <- checkpoint.SequenceNum
+	}
+
+	// Handle commit log
+	for _, record := range catchupMessage.CommitLog {
+		go s.acceptor.CommitRequestHandler(record)
+	}
+	log.Infof("[InitiateCatchupHandler] Finished catching up")
+}
+
 // SendCatchUpRequest sends a catch up request to the leader
 func (s *PaxosServer) SendCatchUpRequest(sequenceNum int64) (*pb.CatchupMessage, error) {
 	catchupRequest := &pb.CatchupRequestMessage{NodeID: s.ID, SequenceNum: sequenceNum}
@@ -44,38 +74,10 @@ func (s *PaxosServer) SendCatchUpRequest(sequenceNum int64) (*pb.CatchupMessage,
 		log.Warnf("[SendCatchUpRequest] Failed to get catch up message from leader")
 		return nil, status.Errorf(codes.Unavailable, "failed to get catch up message from leader")
 	}
+	log.Infof("[SendCatchUpRequest] Received catch up message from leader: %s", catchupMessage.String())
 
 	// Logger: Add received catchup message
 	s.logger.AddReceivedCatchupMessage(catchupMessage)
 
 	return catchupMessage, nil
-}
-
-// CatchupRoutine is the main routine for the catch up
-func (s *PaxosServer) CatchupRoutine() {
-	maxSequenceNum := s.state.MaxSequenceNum()
-	catchupMessage, err := s.SendCatchUpRequest(maxSequenceNum)
-	if err != nil {
-		log.Warnf("[CatchupRoutine] Failed to send catch up request: %v", err)
-		return
-	}
-	if !s.phaseManager.AcceptorBallotNumberHandler(catchupMessage.B) {
-		log.Warnf("[CatchupRoutine] Failed to check and update phase for ballot number %s", utils.LoggingString(catchupMessage.B))
-		return
-	}
-	log.Infof("[CatchupRoutine] Received catch up message from leader %s: %v, msg: %s", catchupMessage.B.NodeID, catchupMessage.B, catchupMessage.String())
-	// s.state.SetLeader(catchupMessage.B.NodeID)
-	// s.state.SetBallotNumber(catchupMessage.B)
-
-	// Install checkpoint if not nil
-	checkpoint := catchupMessage.Checkpoint
-	if checkpoint != nil {
-		log.Infof("[CatchupRoutine] Installing checkpoint for sequence number %d, %s", checkpoint.SequenceNum, checkpoint.String())
-		s.executor.checkpointer.AddCheckpoint(checkpoint.SequenceNum, checkpoint.Snapshot)
-		s.executor.installCheckpointCh <- checkpoint.SequenceNum
-	}
-
-	for _, record := range catchupMessage.CommitLog {
-		s.acceptor.CommitRequestHandler(record)
-	}
 }

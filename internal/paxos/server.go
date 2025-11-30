@@ -57,9 +57,9 @@ func CreatePaxosServer(selfNode *models.Node, peerNodes map[string]*models.Node,
 	paxosTimer := CreateSafeTimer(int64(i), int64(len(peerNodes)+1))
 
 	logger := CreateLogger()
-	phaseManager := CreatePhaseManager(serverState, paxosTimer)
+	phaseManager := CreatePhaseManager(selfNode.ID, serverState, paxosTimer)
 	checkpointer := CreateCheckpointManager(selfNode.ID, serverState, serverConfig, peerNodes, logger)
-	proposer := CreateProposer(selfNode.ID, serverState, serverConfig, peerNodes, logger, checkpointer, phaseManager, executionTriggerCh, installCheckpointCh)
+	proposer := CreateProposer(selfNode.ID, serverState, serverConfig, peerNodes, phaseManager, logger, checkpointer, executionTriggerCh, installCheckpointCh)
 	acceptor := CreateAcceptor(selfNode.ID, serverState, serverConfig, peerNodes, phaseManager, executionTriggerCh)
 	executor := CreateExecutor(serverState, serverConfig, bankDB, checkpointer, paxosTimer, executionTriggerCh, installCheckpointCh)
 

@@ -28,7 +28,7 @@ func (p *Proposer) Reset() {
 }
 
 // CreateProposer creates a new proposer
-func CreateProposer(id string, state *ServerState, config *ServerConfig, peers map[string]*models.Node, logger *Logger, checkpointer *CheckpointManager, phaseManager *PhaseManager, executionTriggerCh chan ExecuteRequest, installCheckpointCh chan int64) *Proposer {
+func CreateProposer(id string, state *ServerState, config *ServerConfig, peers map[string]*models.Node, phaseManager *PhaseManager, logger *Logger, checkpointer *CheckpointManager, executionTriggerCh chan ExecuteRequest, installCheckpointCh chan int64) *Proposer {
 	return &Proposer{
 		id:                  id,
 		state:               state,

@@ -64,8 +64,9 @@ prepareLoop:
 
 			// Update state
 			pm.state.SetBallotNumber(newBallotNumber)
+			pm.ResetTimerCtx()
 
-			go pm.initiatePrepareHandler(newBallotNumber)
+			pm.initiatePrepareHandler(newBallotNumber)
 		}
 	}
 }

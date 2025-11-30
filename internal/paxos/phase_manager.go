@@ -11,6 +11,7 @@ import (
 // PhaseManager is the manager for the phases of the paxos algorithm
 type PhaseManager struct {
 	mutex sync.Mutex
+	id    string
 
 	// Components
 	timer *SafeTimer
@@ -136,11 +137,12 @@ func (pm *PhaseManager) Reset() {
 }
 
 // CreatePhaseManager creates a new phase manager instance
-func CreatePhaseManager(state *ServerState, timer *SafeTimer) *PhaseManager {
+func CreatePhaseManager(id string, state *ServerState, timer *SafeTimer) *PhaseManager {
 	// The phase manager is created in expired state
 	// and the phase change complete channel is used to signal that the phase change is complete
 	pm := &PhaseManager{
 		mutex:                sync.Mutex{},
+		id:                   id,
 		prepareMessageLog:    make([]*PrepareMessageEntry, 0),
 		sendPrepareMessageCh: make(chan *PrepareMessageEntry, 10),
 		state:                state,
@@ -148,6 +150,7 @@ func CreatePhaseManager(state *ServerState, timer *SafeTimer) *PhaseManager {
 	}
 	pm.ResetTimerCtx()
 	pm.ResetProposerCtx()
+	// pm.CancelTimerCtx()
 	// pm.CancelProposerCtx()
 	return pm
 }

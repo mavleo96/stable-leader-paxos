@@ -18,6 +18,11 @@ func (s *PaxosServer) TransferRequest(ctx context.Context, req *pb.TransactionRe
 		return nil, status.Errorf(codes.Unavailable, "node not alive")
 	}
 
+	// Note: race condition in intiate prepare to elected event
+	// Ballot number is set before elected event; transfer request can be skipped by proposer context since it is not reset yet
+	// Then timer won't increase
+	// So reset timer context before initiating prepare handler and cancel it if election fails
+
 	// Ignore if timer context is cancelled
 	select {
 	case <-s.phaseManager.GetTimerCtx().Done():
@@ -26,12 +31,12 @@ func (s *PaxosServer) TransferRequest(ctx context.Context, req *pb.TransactionRe
 	default:
 	}
 
-	// // Get current ballot number
+	// Get current ballot number
 	currentBallotNumber := s.state.GetBallotNumber()
 	log.Infof("[TransferRequest] Request %s to be processed with current ballot number: %s", utils.LoggingString(req), utils.LoggingString(currentBallotNumber))
 
 	// Forward request if not leader
-	if !s.state.IsLeader() {
+	if currentBallotNumber.NodeID != s.ID {
 		// If request is already forwarded, return empty transaction response
 		if s.state.InForwardedRequestsLog(req) {
 			log.Warnf("[TransferRequest] Request %s already forwarded for ballot number: %s", utils.LoggingString(req), utils.LoggingString(currentBallotNumber))
@@ -53,14 +58,20 @@ func (s *PaxosServer) TransferRequest(ctx context.Context, req *pb.TransactionRe
 		s.phaseManager.timer.IncrementWaitCountOrStart()
 
 		// Forward request to leader
-		leader := s.state.GetLeader()
-		if leader != "" {
-			go s.ForwardToLeader(leader, req)
-		}
+		leader := currentBallotNumber.NodeID
+		go s.ForwardToLeader(leader, req)
 		return EmptyTransactionResponse, status.Errorf(codes.Aborted, "not leader; forwarded to leader")
 	}
 
 	// Leader logic
+
+	// Ignore if proposer context not reset yet
+	select {
+	case <-s.phaseManager.GetProposerCtx().Done():
+		log.Warnf("[TransferRequest] Proposer context cancelled/not reset yet; ignoring request %s", utils.LoggingString(req))
+		return EmptyTransactionResponse, status.Errorf(codes.Aborted, "proposer context cancelled/not reset yet")
+	default:
+	}
 
 	// Logger: Add received transaction request
 	s.logger.AddReceivedTransactionRequest(req)

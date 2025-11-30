@@ -107,24 +107,24 @@ func (p *Proposer) InitiatePrepareHandler(ballotNumber *pb.BallotNumber) bool {
 	ackMessages = append(ackMessages, ackMessageEntry)
 collectLoop:
 	for {
-
-		// // TODO: maybe don't use timer ctx here
-		// case <-p.phaseManager.GetTimerCtx().Done():
-		// 	log.Warnf("[InitiatePrepareHandler] Timer context done for ballot number %s at %d", utils.LoggingString(ballotNumber), time.Now().UnixMilli())
-		// 	return false
-		ackMessage, ok := <-responseCh
-		if !ok {
-			log.Warnf("[InitiatePrepareHandler] Response channel closed for ballot number %s", utils.LoggingString(ballotNumber))
+		select {
+		case <-time.After(prepareTimeout):
+			log.Warnf("[InitiatePrepareHandler] Timer context done for ballot number %s at %d", utils.LoggingString(ballotNumber), time.Now().UnixMilli())
+			p.phaseManager.CancelTimerCtx()
 			return false
+		case ackMessage, ok := <-responseCh:
+			if !ok {
+				log.Warnf("[InitiatePrepareHandler] Response channel closed for ballot number %s", utils.LoggingString(ballotNumber))
+				p.phaseManager.CancelTimerCtx()
+				return false
+			}
+			ackMessages = append(ackMessages, ackMessage)
+			accepted++
+			if accepted >= p.config.F+1 {
+				log.Infof("[InitiatePrepareHandler] Accepted quorum for ballot number %s", utils.LoggingString(ballotNumber))
+				break collectLoop
+			}
 		}
-		ackMessages = append(ackMessages, ackMessage)
-		accepted++
-		if accepted >= p.config.F+1 {
-			log.Infof("[InitiatePrepareHandler] Accepted quorum for ballot number %s", utils.LoggingString(ballotNumber))
-			// return true, ackMessages
-			break collectLoop
-		}
-
 	}
 
 	// Aggregate ack messages
@@ -152,9 +152,8 @@ collectLoop:
 		p.state.StateLog.CreateRecordIfNotExists(ballotNumber, acceptMessage.SequenceNum, acceptMessage.Message)
 		p.state.StateLog.SetAccepted(acceptMessage.SequenceNum)
 	}
-	// Set leader and reset timer and proposer contexts
+	// Set leader and reset proposer contexts
 	p.state.SetLeader(p.id)
-	p.phaseManager.ResetTimerCtx()
 	p.phaseManager.ResetProposerCtx()
 
 	go p.RunNewViewPhase(ballotNumber, checkpointedSequenceNum, acceptMessages)
@@ -173,7 +172,8 @@ func (pm *PhaseManager) HandleBallotNumber(ballotNumber *pb.BallotNumber) bool {
 		pm.state.ResetForwardedRequestsLog()
 		pm.timer.Stop()
 		pm.ResetTimerCtx()
-		pm.ResetProposerCtx()
+		// pm.ResetProposerCtx()
+		pm.CancelProposerCtx()
 
 		log.Infof("[HandleBallotNumber] Changed ballot number to %s", utils.LoggingString(ballotNumber))
 

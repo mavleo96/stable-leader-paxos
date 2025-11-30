@@ -23,13 +23,6 @@ type ServerState struct {
 	DedupTable *DedupTable
 }
 
-// Leader is the leader of the paxos server
-func (s *ServerState) GetLeader() string {
-	s.mutex.RLock()
-	defer s.mutex.RUnlock()
-	return s.leader
-}
-
 // SetLeader sets the leader of the paxos server
 func (s *ServerState) SetLeader(leader string) {
 	s.mutex.Lock()

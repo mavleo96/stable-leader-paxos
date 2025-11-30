@@ -134,13 +134,13 @@ interactionLoop:
 			}
 			testSetCh <- *testSets[testSetIndex]
 		case "print log":
-			clientapp.SendPrintLogCommand(nodeMap, testSetIndex)
+			clientapp.SendPrintLogCommand(nodeMap, testSetIndex+1)
 		case "print db":
-			clientapp.SendPrintDBCommand(nodeMap, testSetIndex)
+			clientapp.SendPrintDBCommand(nodeMap, testSetIndex+1)
 		case "print status":
-			clientapp.SendPrintStatusCommand(nodeMap, testSetIndex, arg)
+			clientapp.SendPrintStatusCommand(nodeMap, testSetIndex+1, arg)
 		case "print view":
-			clientapp.SendPrintViewCommand(nodeMap, testSetIndex)
+			clientapp.SendPrintViewCommand(nodeMap, testSetIndex+1)
 		case "kill leader":
 			clientapp.KillLeader(nodeMap)
 		case "reset":

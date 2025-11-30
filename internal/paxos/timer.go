@@ -91,6 +91,12 @@ func randomTimeout(min time.Duration, max time.Duration) (time.Duration, error) 
 func CreateSafeTimer(i int64, n int64) *SafeTimer {
 	// Staggered timeout
 	timeout := minBackupTimeout + (maxBackupTimeout-minBackupTimeout)*time.Duration(i)/time.Duration(n)
+	// Random timeout
+	// timeout, err := randomTimeout(minBackupTimeout, maxBackupTimeout)
+	// if err != nil {
+	// 	log.Fatalf("[Timer] Failed to create safe timer: %v", err)
+	// }
+	log.Infof("[Timer] Created safe timer with timeout: %s", timeout)
 
 	t := &SafeTimer{
 		mutex:     sync.Mutex{},

@@ -60,7 +60,7 @@ func (p *Proposer) HandleTransactionRequest(req *pb.TransactionRequest) error {
 	// Send checkpoint message if sequence number is a multiple of k and purge
 	if err == nil && sequenceNum%p.config.K == 0 {
 		// Check if checkpoint is available
-		if p.checkpointer.GetCheckpoint(sequenceNum) == nil {
+		if p.checkpointer.GetCheckpoint(sequenceNum) != nil {
 			digest := p.checkpointer.GetCheckpoint(sequenceNum).Digest
 			p.SendCheckpointMessage(sequenceNum, digest)
 			p.checkpointer.Purge(sequenceNum)

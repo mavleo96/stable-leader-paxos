@@ -37,6 +37,13 @@ func (s *PaxosServer) TransferRequest(ctx context.Context, req *pb.TransactionRe
 
 	// Forward request if not leader
 	if currentBallotNumber.NodeID != s.ID {
+		// Check dedup table
+		timestamp, _ := s.state.DedupTable.GetLastResult(req.Sender)
+		if timestamp != 0 && req.Timestamp <= timestamp {
+			log.Warnf("[TransferRequest] Ignored %s; Last reply timestamp %d", utils.LoggingString(req), timestamp)
+			return EmptyTransactionResponse, status.Errorf(codes.AlreadyExists, "already processed")
+		}
+
 		// If request is already forwarded, return empty transaction response
 		if s.state.InForwardedRequestsLog(req) {
 			log.Warnf("[TransferRequest] Request %s already forwarded for ballot number: %s", utils.LoggingString(req), utils.LoggingString(currentBallotNumber))

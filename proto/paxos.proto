@@ -30,12 +30,16 @@ service PaxosNode {
 
     rpc ReconfigureNode (google.protobuf.BoolValue) returns (google.protobuf.Empty);
     rpc KillLeader (google.protobuf.Empty) returns (google.protobuf.Empty);
-    rpc ResetNode (google.protobuf.Empty) returns (google.protobuf.Empty);
+    rpc ResetNode (ResetRequest) returns (google.protobuf.Empty);
 }
 
 message StatusRequest {
     int64 testSet = 1;
     int64 sequenceNum = 2;
+}
+
+message ResetRequest {
+    int64 initBalance = 1;
 }
 
 // ---------- TransactionResponse ----------

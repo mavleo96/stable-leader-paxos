@@ -58,7 +58,7 @@ type PaxosNodeClient interface {
 	PrintView(ctx context.Context, in *wrapperspb.Int64Value, opts ...grpc.CallOption) (*emptypb.Empty, error)
 	ReconfigureNode(ctx context.Context, in *wrapperspb.BoolValue, opts ...grpc.CallOption) (*emptypb.Empty, error)
 	KillLeader(ctx context.Context, in *emptypb.Empty, opts ...grpc.CallOption) (*emptypb.Empty, error)
-	ResetNode(ctx context.Context, in *emptypb.Empty, opts ...grpc.CallOption) (*emptypb.Empty, error)
+	ResetNode(ctx context.Context, in *ResetRequest, opts ...grpc.CallOption) (*emptypb.Empty, error)
 }
 
 type paxosNodeClient struct {
@@ -227,7 +227,7 @@ func (c *paxosNodeClient) KillLeader(ctx context.Context, in *emptypb.Empty, opt
 	return out, nil
 }
 
-func (c *paxosNodeClient) ResetNode(ctx context.Context, in *emptypb.Empty, opts ...grpc.CallOption) (*emptypb.Empty, error) {
+func (c *paxosNodeClient) ResetNode(ctx context.Context, in *ResetRequest, opts ...grpc.CallOption) (*emptypb.Empty, error) {
 	out := new(emptypb.Empty)
 	err := c.cc.Invoke(ctx, PaxosNode_ResetNode_FullMethodName, in, out, opts...)
 	if err != nil {
@@ -255,7 +255,7 @@ type PaxosNodeServer interface {
 	PrintView(context.Context, *wrapperspb.Int64Value) (*emptypb.Empty, error)
 	ReconfigureNode(context.Context, *wrapperspb.BoolValue) (*emptypb.Empty, error)
 	KillLeader(context.Context, *emptypb.Empty) (*emptypb.Empty, error)
-	ResetNode(context.Context, *emptypb.Empty) (*emptypb.Empty, error)
+	ResetNode(context.Context, *ResetRequest) (*emptypb.Empty, error)
 	mustEmbedUnimplementedPaxosNodeServer()
 }
 
@@ -308,7 +308,7 @@ func (UnimplementedPaxosNodeServer) ReconfigureNode(context.Context, *wrapperspb
 func (UnimplementedPaxosNodeServer) KillLeader(context.Context, *emptypb.Empty) (*emptypb.Empty, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method KillLeader not implemented")
 }
-func (UnimplementedPaxosNodeServer) ResetNode(context.Context, *emptypb.Empty) (*emptypb.Empty, error) {
+func (UnimplementedPaxosNodeServer) ResetNode(context.Context, *ResetRequest) (*emptypb.Empty, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method ResetNode not implemented")
 }
 func (UnimplementedPaxosNodeServer) mustEmbedUnimplementedPaxosNodeServer() {}
@@ -598,7 +598,7 @@ func _PaxosNode_KillLeader_Handler(srv interface{}, ctx context.Context, dec fun
 }
 
 func _PaxosNode_ResetNode_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(emptypb.Empty)
+	in := new(ResetRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
@@ -610,7 +610,7 @@ func _PaxosNode_ResetNode_Handler(srv interface{}, ctx context.Context, dec func
 		FullMethod: PaxosNode_ResetNode_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(PaxosNodeServer).ResetNode(ctx, req.(*emptypb.Empty))
+		return srv.(PaxosNodeServer).ResetNode(ctx, req.(*ResetRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }

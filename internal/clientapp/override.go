@@ -5,6 +5,7 @@ import (
 	"slices"
 
 	"github.com/mavleo96/stable-leader-paxos/internal/models"
+	pb "github.com/mavleo96/stable-leader-paxos/pb"
 	log "github.com/sirupsen/logrus"
 	"google.golang.org/protobuf/types/known/emptypb"
 	"google.golang.org/protobuf/types/known/wrapperspb"
@@ -36,10 +37,10 @@ func KillLeader(nodeMap map[string]*models.Node) {
 }
 
 // SendResetCommand sends a reset command to all nodes
-func SendResetCommand(nodeMap map[string]*models.Node) {
+func SendResetCommand(nodeMap map[string]*models.Node, initBalance int64) {
 	log.Info("Node Reset command received")
 	for _, node := range nodeMap {
-		_, err := (*node.Client).ResetNode(context.Background(), &emptypb.Empty{})
+		_, err := (*node.Client).ResetNode(context.Background(), &pb.ResetRequest{InitBalance: initBalance})
 		if err != nil {
 			log.Warnf("Error sending reset command to node %s: %v", node.ID, err)
 		}

@@ -147,7 +147,7 @@ interactionLoop:
 			for _, clientID := range cfg.Clients {
 				resetChannels[clientID] <- true
 			}
-			clientapp.SendResetCommand(nodeMap)
+			clientapp.SendResetCommand(nodeMap, cfg.InitBalance)
 		case "exit":
 			break interactionLoop
 		default:

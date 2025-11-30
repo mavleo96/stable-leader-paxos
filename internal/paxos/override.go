@@ -3,6 +3,7 @@ package paxos
 import (
 	"context"
 
+	pb "github.com/mavleo96/stable-leader-paxos/pb"
 	log "github.com/sirupsen/logrus"
 	"google.golang.org/protobuf/types/known/emptypb"
 	"google.golang.org/protobuf/types/known/wrapperspb"
@@ -40,14 +41,14 @@ func (s *PaxosServer) KillLeader(ctx context.Context, in *emptypb.Empty) (*empty
 }
 
 // ResetNode resets the server state and database
-func (s *PaxosServer) ResetNode(ctx context.Context, req *emptypb.Empty) (*emptypb.Empty, error) {
+func (s *PaxosServer) ResetNode(ctx context.Context, req *pb.ResetRequest) (*emptypb.Empty, error) {
 	// Reset server state
 	s.state.Reset()
 	s.acceptor.Reset()
 	s.proposer.Reset()
 	s.phaseManager.Reset()
 	s.executor.Reset()
-	s.executor.db.ResetDB(10)
+	s.executor.db.ResetDB(req.InitBalance)
 	s.executor.checkpointer.Reset()
 	s.logger.Reset()
 

@@ -32,9 +32,16 @@ type PhaseManager struct {
 	// Prepare message log
 	prepareMessageLog    []*PrepareMessageEntry
 	sendPrepareMessageCh chan *PrepareMessageEntry
+	initiateElectionCh   chan InitiateElectionRequest
 
 	// Function pointers
 	initiatePrepareHandler func(ballotNumber *pb.BallotNumber) bool
+}
+
+// InitiateElectionRequest is the request to initiate election
+type InitiateElectionRequest struct {
+	ExpiredTime time.Time
+	SignalCh    chan<- bool
 }
 
 // PrepareMessageEntry is the entry for a prepare message
@@ -47,6 +54,11 @@ type PrepareMessageEntry struct {
 // GetSendPrepareMessageCh returns the channel to send prepare messages to the phase manager
 func (pm *PhaseManager) GetSendPrepareMessageCh() chan<- *PrepareMessageEntry {
 	return pm.sendPrepareMessageCh
+}
+
+// GetInitiateElectionCh returns the channel to initiate election
+func (pm *PhaseManager) GetInitiateElectionCh() chan<- InitiateElectionRequest {
+	return pm.initiateElectionCh
 }
 
 // GetTimerCtx returns the context of the timer
@@ -133,7 +145,8 @@ func (pm *PhaseManager) Reset() {
 	// pm.sendPrepareMessageCh = make(chan *PrepareMessageEntry, 10)
 	pm.ResetTimerCtx()
 	pm.ResetProposerCtx()
-	// pm.CancelProposerCtx()
+	pm.CancelTimerCtx()
+	pm.CancelProposerCtx()
 }
 
 // CreatePhaseManager creates a new phase manager instance
@@ -145,12 +158,13 @@ func CreatePhaseManager(id string, state *ServerState, timer *SafeTimer) *PhaseM
 		id:                   id,
 		prepareMessageLog:    make([]*PrepareMessageEntry, 0),
 		sendPrepareMessageCh: make(chan *PrepareMessageEntry, 10),
+		initiateElectionCh:   make(chan InitiateElectionRequest, 1),
 		state:                state,
 		timer:                timer,
 	}
 	pm.ResetTimerCtx()
 	pm.ResetProposerCtx()
-	// pm.CancelTimerCtx()
-	// pm.CancelProposerCtx()
+	pm.CancelTimerCtx()
+	pm.CancelProposerCtx()
 	return pm
 }

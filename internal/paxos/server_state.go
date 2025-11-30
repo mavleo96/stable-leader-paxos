@@ -164,8 +164,8 @@ func (s *ServerState) ResetForwardedRequestsLog() {
 func (s *ServerState) Reset() {
 	s.mutex.Lock()
 	defer s.mutex.Unlock()
-	s.b = &pb.BallotNumber{N: 1, NodeID: "n1"}
-	s.leader = "n1"
+	s.b = &pb.BallotNumber{N: 0, NodeID: "n0"}
+	s.leader = ""
 	s.lastExecutedSequenceNum = 0
 	s.lastCheckpointedSequenceNum = 0
 	s.forwardedRequestsLog = make([]*pb.TransactionRequest, 0)
@@ -178,8 +178,8 @@ func CreateServerState(id string) *ServerState {
 	return &ServerState{
 		mutex:                       sync.RWMutex{},
 		id:                          id,
-		b:                           &pb.BallotNumber{N: 1, NodeID: "n1"},
-		leader:                      "n1",
+		b:                           &pb.BallotNumber{N: 0, NodeID: "n0"},
+		leader:                      "",
 		lastExecutedSequenceNum:     0,
 		lastCheckpointedSequenceNum: 0,
 		forwardedRequestsLog:        make([]*pb.TransactionRequest, 0),

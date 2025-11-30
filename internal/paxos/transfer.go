@@ -2,6 +2,7 @@ package paxos
 
 import (
 	"context"
+	"time"
 
 	"github.com/mavleo96/stable-leader-paxos/internal/utils"
 	pb "github.com/mavleo96/stable-leader-paxos/pb"
@@ -27,7 +28,17 @@ func (s *PaxosServer) TransferRequest(ctx context.Context, req *pb.TransactionRe
 	select {
 	case <-s.phaseManager.GetTimerCtx().Done():
 		log.Warnf("[TransferRequest] Timer context cancelled; ignoring request %s", utils.LoggingString(req))
-		return EmptyTransactionResponse, status.Errorf(codes.Aborted, "timer context cancelled")
+		signalCh := make(chan bool, 1)
+		initiateElectionRequest := InitiateElectionRequest{
+			ExpiredTime: time.Now(),
+			SignalCh:    signalCh,
+		}
+		s.phaseManager.GetInitiateElectionCh() <- initiateElectionRequest
+		okToContinue := <-signalCh
+		if !okToContinue {
+			log.Warnf("[TransferRequest] Leader election failed; ignoring request %s", utils.LoggingString(req))
+			return EmptyTransactionResponse, status.Errorf(codes.Aborted, "leader election failed")
+		}
 	default:
 	}
 

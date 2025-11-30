@@ -112,11 +112,13 @@ func (s *ServerState) GetLastCheckpointedSequenceNum() int64 {
 	return s.lastCheckpointedSequenceNum
 }
 
-// SetLastCheckpointedSequenceNum sets the last checkpointed sequence number
-func (s *ServerState) SetLastCheckpointedSequenceNum(sequenceNum int64) {
+// UpdateLastCheckpointedSequenceNum updates the last checkpointed sequence number if higher
+func (s *ServerState) UpdateLastCheckpointedSequenceNum(sequenceNum int64) {
 	s.mutex.Lock()
 	defer s.mutex.Unlock()
-	s.lastCheckpointedSequenceNum = sequenceNum
+	if sequenceNum > s.lastCheckpointedSequenceNum {
+		s.lastCheckpointedSequenceNum = sequenceNum
+	}
 }
 
 // TODO: improve design later

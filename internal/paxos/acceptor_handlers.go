@@ -79,6 +79,11 @@ func (a *Acceptor) CommitRequestHandler(commitMessage *pb.CommitMessage) (*empty
 		<-resultCh
 	}
 
+	// Try checkpoint handler if sequence number is a multiple of k
+	if commitMessage.SequenceNum%a.config.K == 0 {
+		a.checkpointer.BackupTryCheckpointHandler(commitMessage.SequenceNum)
+	}
+
 	return &emptypb.Empty{}, nil
 }
 

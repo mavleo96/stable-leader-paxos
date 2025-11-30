@@ -58,11 +58,13 @@ func (p *Proposer) HandleTransactionRequest(req *pb.TransactionRequest) error {
 	err := p.RunCommitPhase(sequenceNum, currentBallotNumber, p.state.StateLog.GetRequest(sequenceNum))
 
 	// Send checkpoint message if sequence number is a multiple of k and purge
-	if sequenceNum%p.config.K == 0 {
-		digest := p.checkpointer.GetCheckpoint(sequenceNum).Digest
-		p.SendCheckpointMessage(sequenceNum, digest)
-
-		p.checkpointer.GetCheckpointPurgeRoutineCh() <- sequenceNum
+	if err == nil && sequenceNum%p.config.K == 0 {
+		// Check if checkpoint is available
+		if p.checkpointer.GetCheckpoint(sequenceNum) == nil {
+			digest := p.checkpointer.GetCheckpoint(sequenceNum).Digest
+			p.SendCheckpointMessage(sequenceNum, digest)
+			p.checkpointer.Purge(sequenceNum)
+		}
 	}
 
 	return err

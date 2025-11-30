@@ -128,23 +128,29 @@ collectLoop:
 	}
 
 	// Aggregate ack messages
-	checkpointedSequenceNum, acceptMessages := aggregateAckMessages(ballotNumber, ackMessages)
+	checkpointSequenceNum, acceptMessages := aggregateAckMessages(ballotNumber, ackMessages)
 
 	// Handle checkpoint
-	if checkpointedSequenceNum > p.state.GetLastExecutedSequenceNum() {
-		// If checkpoint is greater than executed sequence number, trigger install checkpoint routine
-
-		// Get checkpoint from other nodes
-		checkpoint, err := p.checkpointer.SendGetCheckpointRequest(checkpointedSequenceNum)
-		if err != nil {
-			log.Warnf("[RunNewViewPhase] Failed to get checkpoint for sequence number %d: %v", checkpointedSequenceNum, err)
-			return false
+	if checkpointSequenceNum > p.state.GetLastCheckpointedSequenceNum() {
+		// Check if checkpoint is available
+		checkpoint := p.checkpointer.GetCheckpoint(checkpointSequenceNum)
+		if checkpoint == nil {
+			log.Warnf("[InitiatePrepareHandler] Checkpoint for sequence number %d is not available", checkpointSequenceNum)
+			checkpoint, err := p.checkpointer.SendGetCheckpointRequest(checkpointSequenceNum)
+			if err != nil {
+				log.Warnf("[InitiatePrepareHandler] Failed to get checkpoint for sequence number %d: %v", checkpointSequenceNum, err)
+				return false
+			}
+			p.checkpointer.AddCheckpoint(checkpointSequenceNum, checkpoint.Snapshot)
 		}
-		p.checkpointer.AddCheckpoint(checkpointedSequenceNum, checkpoint.Snapshot)
-		p.installCheckpointCh <- checkpointedSequenceNum
-	} else if checkpointedSequenceNum > p.state.GetLastCheckpointedSequenceNum() {
-		// Trigger checkpoint purge routine
-		p.checkpointer.GetCheckpointPurgeRoutineCh() <- checkpointedSequenceNum
+		signalCh := make(chan struct{}, 1)
+		checkpointInstallRequest := CheckpointInstallRequest{
+			SequenceNum: checkpointSequenceNum,
+			SignalCh:    signalCh,
+		}
+		p.installCheckpointCh <- checkpointInstallRequest
+		<-signalCh
+		p.checkpointer.Purge(checkpointSequenceNum)
 	}
 
 	// Update state with new accept messages
@@ -156,7 +162,7 @@ collectLoop:
 	p.state.SetLeader(p.id)
 	p.phaseManager.ResetProposerCtx()
 
-	go p.RunNewViewPhase(ballotNumber, checkpointedSequenceNum, acceptMessages)
+	go p.RunNewViewPhase(ballotNumber, checkpointSequenceNum, acceptMessages)
 	log.Infof("[InitiatePrepareHandler] New leader with promised ballot number %s at %d", utils.LoggingString(ballotNumber), time.Now().UnixMilli())
 	return true
 }

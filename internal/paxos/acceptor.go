@@ -14,6 +14,7 @@ type Acceptor struct {
 
 	// Components
 	phaseManager *PhaseManager
+	checkpointer *CheckpointManager
 
 	// Channels
 	executionTriggerCh chan<- ExecuteRequest
@@ -25,13 +26,14 @@ func (a *Acceptor) Reset() {
 }
 
 // CreateAcceptor creates a new acceptor
-func CreateAcceptor(id string, state *ServerState, config *ServerConfig, peers map[string]*models.Node, phaseManager *PhaseManager, executionTriggerCh chan<- ExecuteRequest) *Acceptor {
+func CreateAcceptor(id string, state *ServerState, config *ServerConfig, peers map[string]*models.Node, phaseManager *PhaseManager, checkpointer *CheckpointManager, executionTriggerCh chan<- ExecuteRequest) *Acceptor {
 	return &Acceptor{
 		id:                 id,
 		state:              state,
 		config:             config,
 		peers:              peers,
 		phaseManager:       phaseManager,
+		checkpointer:       checkpointer,
 		executionTriggerCh: executionTriggerCh,
 	}
 }

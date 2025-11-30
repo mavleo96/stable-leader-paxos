@@ -91,20 +91,26 @@ func (s *PaxosServer) NewViewRequest(req *pb.NewViewMessage, stream pb.PaxosNode
 
 	// Handle checkpoint
 	checkpointSequenceNum := req.SequenceNum
-	if checkpointSequenceNum > s.state.GetLastExecutedSequenceNum() {
-		// If checkpoint is greater than executed sequence number, trigger install checkpoint routine
-
-		// Get checkpoint from other nodes
-		checkpoint, err := s.executor.checkpointer.SendGetCheckpointRequest(checkpointSequenceNum)
-		if err != nil {
-			log.Warnf("[NewViewRequest] Failed to get checkpoint for sequence number %d: %v", checkpointSequenceNum, err)
-			return err
+	if checkpointSequenceNum > s.state.GetLastCheckpointedSequenceNum() {
+		// Check if checkpoint is available
+		checkpoint := s.executor.checkpointer.GetCheckpoint(checkpointSequenceNum)
+		if checkpoint == nil {
+			log.Warnf("[InitiatePrepareHandler] Checkpoint for sequence number %d is not available", checkpointSequenceNum)
+			checkpoint, err := s.executor.checkpointer.SendGetCheckpointRequest(checkpointSequenceNum)
+			if err != nil {
+				log.Warnf("[InitiatePrepareHandler] Failed to get checkpoint for sequence number %d: %v", checkpointSequenceNum, err)
+				return status.Error(codes.Aborted, err.Error())
+			}
+			s.executor.checkpointer.AddCheckpoint(checkpointSequenceNum, checkpoint.Snapshot)
 		}
-		s.executor.checkpointer.AddCheckpoint(checkpointSequenceNum, checkpoint.Snapshot)
-		s.executor.GetInstallCheckpointChannel() <- checkpointSequenceNum
-	} else if checkpointSequenceNum > s.state.GetLastCheckpointedSequenceNum() {
-		// Trigger checkpoint purge routine
-		s.executor.checkpointer.GetCheckpointPurgeRoutineCh() <- checkpointSequenceNum
+		signalCh := make(chan struct{}, 1)
+		checkpointInstallRequest := CheckpointInstallRequest{
+			SequenceNum: checkpointSequenceNum,
+			SignalCh:    signalCh,
+		}
+		s.executor.GetInstallCheckpointChannel() <- checkpointInstallRequest
+		<-signalCh
+		s.executor.checkpointer.Purge(checkpointSequenceNum)
 	}
 
 	// Handle accept messages

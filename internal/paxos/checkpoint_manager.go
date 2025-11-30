@@ -20,14 +20,8 @@ type CheckpointManager struct {
 	logger *Logger
 
 	// checkpoints
-	checkpointMessageLog     map[int64]*pb.CheckpointMessage
-	checkpoints              map[int64]*pb.Checkpoint
-	checkpointPurgeRoutineCh chan int64
-}
-
-// GetCheckpointPurgeRoutineCh gets the checkpoint purge routine channel
-func (c *CheckpointManager) GetCheckpointPurgeRoutineCh() chan<- int64 {
-	return c.checkpointPurgeRoutineCh
+	checkpointMessageLog map[int64]*pb.CheckpointMessage
+	checkpoints          map[int64]*pb.Checkpoint
 }
 
 // AddCheckpointMessage adds a checkpoint message for a given sequence number
@@ -88,14 +82,13 @@ func (c *CheckpointManager) Reset() {
 // CreateCheckpointManager creates a new check point manager
 func CreateCheckpointManager(id string, state *ServerState, config *ServerConfig, peers map[string]*models.Node, logger *Logger) *CheckpointManager {
 	return &CheckpointManager{
-		mutex:                    sync.RWMutex{},
-		id:                       id,
-		state:                    state,
-		config:                   config,
-		peers:                    peers,
-		logger:                   logger,
-		checkpointMessageLog:     make(map[int64]*pb.CheckpointMessage, 5),
-		checkpoints:              make(map[int64]*pb.Checkpoint, 5),
-		checkpointPurgeRoutineCh: make(chan int64, 100),
+		mutex:                sync.RWMutex{},
+		id:                   id,
+		state:                state,
+		config:               config,
+		peers:                peers,
+		logger:               logger,
+		checkpointMessageLog: make(map[int64]*pb.CheckpointMessage, 5),
+		checkpoints:          make(map[int64]*pb.Checkpoint, 5),
 	}
 }

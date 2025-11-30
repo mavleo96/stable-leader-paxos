@@ -35,7 +35,6 @@ type PaxosServer struct {
 // Start starts the paxos server
 func (s *PaxosServer) Start(ctx context.Context) {
 	s.wg.Go(func() { s.executor.ExecuteRouter(ctx) })
-	s.wg.Go(func() { s.executor.checkpointer.CheckpointPurgeRoutine(ctx) })
 	s.wg.Go(func() { s.phaseManager.PhaseTimeoutRoutine(ctx) })
 
 	s.wg.Wait()
@@ -48,19 +47,19 @@ func CreatePaxosServer(selfNode *models.Node, peerNodes map[string]*models.Node,
 	serverState := CreateServerState(selfNode.ID)
 
 	executionTriggerCh := make(chan ExecuteRequest, 100)
-	installCheckpointCh := make(chan int64, 100)
+	installCheckpointCh := make(chan CheckpointInstallRequest, 100)
 
-	i, err := strconv.Atoi(selfNode.ID[1:])
+	i, err := strconv.ParseInt(selfNode.ID[1:], 10, 64)
 	if err != nil {
 		log.Fatal(err)
 	}
-	paxosTimer := CreateSafeTimer(int64(i), int64(len(peerNodes)+1))
+	paxosTimer := CreateSafeTimer(i, int64(len(peerNodes)+1))
 
 	logger := CreateLogger()
 	phaseManager := CreatePhaseManager(selfNode.ID, serverState, paxosTimer)
 	checkpointer := CreateCheckpointManager(selfNode.ID, serverState, serverConfig, peerNodes, logger)
-	proposer := CreateProposer(selfNode.ID, serverState, serverConfig, peerNodes, phaseManager, logger, checkpointer, executionTriggerCh, installCheckpointCh)
-	acceptor := CreateAcceptor(selfNode.ID, serverState, serverConfig, peerNodes, phaseManager, executionTriggerCh)
+	proposer := CreateProposer(selfNode.ID, serverState, serverConfig, peerNodes, phaseManager, checkpointer, logger, executionTriggerCh, installCheckpointCh)
+	acceptor := CreateAcceptor(selfNode.ID, serverState, serverConfig, peerNodes, phaseManager, checkpointer, executionTriggerCh)
 	executor := CreateExecutor(serverState, serverConfig, bankDB, checkpointer, paxosTimer, executionTriggerCh, installCheckpointCh)
 
 	server := PaxosServer{

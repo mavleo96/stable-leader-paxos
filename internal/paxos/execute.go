@@ -22,13 +22,19 @@ type Executor struct {
 
 	// Channels
 	executionTriggerCh  chan ExecuteRequest
-	installCheckpointCh chan int64
+	installCheckpointCh chan CheckpointInstallRequest
 }
 
 // ExecuteRequest is a request to execute a transaction
 type ExecuteRequest struct {
 	SequenceNum int64
-	ResultCh    chan int64
+	ResultCh    chan<- int64
+}
+
+// CheckpointInstallRequest is a request to install a checkpoint
+type CheckpointInstallRequest struct {
+	SequenceNum int64
+	SignalCh    chan<- struct{}
 }
 
 // Enqueue is used to enqueue an execute request
@@ -60,7 +66,7 @@ func (e *Executor) GetExecutionTriggerChannel() chan<- ExecuteRequest {
 }
 
 // GetInstallCheckpointChannel is used to get the install checkpoint channel
-func (e *Executor) GetInstallCheckpointChannel() chan<- int64 {
+func (e *Executor) GetInstallCheckpointChannel() chan<- CheckpointInstallRequest {
 	e.mutex.RLock()
 	defer e.mutex.RUnlock()
 	return e.installCheckpointCh
@@ -74,7 +80,7 @@ func (e *Executor) Reset() {
 }
 
 // CreateExecutor is used to create a new executor
-func CreateExecutor(state *ServerState, config *ServerConfig, db *database.Database, checkpointer *CheckpointManager, timer *SafeTimer, executionTriggerCh chan ExecuteRequest, installCheckpointCh chan int64) *Executor {
+func CreateExecutor(state *ServerState, config *ServerConfig, db *database.Database, checkpointer *CheckpointManager, timer *SafeTimer, executionTriggerCh chan ExecuteRequest, installCheckpointCh chan CheckpointInstallRequest) *Executor {
 	return &Executor{
 		mutex:               sync.RWMutex{},
 		state:               state,

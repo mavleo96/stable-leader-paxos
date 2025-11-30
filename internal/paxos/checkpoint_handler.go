@@ -12,7 +12,7 @@ import (
 	"google.golang.org/grpc/status"
 )
 
-// BackupCheckpointMessageHandler handles the backup checkpoint message
+// BackupCheckpointMessageHandler adds the checkpoint message to the checkpoint message log and tries to purge the logs, checkpoints, and checkpoint messages if the digest is the same
 func (c *CheckpointManager) BackupCheckpointMessageHandler(checkpointMessage *pb.CheckpointMessage) {
 	sequenceNum := checkpointMessage.SequenceNum
 
@@ -26,7 +26,25 @@ func (c *CheckpointManager) BackupCheckpointMessageHandler(checkpointMessage *pb
 	c.AddCheckpointMessage(sequenceNum, checkpointMessage)
 	log.Infof("[CheckpointMessageHandler] Checkpoint message for sequence number %d is logged", sequenceNum)
 
-	c.checkpointPurgeRoutineCh <- sequenceNum
+	c.BackupTryCheckpointHandler(sequenceNum)
+}
+
+// BackupTryCheckpointHandler tries to purge the logs, checkpoints, and checkpoint messages if the digest is the same
+func (c *CheckpointManager) BackupTryCheckpointHandler(sequenceNum int64) {
+	// Check if message and checkpoint are available
+	if c.GetCheckpointMessage(sequenceNum) == nil || c.GetCheckpoint(sequenceNum) == nil {
+		log.Warnf("[CheckpointManager] Checkpoint message or checkpoint for sequence number %d is not available", sequenceNum)
+		return
+	}
+
+	// Compare the digest and add the checkpoint if the digest is the same
+	if !bytes.Equal(c.GetCheckpointMessage(sequenceNum).Digest, c.GetCheckpoint(sequenceNum).Digest) {
+		log.Warnf("[CheckpointManager] Digest mismatch for sequence number %d", sequenceNum)
+		return
+	}
+
+	// Purge the logs and checkpoints for the sequence number
+	c.Purge(sequenceNum)
 }
 
 // SendGetCheckpointRequest multicasts a request to get missing checkpoints
@@ -71,7 +89,7 @@ func (c *CheckpointManager) SendGetCheckpointRequest(sequenceNum int64) (*pb.Che
 // Purge purges the logs, checkpoints, and checkpoint messages for a given sequence number
 func (c *CheckpointManager) Purge(sequenceNum int64) {
 	// Update last checkpointed sequence number
-	c.state.SetLastCheckpointedSequenceNum(sequenceNum)
+	c.state.UpdateLastCheckpointedSequenceNum(sequenceNum)
 	log.Infof("[CheckpointManager] Updated last checkpointed sequence number to %d", sequenceNum)
 
 	// Delete logs and checkpoints older than last checkpointed sequence number
@@ -87,57 +105,4 @@ func (c *CheckpointManager) Purge(sequenceNum int64) {
 		}
 	}
 	log.Infof("[CheckpointManager] Purged logs, checkpoints, and checkpoint messages for sequence number %d", sequenceNum)
-}
-
-// CheckpointPurgeRoutine purges the logs and checkpoints for a given sequence number
-func (c *CheckpointManager) CheckpointPurgeRoutine(ctx context.Context) {
-	for {
-		select {
-		case <-ctx.Done():
-			return
-		case sequenceNum := <-c.checkpointPurgeRoutineCh:
-			// Check if checkpoint message is logged
-			if c.GetCheckpointMessage(sequenceNum) == nil {
-				log.Warnf("[CheckpointRoutine] Checkpoint message for sequence number %d is not logged", sequenceNum)
-				continue
-			}
-
-			// Check if checkpoint is available
-			if c.GetCheckpoint(sequenceNum) == nil {
-				log.Warnf("[CheckpointRoutine] Checkpoint for sequence number %d is not available", sequenceNum)
-				continue
-			}
-
-			// If both are available, then compare the digest and add the checkpoint if the digest is the same
-			if !bytes.Equal(c.GetCheckpointMessage(sequenceNum).Digest, c.GetCheckpoint(sequenceNum).Digest) {
-				log.Warnf("[CheckpointRoutine] Digest mismatch for sequence number %d", sequenceNum)
-				continue
-			}
-
-			// Purge logs, checkpoints, and checkpoint messages
-			c.Purge(sequenceNum)
-
-			// // Update last checkpointed sequence number
-			// lastCheckpointedSequenceNum := c.state.GetLastCheckpointedSequenceNum()
-			// delta := sequenceNum - lastCheckpointedSequenceNum
-			// c.state.SetLastCheckpointedSequenceNum(sequenceNum)
-			// log.Infof("[CheckpointManager] Updated last checkpointed sequence number to %d", sequenceNum)
-
-			// // Delete logs and checkpoints older than last checkpointed sequence number
-			// for i := sequenceNum - delta + 1; i <= sequenceNum; i++ {
-			// 	c.state.StateLog.Delete(i)
-			// }
-			// for i := range c.checkpoints {
-			// 	if i < sequenceNum {
-			// 		c.DeleteCheckpoint(i)
-			// 	}
-			// }
-			// for i := range c.checkpointMessageLog {
-			// 	if i < sequenceNum {
-			// 		c.DeleteCheckpointMessage(i)
-			// 	}
-			// }
-			// log.Infof("[CheckpointManager] Purged logs, checkpoints, and checkpoint messages for sequence number %d", sequenceNum)
-		}
-	}
 }

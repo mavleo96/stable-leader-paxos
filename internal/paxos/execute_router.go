@@ -74,7 +74,6 @@ executeLoop:
 					}
 					log.Infof("[Executor] Creating checkpoint for sequence number %d", i)
 					e.checkpointer.AddCheckpoint(i, dbState)
-					e.checkpointer.GetCheckpointPurgeRoutineCh() <- i
 				}
 
 				// Dequeue execute requests
@@ -86,17 +85,22 @@ executeLoop:
 				}
 			}
 
-		case sequenceNum := <-e.installCheckpointCh:
+		case checkpointInstallRequest := <-e.installCheckpointCh:
 			// Get checkpoint
-			checkpoint := e.checkpointer.GetCheckpoint(sequenceNum)
+			checkpoint := e.checkpointer.GetCheckpoint(checkpointInstallRequest.SequenceNum)
 			if checkpoint == nil {
-				log.Warnf("[Executor] Checkpoint for sequence number %d is not available", sequenceNum)
+				log.Fatalf("[Executor] Checkpoint for sequence number %d is not available", checkpointInstallRequest.SequenceNum)
 				continue executeLoop
 			}
 
 			// If executed sequence number is greater than or equal to checkpoint sequence number, skip
-			if sequenceNum <= e.state.GetLastExecutedSequenceNum() {
-				log.Infof("[Executor] Checkpoint for sequence number %d is already installed", sequenceNum)
+			if checkpointInstallRequest.SequenceNum <= e.state.GetLastExecutedSequenceNum() {
+				log.Infof("[Executor] Checkpoint for sequence number %d is already installed", checkpointInstallRequest.SequenceNum)
+
+				// Send signal to requestor
+				checkpointInstallRequest.SignalCh <- struct{}{}
+				close(checkpointInstallRequest.SignalCh)
+
 				continue executeLoop
 			}
 
@@ -108,16 +112,14 @@ executeLoop:
 					log.Fatalf("[Executor] Failed to set balance for client %s: %v", clientID, err)
 				}
 			}
-			log.Infof("[Executor] Installed checkpoint for sequence number %d", sequenceNum)
+			log.Infof("[Executor] Installed checkpoint for sequence number %d", checkpointInstallRequest.SequenceNum)
 
 			// Update state
-			e.state.SetLastExecutedSequenceNum(sequenceNum)
+			e.state.SetLastExecutedSequenceNum(checkpointInstallRequest.SequenceNum)
 
-			// Purge logs, checkpoints, and checkpoint messages
-			e.checkpointer.Purge(sequenceNum)
-
-			// // Trigger checkpoint purge routine
-			// e.checkpointer.GetCheckpointPurgeRoutineCh() <- sequenceNum
+			// Send signal to requestor
+			checkpointInstallRequest.SignalCh <- struct{}{}
+			close(checkpointInstallRequest.SignalCh)
 		}
 	}
 }

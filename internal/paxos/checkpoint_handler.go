@@ -61,7 +61,7 @@ func (c *CheckpointManager) SendGetCheckpointRequest(sequenceNum int64) (*pb.Che
 		wg.Add(1)
 		go func(peer *models.Node) {
 			defer wg.Done()
-			checkpoint, err := (*peer.Client).GetCheckpoint(context.Background(), getCheckpointRequest)
+			checkpoint, err := peer.Client.GetCheckpoint(context.Background(), getCheckpointRequest)
 			if err != nil || checkpoint == nil {
 				return
 			}

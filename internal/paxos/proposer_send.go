@@ -23,7 +23,7 @@ func (p *Proposer) SendPrepareMessage(prepareMessage *pb.PrepareMessage, respons
 		wg.Add(1)
 		go func(peer *models.Node) {
 			defer wg.Done()
-			ackMessage, err := (*peer.Client).PrepareRequest(context.Background(), prepareMessage)
+			ackMessage, err := peer.Client.PrepareRequest(context.Background(), prepareMessage)
 			if err != nil || ackMessage == nil {
 				log.Warnf("[SendPrepareMessage] Failed to send prepare message to peer %s: %v", peer.ID, err)
 				return
@@ -51,7 +51,7 @@ func (p *Proposer) SendNewViewMessage(newViewMessage *pb.NewViewMessage, respons
 		wg.Add(1)
 		go func(peer *models.Node) {
 			defer wg.Done()
-			stream, err := (*peer.Client).NewViewRequest(context.Background(), newViewMessage)
+			stream, err := peer.Client.NewViewRequest(context.Background(), newViewMessage)
 			if err != nil {
 				log.Warnf("[SendNewViewMessage] Failed to send new view message to peer %s: %v", peer.ID, err)
 				return
@@ -91,7 +91,7 @@ func (p *Proposer) SendAcceptMessage(acceptMessage *pb.AcceptMessage, responseCh
 		wg.Add(1)
 		go func(peer *models.Node) {
 			defer wg.Done()
-			resp, err := (*peer.Client).AcceptRequest(context.Background(), acceptMessage)
+			resp, err := peer.Client.AcceptRequest(context.Background(), acceptMessage)
 			if err != nil {
 				log.Warnf("[SendAcceptMessage] Failed to send accept message to peer %s: %v", peer.ID, err)
 				responseCh <- false
@@ -117,7 +117,7 @@ func (p *Proposer) BroadcastCommitMessage(commitMessage *pb.CommitMessage) {
 	log.Infof("[BroadcastCommitMessage] Broadcasting commit request %s", utils.LoggingString(commitMessage.Message))
 	for _, peer := range p.peers {
 		go func(peer *models.Node) {
-			_, err := (*peer.Client).CommitRequest(context.Background(), commitMessage)
+			_, err := peer.Client.CommitRequest(context.Background(), commitMessage)
 			if err != nil {
 				log.Warnf("[BroadcastCommitMessage] Failed to send commit message to peer %s: %v", peer.ID, err)
 				return
@@ -144,7 +144,7 @@ func (p *Proposer) SendCheckpointMessage(sequenceNum int64, digest []byte) {
 	log.Infof("[SendCheckpointMessage] Sending checkpoint message for sequence number %d to all peers", sequenceNum)
 	for _, peer := range p.peers {
 		go func(peer *models.Node) {
-			_, err := (*peer.Client).CheckpointRequest(context.Background(), checkpointMessage)
+			_, err := peer.Client.CheckpointRequest(context.Background(), checkpointMessage)
 			if err != nil {
 				log.Warnf("[SendCheckpointMessage] Failed to send checkpoint message to peer %s: %v", peer.ID, err)
 				return

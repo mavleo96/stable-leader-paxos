@@ -15,7 +15,7 @@ func SendPrintLogCommand(nodeMap map[string]*models.Node, testSet int64) error {
 	for _, node := range nodeMap {
 		// Capture node in closure to avoid variable capture issues
 		go func(n *models.Node) {
-			_, err := (*n.Client).PrintLog(context.Background(), &wrapperspb.Int64Value{Value: testSet})
+			_, err := n.Client.PrintLog(context.Background(), &wrapperspb.Int64Value{Value: testSet})
 			if err != nil {
 				log.Warnf("Error sending print log command to node %s: %v", n.ID, err)
 			}
@@ -30,7 +30,7 @@ func SendPrintDBCommand(nodeMap map[string]*models.Node, testSet int64) error {
 	for _, node := range nodeMap {
 		// Capture node in closure to avoid variable capture issues
 		go func(n *models.Node) {
-			_, err := (*n.Client).PrintDB(context.Background(), &wrapperspb.Int64Value{Value: testSet})
+			_, err := n.Client.PrintDB(context.Background(), &wrapperspb.Int64Value{Value: testSet})
 			if err != nil {
 				log.Warnf("Error sending print db command to node %s: %v", n.ID, err)
 			}
@@ -49,7 +49,7 @@ func SendPrintStatusCommand(nodeMap map[string]*models.Node, testSet int64, sequ
 	for _, node := range nodeMap {
 		// Capture node in closure to avoid variable capture issues
 		go func(n *models.Node) {
-			_, err := (*n.Client).PrintStatus(context.Background(), &pb.StatusRequest{TestSet: testSet, SequenceNum: sequenceNum})
+			_, err := n.Client.PrintStatus(context.Background(), &pb.StatusRequest{TestSet: testSet, SequenceNum: sequenceNum})
 			if err != nil {
 				log.Warnf("Error sending print status command to node %s: %v", n.ID, err)
 			}
@@ -64,7 +64,7 @@ func SendPrintViewCommand(nodeMap map[string]*models.Node, testSet int64) error 
 	for _, node := range nodeMap {
 		// Capture node in closure to avoid variable capture issues
 		go func(n *models.Node) {
-			_, err := (*n.Client).PrintView(context.Background(), &wrapperspb.Int64Value{Value: testSet})
+			_, err := n.Client.PrintView(context.Background(), &wrapperspb.Int64Value{Value: testSet})
 			if err != nil {
 				log.Warnf("Error sending print view command to node %s: %v", n.ID, err)
 			}

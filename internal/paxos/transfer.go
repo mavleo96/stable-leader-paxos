@@ -131,5 +131,5 @@ func (s *PaxosServer) ForwardToLeader(leader string, req *pb.TransactionRequest)
 
 	// Forward request to leader
 	log.Infof("[ForwardToLeader] Forwarding request %s to leader %s", utils.LoggingString(req), leader)
-	(*s.peers[leader].Client).ForwardRequest(context.Background(), req)
+	s.peers[leader].Client.ForwardRequest(context.Background(), req)
 }

@@ -39,7 +39,7 @@ retryLoop:
 			wg.Add(1)
 			go func(node *models.Node) {
 				defer wg.Done()
-				response, err := (*node.Client).TransferRequest(context.Background(), request)
+				response, err := node.Client.TransferRequest(context.Background(), request)
 				if err == nil {
 					log.Infof("%s <- %s: %s, %s", clientID, *leaderNode, utils.LoggingString(request), utils.LoggingString(response))
 				} else {
@@ -54,7 +54,7 @@ retryLoop:
 				wg.Add(1)
 				go func(node *models.Node) {
 					defer wg.Done()
-					response, err := (*node.Client).TransferRequest(context.Background(), request)
+					response, err := node.Client.TransferRequest(context.Background(), request)
 					if err == nil {
 						log.Infof("%s <- %s: %s, %s", clientID, node.ID, utils.LoggingString(request), utils.LoggingString(response))
 					} else {

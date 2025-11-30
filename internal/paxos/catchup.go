@@ -64,7 +64,7 @@ func (s *PaxosServer) SendCatchUpRequest(sequenceNum int64) (*pb.CatchupMessage,
 		wg.Add(1)
 		go func(peer *models.Node) {
 			defer wg.Done()
-			catchupMessage, err := (*peer.Client).CatchupRequest(context.Background(), catchupRequest)
+			catchupMessage, err := peer.Client.CatchupRequest(context.Background(), catchupRequest)
 			if err != nil || catchupMessage == nil {
 				return
 			}

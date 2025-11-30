@@ -18,7 +18,7 @@ func ReconfigureNodes(nodeMap map[string]*models.Node, aliveNodes []*models.Node
 		status := slices.ContainsFunc(aliveNodes, func(aliveNode *models.Node) bool {
 			return aliveNode.ID == node.ID
 		})
-		_, err := (*node.Client).ReconfigureNode(context.Background(), &wrapperspb.BoolValue{Value: status})
+		_, err := node.Client.ReconfigureNode(context.Background(), &wrapperspb.BoolValue{Value: status})
 		if err != nil {
 			log.Warnf("Error reconfiguring node %s: %v", node.ID, err)
 		}
@@ -29,7 +29,7 @@ func ReconfigureNodes(nodeMap map[string]*models.Node, aliveNodes []*models.Node
 func KillLeader(nodeMap map[string]*models.Node) {
 	log.Infof("Killing leader")
 	for _, node := range nodeMap {
-		_, err := (*node.Client).KillLeader(context.Background(), &emptypb.Empty{})
+		_, err := node.Client.KillLeader(context.Background(), &emptypb.Empty{})
 		if err != nil {
 			log.Warnf("Error killing leader on node %s: %v", node.ID, err)
 		}
@@ -40,7 +40,7 @@ func KillLeader(nodeMap map[string]*models.Node) {
 func SendResetCommand(nodeMap map[string]*models.Node, initBalance int64) {
 	log.Info("Node Reset command received")
 	for _, node := range nodeMap {
-		_, err := (*node.Client).ResetNode(context.Background(), &pb.ResetRequest{InitBalance: initBalance})
+		_, err := node.Client.ResetNode(context.Background(), &pb.ResetRequest{InitBalance: initBalance})
 		if err != nil {
 			log.Warnf("Error sending reset command to node %s: %v", node.ID, err)
 		}

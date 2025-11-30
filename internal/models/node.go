@@ -10,7 +10,7 @@ import (
 type Node struct {
 	ID      string `yaml:"id"`
 	Address string `yaml:"address"`
-	Client  *pb.PaxosNodeClient
+	Client  pb.PaxosNodeClient
 	Close   func() error
 }
 
@@ -30,7 +30,7 @@ func GetNodeMap(nodeConfig map[string]*config.NodeEntry) (map[string]*Node, erro
 		nodeMap[id] = &Node{
 			ID:      id,
 			Address: nodeConfig.Address,
-			Client:  &nodeClient,
+			Client:  nodeClient,
 			Close:   func() error { return conn.Close() },
 		}
 	}

@@ -117,6 +117,23 @@ func (d *Database) SetBalance(account string, balance int64) error {
 	})
 }
 
+// InstallSnapshot installs the snapshot into the database.
+func (d *Database) InstallSnapshot(snapshot map[string]int64) error {
+	return d.db.Update(func(tx *bbolt.Tx) error {
+		b := tx.Bucket([]byte("balances"))
+		if b == nil {
+			return errors.New("balances bucket not found")
+		}
+		for account, balance := range snapshot {
+			err := b.Put([]byte(account), []byte(strconv.FormatInt(balance, 10)))
+			if err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+}
+
 // GetDBState gets the current state of the database.
 func (d *Database) GetDBState() (map[string]int64, error) {
 	dbState := make(map[string]int64)

@@ -106,11 +106,9 @@ executeLoop:
 
 			// Install checkpoint
 			snapshot := checkpoint.Snapshot
-			for clientID, balance := range snapshot {
-				err := e.db.SetBalance(clientID, balance)
-				if err != nil {
-					log.Fatalf("[Executor] Failed to set balance for client %s: %v", clientID, err)
-				}
+			err := e.db.InstallSnapshot(snapshot)
+			if err != nil {
+				log.Fatalf("[Executor] Failed to install snapshot: %v", err)
 			}
 			log.Infof("[Executor] Installed checkpoint for sequence number %d", checkpointInstallRequest.SequenceNum)
 

@@ -756,12 +756,14 @@ func (x *GetCheckpointMessage) GetNodeID() string {
 }
 
 type Checkpoint struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	SequenceNum   int64                  `protobuf:"varint,1,opt,name=sequenceNum,proto3" json:"sequenceNum,omitempty"`
-	Digest        []byte                 `protobuf:"bytes,2,opt,name=digest,proto3" json:"digest,omitempty"`
-	Snapshot      map[string]int64       `protobuf:"bytes,3,rep,name=snapshot,proto3" json:"snapshot,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"varint,2,opt,name=value"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	state               protoimpl.MessageState `protogen:"open.v1"`
+	SequenceNum         int64                  `protobuf:"varint,1,opt,name=sequenceNum,proto3" json:"sequenceNum,omitempty"`
+	Digest              []byte                 `protobuf:"bytes,2,opt,name=digest,proto3" json:"digest,omitempty"`
+	Snapshot            map[string]int64       `protobuf:"bytes,3,rep,name=snapshot,proto3" json:"snapshot,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"varint,2,opt,name=value"`
+	DedupTableTimestamp map[string]int64       `protobuf:"bytes,4,rep,name=dedupTableTimestamp,proto3" json:"dedupTableTimestamp,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"varint,2,opt,name=value"`
+	DedupTableResult    map[string]int64       `protobuf:"bytes,5,rep,name=dedupTableResult,proto3" json:"dedupTableResult,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"varint,2,opt,name=value"`
+	unknownFields       protoimpl.UnknownFields
+	sizeCache           protoimpl.SizeCache
 }
 
 func (x *Checkpoint) Reset() {
@@ -811,6 +813,20 @@ func (x *Checkpoint) GetDigest() []byte {
 func (x *Checkpoint) GetSnapshot() map[string]int64 {
 	if x != nil {
 		return x.Snapshot
+	}
+	return nil
+}
+
+func (x *Checkpoint) GetDedupTableTimestamp() map[string]int64 {
+	if x != nil {
+		return x.DedupTableTimestamp
+	}
+	return nil
+}
+
+func (x *Checkpoint) GetDedupTableResult() map[string]int64 {
+	if x != nil {
+		return x.DedupTableResult
 	}
 	return nil
 }
@@ -1038,13 +1054,21 @@ const file_paxos_proto_rawDesc = "" +
 	"\x06digest\x18\x02 \x01(\fR\x06digest\"P\n" +
 	"\x14GetCheckpointMessage\x12 \n" +
 	"\vsequenceNum\x18\x01 \x01(\x03R\vsequenceNum\x12\x16\n" +
-	"\x06nodeID\x18\x02 \x01(\tR\x06nodeID\"\xbd\x01\n" +
+	"\x06nodeID\x18\x02 \x01(\tR\x06nodeID\"\xf7\x03\n" +
 	"\n" +
 	"Checkpoint\x12 \n" +
 	"\vsequenceNum\x18\x01 \x01(\x03R\vsequenceNum\x12\x16\n" +
 	"\x06digest\x18\x02 \x01(\fR\x06digest\x128\n" +
-	"\bsnapshot\x18\x03 \x03(\v2\x1c.pb.Checkpoint.SnapshotEntryR\bsnapshot\x1a;\n" +
+	"\bsnapshot\x18\x03 \x03(\v2\x1c.pb.Checkpoint.SnapshotEntryR\bsnapshot\x12Y\n" +
+	"\x13dedupTableTimestamp\x18\x04 \x03(\v2'.pb.Checkpoint.DedupTableTimestampEntryR\x13dedupTableTimestamp\x12P\n" +
+	"\x10dedupTableResult\x18\x05 \x03(\v2$.pb.Checkpoint.DedupTableResultEntryR\x10dedupTableResult\x1a;\n" +
 	"\rSnapshotEntry\x12\x10\n" +
+	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
+	"\x05value\x18\x02 \x01(\x03R\x05value:\x028\x01\x1aF\n" +
+	"\x18DedupTableTimestampEntry\x12\x10\n" +
+	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
+	"\x05value\x18\x02 \x01(\x03R\x05value:\x028\x01\x1aC\n" +
+	"\x15DedupTableResultEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
 	"\x05value\x18\x02 \x01(\x03R\x05value:\x028\x01\"\x83\x01\n" +
 	"\x0eNewViewMessage\x12\x1e\n" +
@@ -1091,7 +1115,7 @@ func file_paxos_proto_rawDescGZIP() []byte {
 	return file_paxos_proto_rawDescData
 }
 
-var file_paxos_proto_msgTypes = make([]protoimpl.MessageInfo, 18)
+var file_paxos_proto_msgTypes = make([]protoimpl.MessageInfo, 20)
 var file_paxos_proto_goTypes = []any{
 	(*StatusRequest)(nil),         // 0: pb.StatusRequest
 	(*ResetRequest)(nil),          // 1: pb.ResetRequest
@@ -1111,9 +1135,11 @@ var file_paxos_proto_goTypes = []any{
 	(*CatchupRequestMessage)(nil), // 15: pb.CatchupRequestMessage
 	(*CatchupMessage)(nil),        // 16: pb.CatchupMessage
 	nil,                           // 17: pb.Checkpoint.SnapshotEntry
-	(*wrapperspb.Int64Value)(nil), // 18: google.protobuf.Int64Value
-	(*wrapperspb.BoolValue)(nil),  // 19: google.protobuf.BoolValue
-	(*emptypb.Empty)(nil),         // 20: google.protobuf.Empty
+	nil,                           // 18: pb.Checkpoint.DedupTableTimestampEntry
+	nil,                           // 19: pb.Checkpoint.DedupTableResultEntry
+	(*wrapperspb.Int64Value)(nil), // 20: google.protobuf.Int64Value
+	(*wrapperspb.BoolValue)(nil),  // 21: google.protobuf.BoolValue
+	(*emptypb.Empty)(nil),         // 22: google.protobuf.Empty
 }
 var file_paxos_proto_depIdxs = []int32{
 	7,  // 0: pb.TransactionResponse.b:type_name -> pb.BallotNumber
@@ -1128,48 +1154,50 @@ var file_paxos_proto_depIdxs = []int32{
 	7,  // 9: pb.CommitMessage.b:type_name -> pb.BallotNumber
 	3,  // 10: pb.CommitMessage.message:type_name -> pb.TransactionRequest
 	17, // 11: pb.Checkpoint.snapshot:type_name -> pb.Checkpoint.SnapshotEntry
-	7,  // 12: pb.NewViewMessage.b:type_name -> pb.BallotNumber
-	8,  // 13: pb.NewViewMessage.acceptLog:type_name -> pb.AcceptMessage
-	7,  // 14: pb.CatchupMessage.b:type_name -> pb.BallotNumber
-	13, // 15: pb.CatchupMessage.checkpoint:type_name -> pb.Checkpoint
-	10, // 16: pb.CatchupMessage.commitLog:type_name -> pb.CommitMessage
-	3,  // 17: pb.PaxosNode.TransferRequest:input_type -> pb.TransactionRequest
-	3,  // 18: pb.PaxosNode.ForwardRequest:input_type -> pb.TransactionRequest
-	5,  // 19: pb.PaxosNode.PrepareRequest:input_type -> pb.PrepareMessage
-	8,  // 20: pb.PaxosNode.AcceptRequest:input_type -> pb.AcceptMessage
-	10, // 21: pb.PaxosNode.CommitRequest:input_type -> pb.CommitMessage
-	11, // 22: pb.PaxosNode.CheckpointRequest:input_type -> pb.CheckpointMessage
-	14, // 23: pb.PaxosNode.NewViewRequest:input_type -> pb.NewViewMessage
-	15, // 24: pb.PaxosNode.CatchupRequest:input_type -> pb.CatchupRequestMessage
-	12, // 25: pb.PaxosNode.GetCheckpoint:input_type -> pb.GetCheckpointMessage
-	18, // 26: pb.PaxosNode.PrintLog:input_type -> google.protobuf.Int64Value
-	18, // 27: pb.PaxosNode.PrintDB:input_type -> google.protobuf.Int64Value
-	0,  // 28: pb.PaxosNode.PrintStatus:input_type -> pb.StatusRequest
-	18, // 29: pb.PaxosNode.PrintView:input_type -> google.protobuf.Int64Value
-	19, // 30: pb.PaxosNode.ReconfigureNode:input_type -> google.protobuf.BoolValue
-	20, // 31: pb.PaxosNode.KillLeader:input_type -> google.protobuf.Empty
-	1,  // 32: pb.PaxosNode.ResetNode:input_type -> pb.ResetRequest
-	2,  // 33: pb.PaxosNode.TransferRequest:output_type -> pb.TransactionResponse
-	20, // 34: pb.PaxosNode.ForwardRequest:output_type -> google.protobuf.Empty
-	6,  // 35: pb.PaxosNode.PrepareRequest:output_type -> pb.AckMessage
-	9,  // 36: pb.PaxosNode.AcceptRequest:output_type -> pb.AcceptedMessage
-	20, // 37: pb.PaxosNode.CommitRequest:output_type -> google.protobuf.Empty
-	20, // 38: pb.PaxosNode.CheckpointRequest:output_type -> google.protobuf.Empty
-	9,  // 39: pb.PaxosNode.NewViewRequest:output_type -> pb.AcceptedMessage
-	16, // 40: pb.PaxosNode.CatchupRequest:output_type -> pb.CatchupMessage
-	13, // 41: pb.PaxosNode.GetCheckpoint:output_type -> pb.Checkpoint
-	20, // 42: pb.PaxosNode.PrintLog:output_type -> google.protobuf.Empty
-	20, // 43: pb.PaxosNode.PrintDB:output_type -> google.protobuf.Empty
-	20, // 44: pb.PaxosNode.PrintStatus:output_type -> google.protobuf.Empty
-	20, // 45: pb.PaxosNode.PrintView:output_type -> google.protobuf.Empty
-	20, // 46: pb.PaxosNode.ReconfigureNode:output_type -> google.protobuf.Empty
-	20, // 47: pb.PaxosNode.KillLeader:output_type -> google.protobuf.Empty
-	20, // 48: pb.PaxosNode.ResetNode:output_type -> google.protobuf.Empty
-	33, // [33:49] is the sub-list for method output_type
-	17, // [17:33] is the sub-list for method input_type
-	17, // [17:17] is the sub-list for extension type_name
-	17, // [17:17] is the sub-list for extension extendee
-	0,  // [0:17] is the sub-list for field type_name
+	18, // 12: pb.Checkpoint.dedupTableTimestamp:type_name -> pb.Checkpoint.DedupTableTimestampEntry
+	19, // 13: pb.Checkpoint.dedupTableResult:type_name -> pb.Checkpoint.DedupTableResultEntry
+	7,  // 14: pb.NewViewMessage.b:type_name -> pb.BallotNumber
+	8,  // 15: pb.NewViewMessage.acceptLog:type_name -> pb.AcceptMessage
+	7,  // 16: pb.CatchupMessage.b:type_name -> pb.BallotNumber
+	13, // 17: pb.CatchupMessage.checkpoint:type_name -> pb.Checkpoint
+	10, // 18: pb.CatchupMessage.commitLog:type_name -> pb.CommitMessage
+	3,  // 19: pb.PaxosNode.TransferRequest:input_type -> pb.TransactionRequest
+	3,  // 20: pb.PaxosNode.ForwardRequest:input_type -> pb.TransactionRequest
+	5,  // 21: pb.PaxosNode.PrepareRequest:input_type -> pb.PrepareMessage
+	8,  // 22: pb.PaxosNode.AcceptRequest:input_type -> pb.AcceptMessage
+	10, // 23: pb.PaxosNode.CommitRequest:input_type -> pb.CommitMessage
+	11, // 24: pb.PaxosNode.CheckpointRequest:input_type -> pb.CheckpointMessage
+	14, // 25: pb.PaxosNode.NewViewRequest:input_type -> pb.NewViewMessage
+	15, // 26: pb.PaxosNode.CatchupRequest:input_type -> pb.CatchupRequestMessage
+	12, // 27: pb.PaxosNode.GetCheckpoint:input_type -> pb.GetCheckpointMessage
+	20, // 28: pb.PaxosNode.PrintLog:input_type -> google.protobuf.Int64Value
+	20, // 29: pb.PaxosNode.PrintDB:input_type -> google.protobuf.Int64Value
+	0,  // 30: pb.PaxosNode.PrintStatus:input_type -> pb.StatusRequest
+	20, // 31: pb.PaxosNode.PrintView:input_type -> google.protobuf.Int64Value
+	21, // 32: pb.PaxosNode.ReconfigureNode:input_type -> google.protobuf.BoolValue
+	22, // 33: pb.PaxosNode.KillLeader:input_type -> google.protobuf.Empty
+	1,  // 34: pb.PaxosNode.ResetNode:input_type -> pb.ResetRequest
+	2,  // 35: pb.PaxosNode.TransferRequest:output_type -> pb.TransactionResponse
+	22, // 36: pb.PaxosNode.ForwardRequest:output_type -> google.protobuf.Empty
+	6,  // 37: pb.PaxosNode.PrepareRequest:output_type -> pb.AckMessage
+	9,  // 38: pb.PaxosNode.AcceptRequest:output_type -> pb.AcceptedMessage
+	22, // 39: pb.PaxosNode.CommitRequest:output_type -> google.protobuf.Empty
+	22, // 40: pb.PaxosNode.CheckpointRequest:output_type -> google.protobuf.Empty
+	9,  // 41: pb.PaxosNode.NewViewRequest:output_type -> pb.AcceptedMessage
+	16, // 42: pb.PaxosNode.CatchupRequest:output_type -> pb.CatchupMessage
+	13, // 43: pb.PaxosNode.GetCheckpoint:output_type -> pb.Checkpoint
+	22, // 44: pb.PaxosNode.PrintLog:output_type -> google.protobuf.Empty
+	22, // 45: pb.PaxosNode.PrintDB:output_type -> google.protobuf.Empty
+	22, // 46: pb.PaxosNode.PrintStatus:output_type -> google.protobuf.Empty
+	22, // 47: pb.PaxosNode.PrintView:output_type -> google.protobuf.Empty
+	22, // 48: pb.PaxosNode.ReconfigureNode:output_type -> google.protobuf.Empty
+	22, // 49: pb.PaxosNode.KillLeader:output_type -> google.protobuf.Empty
+	22, // 50: pb.PaxosNode.ResetNode:output_type -> google.protobuf.Empty
+	35, // [35:51] is the sub-list for method output_type
+	19, // [19:35] is the sub-list for method input_type
+	19, // [19:19] is the sub-list for extension type_name
+	19, // [19:19] is the sub-list for extension extendee
+	0,  // [0:19] is the sub-list for field type_name
 }
 
 func init() { file_paxos_proto_init() }
@@ -1183,7 +1211,7 @@ func file_paxos_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_paxos_proto_rawDesc), len(file_paxos_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   18,
+			NumMessages:   20,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

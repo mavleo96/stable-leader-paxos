@@ -61,7 +61,11 @@ executeLoop:
 				// Add to executed log
 				e.state.StateLog.SetExecuted(i)
 				e.state.DedupTable.UpdateLastResult(request.Sender, request.Timestamp, result)
-				e.timer.DecrementWaitCountAndResetOrStopIfZero()
+				if e.state.StateLog.GetPendingCount() > 0 {
+					e.timer.Reset()
+				} else {
+					e.timer.StopIfRunning()
+				}
 				log.Infof("[Executor] Executed sequence number %d, %s", i, utils.LoggingString(request))
 
 				e.state.SetLastExecutedSequenceNum(i)
@@ -73,7 +77,7 @@ executeLoop:
 						log.Warn(err)
 					}
 					log.Infof("[Executor] Creating checkpoint for sequence number %d", i)
-					e.checkpointer.AddCheckpoint(i, dbState)
+					e.checkpointer.AddCheckpoint(i, dbState, e.state.DedupTable.GetTimestampMap(), e.state.DedupTable.GetResultMap())
 				}
 
 				// Dequeue execute requests
@@ -111,6 +115,12 @@ executeLoop:
 				log.Fatalf("[Executor] Failed to install snapshot: %v", err)
 			}
 			log.Infof("[Executor] Installed checkpoint for sequence number %d", checkpointInstallRequest.SequenceNum)
+
+			// Install dedup table
+			dedupTableTimestamp := checkpoint.DedupTableTimestamp
+			dedupTableResult := checkpoint.DedupTableResult
+			e.state.DedupTable.InstallDedupTable(dedupTableTimestamp, dedupTableResult)
+			log.Infof("[Executor] Installed dedup table for sequence number %d", checkpointInstallRequest.SequenceNum)
 
 			// Update state
 			e.state.SetLastExecutedSequenceNum(checkpointInstallRequest.SequenceNum)

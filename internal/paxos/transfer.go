@@ -55,12 +55,6 @@ func (s *PaxosServer) TransferRequest(ctx context.Context, req *pb.TransactionRe
 			return EmptyTransactionResponse, status.Errorf(codes.AlreadyExists, "already processed")
 		}
 
-		// If request is already forwarded, return empty transaction response
-		if s.state.InForwardedRequestsLog(req) {
-			log.Warnf("[TransferRequest] Request %s already forwarded for ballot number: %s", utils.LoggingString(req), utils.LoggingString(currentBallotNumber))
-			return EmptyTransactionResponse, status.Errorf(codes.Aborted, "not leader; already forwarded")
-		}
-
 		// If request is already accepted in current ballot number, return empty transaction response
 		sequenceNum := s.state.StateLog.GetSequenceNumber(req)
 		if s.state.StateLog.IsAccepted(sequenceNum) && proto.Equal(s.state.StateLog.GetBallotNumber(sequenceNum), currentBallotNumber) {
@@ -71,9 +65,10 @@ func (s *PaxosServer) TransferRequest(ctx context.Context, req *pb.TransactionRe
 		// Logger: Add received transaction request
 		s.logger.AddReceivedTransactionRequest(req)
 
-		// Add request to forwarded requests log and start timer
-		s.state.AddForwardedRequest(req)
-		s.phaseManager.timer.IncrementWaitCountOrStart()
+		// Start timer if there are pending transactions
+		if sequenceNum == 0 || s.state.StateLog.GetPendingCount() > 0 {
+			s.phaseManager.timer.StartIfNotRunning()
+		}
 
 		// Forward request to leader
 		leader := currentBallotNumber.NodeID

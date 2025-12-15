@@ -14,11 +14,12 @@ func (p *Proposer) HandleTransactionRequest(req *pb.TransactionRequest) error {
 	currentBallotNumber := p.state.GetBallotNumber()
 
 	// Assign a sequence number and create a record if it doesn't exist
-	sequenceNum, created := p.state.AssignSequenceNumberAndCreateRecord(currentBallotNumber, req)
+	sequenceNum, _ := p.state.AssignSequenceNumberAndCreateRecord(currentBallotNumber, req)
 	log.Infof("[Proposer] Assigned sequence number %d for request %s", sequenceNum, utils.LoggingString(req))
 
-	if created {
-		p.phaseManager.timer.IncrementWaitCountOrStart()
+	pendingCount := p.state.StateLog.GetPendingCount()
+	if pendingCount > 0 {
+		p.phaseManager.timer.StartIfNotRunning()
 	}
 
 	// Note: We are accepting the request even if the timer is expired; but this maybe handled in transfer.go where this function is called

@@ -16,7 +16,6 @@ type ServerState struct {
 	leader                      string
 	lastExecutedSequenceNum     int64
 	lastCheckpointedSequenceNum int64
-	forwardedRequestsLog        []*pb.TransactionRequest
 
 	// Self-managed components
 	StateLog   *StateLog
@@ -134,32 +133,6 @@ func (s *ServerState) MaxSequenceNum() int64 {
 	return utils.Max(utils.Keys(s.StateLog.log))
 }
 
-// AddForwardedRequest adds a forwarded request to the forwarded requests log
-func (s *ServerState) AddForwardedRequest(request *pb.TransactionRequest) {
-	s.mutex.Lock()
-	defer s.mutex.Unlock()
-	s.forwardedRequestsLog = append(s.forwardedRequestsLog, request)
-}
-
-// InForwardedRequestsLog checks if a request is in the forwarded requests log
-func (s *ServerState) InForwardedRequestsLog(request *pb.TransactionRequest) bool {
-	s.mutex.RLock()
-	defer s.mutex.RUnlock()
-	for _, forwardRequest := range s.forwardedRequestsLog {
-		if proto.Equal(forwardRequest, request) {
-			return true
-		}
-	}
-	return false
-}
-
-// ResetForwardedRequestsLog resets the forwarded requests log
-func (s *ServerState) ResetForwardedRequestsLog() {
-	s.mutex.Lock()
-	defer s.mutex.Unlock()
-	s.forwardedRequestsLog = make([]*pb.TransactionRequest, 0)
-}
-
 // Reset resets the server state
 func (s *ServerState) Reset() {
 	s.mutex.Lock()
@@ -168,7 +141,6 @@ func (s *ServerState) Reset() {
 	s.leader = ""
 	s.lastExecutedSequenceNum = 0
 	s.lastCheckpointedSequenceNum = 0
-	s.forwardedRequestsLog = make([]*pb.TransactionRequest, 0)
 	s.StateLog.Reset()
 	s.DedupTable.Reset()
 }
@@ -182,7 +154,6 @@ func CreateServerState(id string) *ServerState {
 		leader:                      "",
 		lastExecutedSequenceNum:     0,
 		lastCheckpointedSequenceNum: 0,
-		forwardedRequestsLog:        make([]*pb.TransactionRequest, 0),
 		StateLog:                    CreateStateLog(id),
 		DedupTable:                  CreateDedupTable(),
 	}

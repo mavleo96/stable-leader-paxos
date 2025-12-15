@@ -40,8 +40,9 @@ func (pm *PhaseManager) PrepareQueueHandler(expiredTime time.Time) (bool, *pb.Ba
 			log.Infof("[PrepareQueueHandler] Updating state for ballot number %s", utils.LoggingString(prepareMessageEntry.PrepareMessage.B))
 			pm.state.SetBallotNumber(prepareMessageEntry.PrepareMessage.B)
 			pm.state.SetLeader(prepareMessageEntry.PrepareMessage.B.NodeID)
-			pm.state.ResetForwardedRequestsLog()
 			pm.ResetTimerCtx()
+			pm.timer.StartIfNotRunning()
+			log.Infof("[PrepareQueueHandler] Started timer for ballot number %s", utils.LoggingString(prepareMessageEntry.PrepareMessage.B))
 
 			// Respond true on channel
 			if prepareMessageEntry.ResponseCh != nil {
@@ -142,7 +143,7 @@ collectLoop:
 				log.Warnf("[InitiatePrepareHandler] Failed to get checkpoint for sequence number %d: %v", checkpointSequenceNum, err)
 				return false
 			}
-			p.checkpointer.AddCheckpoint(checkpointSequenceNum, checkpoint.Snapshot)
+			p.checkpointer.AddCheckpoint(checkpointSequenceNum, checkpoint.Snapshot, checkpoint.DedupTableTimestamp, checkpoint.DedupTableResult)
 		}
 		signalCh := make(chan struct{}, 1)
 		checkpointInstallRequest := CheckpointInstallRequest{
@@ -174,13 +175,11 @@ func (pm *PhaseManager) HandleBallotNumber(ballotNumber *pb.BallotNumber) bool {
 	switch compareBallotNumbers(ballotNumber, pm.state.GetBallotNumber()) {
 	case 1:
 		// Update state and stop timer
+		// pm.timer.StopIfRunning()
+		pm.ResetTimerCtx()
+		pm.CancelProposerCtx()
 		pm.state.SetBallotNumber(ballotNumber)
 		pm.state.SetLeader(ballotNumber.NodeID)
-		pm.state.ResetForwardedRequestsLog()
-		pm.timer.Stop()
-		pm.ResetTimerCtx()
-		// pm.ResetProposerCtx()
-		pm.CancelProposerCtx()
 
 		log.Infof("[HandleBallotNumber] Changed ballot number to %s", utils.LoggingString(ballotNumber))
 

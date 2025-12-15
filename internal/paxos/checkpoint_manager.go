@@ -46,14 +46,16 @@ func (c *CheckpointManager) DeleteCheckpointMessage(sequenceNum int64) {
 }
 
 // AddCheckpoint adds a checkpoint for a given sequence number
-func (c *CheckpointManager) AddCheckpoint(sequenceNum int64, snapshot map[string]int64) {
+func (c *CheckpointManager) AddCheckpoint(sequenceNum int64, snapshot map[string]int64, dedupTableTimestamp map[string]int64, dedupTableResult map[string]int64) {
 	c.mutex.Lock()
 	defer c.mutex.Unlock()
 	digest := crypto.DigestAny(snapshot)
 	c.checkpoints[sequenceNum] = &pb.Checkpoint{
-		SequenceNum: sequenceNum,
-		Digest:      digest,
-		Snapshot:    snapshot,
+		SequenceNum:         sequenceNum,
+		Digest:              digest,
+		Snapshot:            snapshot,
+		DedupTableTimestamp: dedupTableTimestamp,
+		DedupTableResult:    dedupTableResult,
 	}
 }
 

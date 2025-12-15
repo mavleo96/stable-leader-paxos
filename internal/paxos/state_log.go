@@ -180,6 +180,19 @@ func (s *StateLog) SetExecuted(sequenceNum int64) {
 	record.executed = true
 }
 
+// GetPendingCount returns the number of pending transactions
+func (s *StateLog) GetPendingCount() int64 {
+	s.mutex.RLock()
+	defer s.mutex.RUnlock()
+	pendingCount := int64(0)
+	for _, record := range s.log {
+		if !record.executed {
+			pendingCount++
+		}
+	}
+	return pendingCount
+}
+
 // GetAcceptedLog returns the accepted log
 func (s *StateLog) GetAcceptedLog() []*pb.AcceptedMessage {
 	s.mutex.RLock()
@@ -273,11 +286,33 @@ type DedupTable struct {
 	resultMap    map[string]int64
 }
 
+// GetTimestampMap returns the timestamp map
+func (d *DedupTable) GetTimestampMap() map[string]int64 {
+	d.mutex.RLock()
+	defer d.mutex.RUnlock()
+	return d.timestampMap
+}
+
+// GetResultMap returns the result map
+func (d *DedupTable) GetResultMap() map[string]int64 {
+	d.mutex.RLock()
+	defer d.mutex.RUnlock()
+	return d.resultMap
+}
+
 // GetLastResult returns the last result for a sender
 func (d *DedupTable) GetLastResult(sender string) (int64, int64) {
 	d.mutex.RLock()
 	defer d.mutex.RUnlock()
 	return d.timestampMap[sender], d.resultMap[sender]
+}
+
+// InstallDedupTable installs the dedup table
+func (d *DedupTable) InstallDedupTable(timestampMap map[string]int64, resultMap map[string]int64) {
+	d.mutex.Lock()
+	defer d.mutex.Unlock()
+	d.timestampMap = timestampMap
+	d.resultMap = resultMap
 }
 
 // UpdateLastResult updates the last result for a sender

@@ -26,6 +26,12 @@ prepareLoop:
 			pm.AddPrepareMessageToLog(prepareMessageEntry)
 			log.Infof("[PhaseTimeoutRoutine] Added prepare message to log: %s", utils.LoggingString(prepareMessageEntry.PrepareMessage.B))
 
+			// If the new prepare message if from current leader, cancel timer context
+			if prepareMessageEntry.PrepareMessage.B.NodeID == pm.state.GetBallotNumber().NodeID {
+				pm.CancelTimerCtx()
+				log.Infof("[PhaseTimeoutRoutine] Canceled timer context for new prepare message from current leader")
+			}
+
 			// Check if timer has expired
 			select {
 			case <-pm.GetTimerCtx().Done():
@@ -70,10 +76,9 @@ func (pm *PhaseManager) leaderElectionHandler(expiredTime time.Time) (bool, bool
 	currentballotnumber := pm.state.GetBallotNumber()
 	log.Infof("[PhaseTimeoutRoutine] Current ballot number: %s has expired at %d", utils.LoggingString(currentballotnumber), expiredTime.UnixMilli())
 
-	// Reset leader and forwarded requests log
+	// Reset leader
 	pm.state.ResetLeader()
-	pm.state.ResetForwardedRequestsLog()
-	log.Infof("[PhaseTimeoutRoutine] Reset forwarded requests log of ballot number: %s", utils.LoggingString(currentballotnumber))
+	log.Infof("[PhaseTimeoutRoutine] Reset leader of ballot number: %s", utils.LoggingString(currentballotnumber))
 
 	// Handle the prepare message log
 	promised, highestBallotNumber, _ := pm.PrepareQueueHandler(expiredTime)

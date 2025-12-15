@@ -2,13 +2,11 @@ package paxos
 
 import (
 	"context"
-	"strconv"
 	"sync"
 
 	"github.com/mavleo96/stable-leader-paxos/internal/database"
 	"github.com/mavleo96/stable-leader-paxos/internal/models"
 	pb "github.com/mavleo96/stable-leader-paxos/pb"
-	log "github.com/sirupsen/logrus"
 )
 
 // PaxosServer represents the Paxos server node
@@ -49,11 +47,11 @@ func CreatePaxosServer(selfNode *models.Node, peerNodes map[string]*models.Node,
 	executionTriggerCh := make(chan ExecuteRequest, 100)
 	installCheckpointCh := make(chan CheckpointInstallRequest, 100)
 
-	i, err := strconv.ParseInt(selfNode.ID[1:], 10, 64)
-	if err != nil {
-		log.Fatal(err)
-	}
-	paxosTimer := CreateSafeTimer(i, int64(len(peerNodes)+1))
+	// i, err := strconv.ParseInt(selfNode.ID[1:], 10, 64)
+	// if err != nil {
+	// 	log.Fatal(err)
+	// }
+	paxosTimer := CreateSimpleTimer(minBackupTimeout, maxBackupTimeout)
 
 	logger := CreateLogger()
 	phaseManager := CreatePhaseManager(selfNode.ID, serverState, paxosTimer)

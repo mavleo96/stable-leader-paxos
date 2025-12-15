@@ -123,6 +123,8 @@ message Checkpoint {
     int64 sequenceNum = 1;
     bytes digest = 2;
     map<string, int64> snapshot = 3;
+    map<string, int64> dedupTableTimestamp = 4;
+    map<string, int64> dedupTableResult = 5;
 }
 
 // ---------- NewView ----------

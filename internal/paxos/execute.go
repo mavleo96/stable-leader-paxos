@@ -15,7 +15,7 @@ type Executor struct {
 
 	// Components
 	checkpointer *CheckpointManager
-	timer        *SafeTimer
+	timer        *SimpleTimer
 
 	// Database
 	db *database.Database
@@ -80,7 +80,7 @@ func (e *Executor) Reset() {
 }
 
 // CreateExecutor is used to create a new executor
-func CreateExecutor(state *ServerState, config *ServerConfig, db *database.Database, checkpointer *CheckpointManager, timer *SafeTimer, executionTriggerCh chan ExecuteRequest, installCheckpointCh chan CheckpointInstallRequest) *Executor {
+func CreateExecutor(state *ServerState, config *ServerConfig, db *database.Database, checkpointer *CheckpointManager, timer *SimpleTimer, executionTriggerCh chan ExecuteRequest, installCheckpointCh chan CheckpointInstallRequest) *Executor {
 	return &Executor{
 		mutex:               sync.RWMutex{},
 		state:               state,

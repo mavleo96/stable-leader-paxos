@@ -25,10 +25,12 @@ func (a *Acceptor) AcceptRequestHandler(acceptMessage *pb.AcceptMessage) (*pb.Ac
 		return nil, nil
 	}
 
-	// Create record if not exists
-	created := a.state.StateLog.CreateRecordIfNotExists(acceptMessage.B, acceptMessage.SequenceNum, acceptMessage.Message)
-	if created && !a.state.InForwardedRequestsLog(acceptMessage.Message) && !a.state.StateLog.IsExecuted(acceptMessage.SequenceNum) {
-		a.phaseManager.timer.IncrementWaitCountOrStart()
+	a.state.StateLog.CreateRecordIfNotExists(acceptMessage.B, acceptMessage.SequenceNum, acceptMessage.Message)
+
+	// Start timer if there are pending transactions
+	pendingCount := a.state.StateLog.GetPendingCount()
+	if pendingCount > 0 {
+		a.phaseManager.timer.StartIfNotRunning()
 	}
 
 	// Update record state
@@ -59,10 +61,12 @@ func (a *Acceptor) CommitRequestHandler(commitMessage *pb.CommitMessage) (*empty
 		return &emptypb.Empty{}, nil
 	}
 
-	// Create record if not exists
-	created := a.state.StateLog.CreateRecordIfNotExists(commitMessage.B, commitMessage.SequenceNum, commitMessage.Message)
-	if created && !a.state.InForwardedRequestsLog(commitMessage.Message) && !a.state.StateLog.IsExecuted(commitMessage.SequenceNum) {
-		a.phaseManager.timer.IncrementWaitCountOrStart()
+	a.state.StateLog.CreateRecordIfNotExists(commitMessage.B, commitMessage.SequenceNum, commitMessage.Message)
+
+	// Start timer if there are pending transactions
+	pendingCount := a.state.StateLog.GetPendingCount()
+	if pendingCount > 0 {
+		a.phaseManager.timer.StartIfNotRunning()
 	}
 
 	// Update record state
@@ -90,6 +94,12 @@ func (a *Acceptor) CommitRequestHandler(commitMessage *pb.CommitMessage) (*empty
 // NewViewRequestHandler handles the new view request for backup node
 func (a *Acceptor) NewViewRequestHandler(newViewMessage *pb.NewViewMessage) error {
 	// Check and update phase
+	if a.state.StateLog.GetPendingCount() > 0 {
+		a.phaseManager.timer.Reset()
+	} else {
+		a.phaseManager.timer.StopIfRunning()
+	}
+
 	if !a.phaseManager.HandleBallotNumber(newViewMessage.B) {
 		log.Warnf("[Acceptor] Ballot number %s is lower than promised ballot number %s", utils.LoggingString(newViewMessage.B), utils.LoggingString(a.state.GetBallotNumber()))
 		return errors.New("ballot number is lower than promised ballot number")

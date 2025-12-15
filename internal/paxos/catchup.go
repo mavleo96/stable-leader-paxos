@@ -31,7 +31,7 @@ func (s *PaxosServer) InitiateCatchupHandler() {
 	checkpoint := catchupMessage.Checkpoint
 	if checkpoint != nil {
 		log.Infof("[InitiateCatchupHandler] Installing checkpoint for sequence number %d, %s", checkpoint.SequenceNum, checkpoint.String())
-		s.executor.checkpointer.AddCheckpoint(checkpoint.SequenceNum, checkpoint.Snapshot)
+		s.executor.checkpointer.AddCheckpoint(checkpoint.SequenceNum, checkpoint.Snapshot, checkpoint.DedupTableTimestamp, checkpoint.DedupTableResult)
 
 		signalCh := make(chan struct{}, 1)
 		checkpointInstallRequest := CheckpointInstallRequest{

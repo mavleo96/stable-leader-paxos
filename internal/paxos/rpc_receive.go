@@ -101,7 +101,7 @@ func (s *PaxosServer) NewViewRequest(req *pb.NewViewMessage, stream pb.PaxosNode
 				log.Warnf("[InitiatePrepareHandler] Failed to get checkpoint for sequence number %d: %v", checkpointSequenceNum, err)
 				return status.Error(codes.Aborted, err.Error())
 			}
-			s.executor.checkpointer.AddCheckpoint(checkpointSequenceNum, checkpoint.Snapshot)
+			s.executor.checkpointer.AddCheckpoint(checkpointSequenceNum, checkpoint.Snapshot, checkpoint.DedupTableTimestamp, checkpoint.DedupTableResult)
 		}
 		signalCh := make(chan struct{}, 1)
 		checkpointInstallRequest := CheckpointInstallRequest{

@@ -14,7 +14,7 @@ type PhaseManager struct {
 	id    string
 
 	// Components
-	timer *SafeTimer
+	timer *SimpleTimer
 	state *ServerState
 
 	// Timer context
@@ -150,7 +150,7 @@ func (pm *PhaseManager) Reset() {
 }
 
 // CreatePhaseManager creates a new phase manager instance
-func CreatePhaseManager(id string, state *ServerState, timer *SafeTimer) *PhaseManager {
+func CreatePhaseManager(id string, state *ServerState, timer *SimpleTimer) *PhaseManager {
 	// The phase manager is created in expired state
 	// and the phase change complete channel is used to signal that the phase change is complete
 	pm := &PhaseManager{

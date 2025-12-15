@@ -6,10 +6,14 @@ import (
 )
 
 const (
-	minBackupTimeout = time.Duration(250 * time.Millisecond)
-	maxBackupTimeout = time.Duration(400 * time.Millisecond)
-	prepareTimeout   = time.Duration(250 * time.Millisecond)
-	K                = 10 // check point interval
+	// minBackupTimeout = time.Duration(250 * time.Millisecond)
+	// maxBackupTimeout = time.Duration(400 * time.Millisecond)
+	// prepareTimeout   = time.Duration(250 * time.Millisecond)
+	// K                = 10 // check point interval
+	minBackupTimeout = time.Duration(40 * time.Millisecond)
+	maxBackupTimeout = time.Duration(60 * time.Millisecond)
+	prepareTimeout   = time.Duration(30 * time.Millisecond)
+	K                = 20 // check point interval
 )
 
 // ServerConfig is the configuration for the server

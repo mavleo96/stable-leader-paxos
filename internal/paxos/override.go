@@ -22,7 +22,7 @@ func (s *PaxosServer) ReconfigureNode(ctx context.Context, status *wrapperspb.Bo
 		s.config.Alive = true
 	} else {
 		s.config.Alive = false
-		s.phaseManager.timer.Stop()
+		s.phaseManager.timer.StopIfRunning()
 	}
 	log.Warnf("Node %s status changed to %v", s.ID, s.config.Alive)
 	return &emptypb.Empty{}, nil
@@ -35,7 +35,7 @@ func (s *PaxosServer) KillLeader(ctx context.Context, in *emptypb.Empty) (*empty
 	}
 	s.config.Alive = false
 	s.phaseManager.CancelProposerCtx()
-	s.phaseManager.timer.Stop()
+	s.phaseManager.timer.StopIfRunning()
 	log.Warnf("Node %s status changed to %v", s.ID, s.config.Alive)
 	return &emptypb.Empty{}, nil
 }
